@@ -7,6 +7,7 @@ import { BlaneFormData, BlaneType } from "@/admin/lib/api/types/blane";
 import { BlaneimgFormData } from "@/admin/lib/api/types/blaneImg";
 import { BlanImgService } from "@/admin/lib/api/services/blanimgs";
 import { BLANE_STATUS, type BlaneStatus, getStatusLabel } from "@/admin/lib/constants/status";
+import { parsePhoneNumberFromAPI } from "@/user/lib/utils/phoneValidation";
 import { HeartIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as HeartSolidIcon } from "@heroicons/react/24/solid";
 import { Input } from "@/admin/components/ui/input";
@@ -1143,27 +1144,27 @@ const BlaneForm = ({
 
   // Add state for phone input
   const [phoneError, setPhoneError] = useState<string>('');
-  const [countryCode, setCountryCode] = useState('212'); // Default to Morocco
-
-  // Utility to normalize phone number (removes duplicate country code)
-  const normalizePhoneNumber = (input: string, code: string) => {
-    // Remove all non-digit characters
-    let number = input.replace(/\D/g, '');
-    // Remove leading country code if present
-    if (number.startsWith(code)) {
-      number = number.slice(code.length);
-    }
-    return code + number;
-  };
+  
+  // Parse phone number from API if available
+  const parsedPhone = initialData?.commerce_phone ? parsePhoneNumberFromAPI(initialData.commerce_phone) : { countryCode: '212', phoneNumber: '' };
+  const [countryCode, setCountryCode] = useState(parsedPhone.countryCode);
+  const [phoneNumber, setPhoneNumber] = useState(parsedPhone.phoneNumber);
 
   // Update phone handling
   const handlePhoneValidation = (result: { isValid: boolean; errorMessage?: string; formattedNumber?: string }) => {
     setPhoneError(result.errorMessage || '');
     if (result.isValid && result.formattedNumber) {
-      const normalized = normalizePhoneNumber(result.formattedNumber, countryCode);
-      handleInputChange("commerce_phone", normalized);
+      // Remove all spaces and the plus sign, then save to formData
+      const cleanNumber = result.formattedNumber.replace(/[\s+]/g, '');
+      handleInputChange("commerce_phone", cleanNumber);
     }
   };
+
+  // Update phone number when country code or phone number changes
+  useEffect(() => {
+    const fullNumber = countryCode + phoneNumber;
+    handleInputChange("commerce_phone", fullNumber);
+  }, [countryCode, phoneNumber]);
 
   if (!categories || !subcategories || !cities) {
     return <div>Loading...</div>;
@@ -1343,19 +1344,20 @@ const BlaneForm = ({
                   <Label>Téléphone du commerce</Label>
                   <PhoneInput
                     countryCode={countryCode}
-                    phoneNumber={formData.commerce_phone?.replace(new RegExp(`^${countryCode}`), '') || ''}
+                    phoneNumber={phoneNumber}
                     onCountryCodeChange={(newCode) => {
                       setCountryCode(newCode);
-                      if (formData.commerce_phone) {
-                        // Remove any country code and re-apply new one
-                        const normalized = normalizePhoneNumber(formData.commerce_phone, newCode);
-                        handleInputChange("commerce_phone", normalized);
-                      }
+                      // Update the full phone number when country code changes
+                      const fullNumber = newCode + phoneNumber;
+                      handleInputChange("commerce_phone", fullNumber);
                     }}
                     onPhoneNumberChange={(value) => {
-                      // Normalize and save
-                      const normalized = normalizePhoneNumber(value, countryCode);
-                      handleInputChange("commerce_phone", normalized);
+                      setPhoneNumber(value);
+                      // Always combine country code with phone number when saving
+                      const fullNumber = value.startsWith('+') 
+                        ? value.replace(/[\s+]/g, '')
+                        : countryCode + value.replace(/\D/g, '');
+                      handleInputChange("commerce_phone", fullNumber);
                     }}
                     onValidationChange={handlePhoneValidation}
                     className="w-full"
