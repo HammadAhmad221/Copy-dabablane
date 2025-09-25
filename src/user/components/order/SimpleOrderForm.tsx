@@ -233,7 +233,7 @@ export const SimpleOrderForm = ({ blane, onOrderComplete }: SimpleOrderFormProps
       }
       
       // Format the phone number for submission
-      const formattedPhone = formData.countryCode + formData.phone; // Just concatenate without spaces or plus sign
+      const formattedPhone = `+${formData.countryCode}${formData.phone}`; // Include + sign for proper international format
 
       // Prepare order data
       const orderPayload = {

@@ -445,7 +445,7 @@ export const SimpleReservationForm = ({ blane, onReservationComplete }: SimpleRe
     
     try {
       // Format the phone number for submission
-      const formattedPhone = formData.countryCode + formData.phone;
+      const formattedPhone = `+${formData.countryCode}${formData.phone}`;
 
       // Prepare reservation data
       const reservationPayload: ReservationPayload = {

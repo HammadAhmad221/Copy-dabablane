@@ -63,8 +63,8 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
 
     // If we have a selected country, include it in the validation result
     const country = countries.find(c => c.dialCode === countryCode);
-    // Always include country code in the formatted number
-    const formattedNumber = countryCode + phoneNumber;
+    // Always include country code in the formatted number with + sign
+    const formattedNumber = `+${countryCode}${phoneNumber}`;
     
     return {
       isValid: true,

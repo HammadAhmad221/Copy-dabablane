@@ -1154,15 +1154,15 @@ const BlaneForm = ({
   const handlePhoneValidation = (result: { isValid: boolean; errorMessage?: string; formattedNumber?: string }) => {
     setPhoneError(result.errorMessage || '');
     if (result.isValid && result.formattedNumber) {
-      // Remove all spaces and the plus sign, then save to formData
-      const cleanNumber = result.formattedNumber.replace(/[\s+]/g, '');
+      // Keep the + sign but remove spaces, then save to formData
+      const cleanNumber = result.formattedNumber.replace(/\s/g, '');
       handleInputChange("commerce_phone", cleanNumber);
     }
   };
 
   // Update phone number when country code or phone number changes
   useEffect(() => {
-    const fullNumber = countryCode + phoneNumber;
+    const fullNumber = `+${countryCode}${phoneNumber}`;
     handleInputChange("commerce_phone", fullNumber);
   }, [countryCode, phoneNumber]);
 

@@ -65,6 +65,12 @@ export const parsePhoneNumberFromAPI = (apiPhoneNumber: string): { countryCode: 
     if (matchingCountries.length > 0) {
       const country = matchingCountries[0];
       const phoneNumber = numberWithoutPlus.substring(country.dialCode.length);
+      
+      // If the phone number part is all zeros, too short, or invalid, treat it as empty
+      if (phoneNumber === '' || /^0+$/.test(phoneNumber) || phoneNumber.length < 5 || !/^\d+$/.test(phoneNumber)) {
+        return { countryCode: country.dialCode, phoneNumber: '' };
+      }
+      
       return { countryCode: country.dialCode, phoneNumber };
     }
   }
