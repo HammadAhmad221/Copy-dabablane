@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <title>Dabablane | Offres et promotions au Maroc</title>
+    <meta name="description" content="DabaBlane est votre destination en ligne pour découvrir les meilleures offres et promotions au Maroc." />
+    <meta name="keywords" content="Dabablane, Maroc, Casablanca, offres, promotions" />
+    <meta name="author" content="Dabablane" />
+
+    <meta property="og:title" content="Dabablane | Offres et promotions au Maroc" />
+    <meta property="og:description" content="DabaBlane est votre destination en ligne pour découvrir les meilleures offres et promotions au Maroc." />
+    <meta property="og:image" content="/src/assets/images/favicon-dabablane.svg" />
+    <meta property="og:url" content="https://dabablane.com" />
+    <meta property="og:type" content="website" />
+
+    <!-- Meta Pixel Code -->
+    <script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', '572391835899242');
+    fbq('track', 'PageView');
+    </script>
+    <!-- End Meta Pixel Code -->
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/src/assets/images/favicon-dabablane.svg" />
+
+    <!-- Preconnects -->
+    <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin />
+    <link rel="preconnect" href="https://www.google-analytics.com" crossorigin />
+    <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+    <link rel="dns-prefetch" href="https://www.google-analytics.com" />
+
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet" />
+
+    <!-- Inline critical styles -->
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: system-ui, Lato;
+        text-rendering: optimizeSpeed;
+      }
+
+      #root {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+
+      .lazycontent {
+        content-visibility: auto;
+        contain-intrinsic-size: 1px 5000px;
+      }
+
+      .img-container {
+        position: relative;
+        overflow: hidden;
+      }
+
+      img.h-12 {
+        width: 120px;
+        height: 48px;
+        aspect-ratio: 120 / 48;
+      }
+
+      img.w-full.h-\[300px\], 
+      img.w-full.h-\[400px\] {
+        display: block;
+        width: 100%;
+        height: auto;
+        aspect-ratio: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Meta Pixel Code (noscript) -->
+    <noscript><img height="1" width="1" style="display:none"
+    src="https://www.facebook.com/tr?id=572391835899242&ev=PageView&noscript=1"
+    /></noscript>
+
+    <noscript>
+      <strong>Vous devez activer JavaScript pour utiliser ce site.</strong>
+    </noscript>
+
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-CG95L012WE"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      gtag('js', new Date());
+      gtag('config', 'G-CG95L012WE', { send_page_view: false });
+
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: window.location.href,
+            page_path: window.location.pathname
+          });
+        }, 2000);
+      });
+    </script>
+
+    <!-- JotForm Agent 
+    <script src='https://cdn.jotfor.ms/s/umd/latest/for-embedded-agent.js'></script>
+    <script>
+      window.addEventListener("DOMContentLoaded", function() {
+        window.AgentInitializer.init({
+          agentRenderURL: "https://agent.jotform.com/0196917a793e788f9db6d1fe78397ee6dd0c",
+          rootId: "JotformAgent-0196917a793e788f9db6d1fe78397ee6dd0c",
+          formID: "0196917a793e788f9db6d1fe78397ee6dd0c",
+          queryParams: ["skipWelcome=1", "maximizable=1"],
+          domain: "https://www.jotform.com",
+          isDraggable: false,
+          background: "linear-gradient(180deg, #0ea7d3 0%, #048b97 100%)",
+          buttonBackgroundColor: "#0066C3",
+          buttonIconColor: "#FFFFFF",
+          variant: false,
+          customizations: {
+            "greeting": "Yes",
+            "greetingMessage": "Bonjour ! Comment puis-je vous aider ?",
+            "openByDefault": "No",
+            "pulse": "Yes",
+            "position": "right",
+            "autoOpenChatIn": "5000"
+          },
+          isVoice: false,
+        });
+      });
+    </script>
+    -->
+  </body>
+</html>

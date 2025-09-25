@@ -1,0 +1,84 @@
+name: Deploy React.js to Anzahosting (Prod)
+
+on:
+  push:
+    branches:
+      - prod  # Trigger deployment on push to prod
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      SERVER_USER: ${{ secrets.SERVER_USER }}
+      SERVER_IP: ${{ secrets.SERVER_IP }}
+      DEPLOY_PATH: /home/sites/39b/d/df3aa0b4e9/dabablane  # Your server path
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    steps:
+      # Checkout the code
+      - name: Checkout code
+        uses: actions/checkout@v3  # Updated to v3
+
+      # Set up SSH
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      # Add known hosts (avoids SSH confirmation)
+      - name: Add SSH Host Key
+        run: |
+          ssh-keyscan ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      # Set up Node.js (using v18 as in your original CI)
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      # Debug SSH connection
+      - name: Debug SSH connection
+        run: |
+          echo "Testing SSH connectivity..."
+          # Try SSH with a 10-second timeout
+          timeout 10 ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} "echo 'SSH connection successful'" || echo "SSH connection failed"
+          
+          # Test specific port connectivity
+          echo "Testing port 22 connectivity..."
+          timeout 5 nc -zv ${{ env.SERVER_IP }} 22 || echo "Port 22 not reachable"
+          
+          # Display connection information
+          echo "Attempting to connect to:"
+          echo "Host: ${{ env.SERVER_IP }}"
+          echo "User: ${{ env.SERVER_USER }}"
+          
+          # Try to resolve the hostname
+          echo "Resolving hostname..."
+          nslookup ${{ env.SERVER_IP }} || echo "Failed to resolve hostname"
+
+      # Install dependencies
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      # Build React.js app (using CI=false to ignore warnings)
+      - name: Build React.js app
+        run: |
+          CI=false npm run build
+
+      # Deploy using rsync (syncs the `dist/` folder instead of `build/`)
+      - name: Deploy to Anzahosting
+        run: |
+          echo "Starting rsync deployment..."
+          rsync -avvz --stats --delete --exclude=".htaccess" ./dist/ ${{ env.SERVER_USER }}@${{ env.SERVER_IP }}:${{ env.DEPLOY_PATH }}
+
+      # Set permissions on the server
+      - name: Set Permissions
+        run: |
+          if ssh ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} "[ -d ${{ env.DEPLOY_PATH }} ]"; then
+            echo "Directory exists, setting permissions..."
+            ssh ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} "chmod -R 755 ${{ env.DEPLOY_PATH }}"
+          else
+            echo "Error: Deploy directory does not exist!"
+            exit 1
+          fi

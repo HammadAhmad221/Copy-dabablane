@@ -1,0 +1,7 @@
+{
+  "applyTreeShaking": true,
+  "minifyHtml": true,
+  "removeConsole": true,
+  "removeDebugStatements": true,
+  "timestamp": "2025-04-20T21:43:27.976Z"
+}
