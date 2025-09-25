@@ -1145,13 +1145,23 @@ const BlaneForm = ({
   const [phoneError, setPhoneError] = useState<string>('');
   const [countryCode, setCountryCode] = useState('212'); // Default to Morocco
 
+  // Utility to normalize phone number (removes duplicate country code)
+  const normalizePhoneNumber = (input: string, code: string) => {
+    // Remove all non-digit characters
+    let number = input.replace(/\D/g, '');
+    // Remove leading country code if present
+    if (number.startsWith(code)) {
+      number = number.slice(code.length);
+    }
+    return code + number;
+  };
+
   // Update phone handling
   const handlePhoneValidation = (result: { isValid: boolean; errorMessage?: string; formattedNumber?: string }) => {
     setPhoneError(result.errorMessage || '');
     if (result.isValid && result.formattedNumber) {
-      // Remove all spaces and the plus sign, then save to formData
-      const cleanNumber = result.formattedNumber.replace(/[\s+]/g, '');
-      handleInputChange("commerce_phone", cleanNumber);
+      const normalized = normalizePhoneNumber(result.formattedNumber, countryCode);
+      handleInputChange("commerce_phone", normalized);
     }
   };
 
@@ -1336,18 +1346,16 @@ const BlaneForm = ({
                     phoneNumber={formData.commerce_phone?.replace(new RegExp(`^${countryCode}`), '') || ''}
                     onCountryCodeChange={(newCode) => {
                       setCountryCode(newCode);
-                      // When country code changes, update the full phone number
                       if (formData.commerce_phone) {
-                        const numberWithoutCode = formData.commerce_phone.replace(new RegExp(`^${countryCode}`), '');
-                        handleInputChange("commerce_phone", newCode + numberWithoutCode);
+                        // Remove any country code and re-apply new one
+                        const normalized = normalizePhoneNumber(formData.commerce_phone, newCode);
+                        handleInputChange("commerce_phone", normalized);
                       }
                     }}
                     onPhoneNumberChange={(value) => {
-                      // Always combine country code with phone number when saving
-                      const fullNumber = value.startsWith('+') 
-                        ? value.replace(/[\s+]/g, '')
-                        : countryCode + value.replace(/\D/g, '');
-                      handleInputChange("commerce_phone", fullNumber);
+                      // Normalize and save
+                      const normalized = normalizePhoneNumber(value, countryCode);
+                      handleInputChange("commerce_phone", normalized);
                     }}
                     onValidationChange={handlePhoneValidation}
                     className="w-full"
