@@ -95,6 +95,11 @@ export const adminNavItems = [
         title: 'Vendeurs',
         path: '/admin/vendors',
       },
+      {
+        id: 'commission-charts',
+        title: 'Commission Charts',
+        path: '/admin/vendors/commission-charts',
+      },
     ],
   },
   {

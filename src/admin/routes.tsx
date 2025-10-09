@@ -16,6 +16,7 @@ const Reservations = lazy(() => import('./pages/reservations-orders/Reservations
 const Orders = lazy(() => import('./pages/reservations-orders/Orders'));
 const Merchants = lazy(() => import('./pages/merchants-management/Merchants'));
 const Offers = lazy(() => import('./pages/merchants-management/Offers'));
+const CommissionChart = lazy(() => import('./pages/vendors/CommissionChart'));
 const Coupons = lazy(() => import('./pages/coupons/Coupons'));
 const Settings = lazy(() => import('./pages/general-settings/Settings'));
 const SocialMediaIntegrations = lazy(() => import('./pages/integrations/SocialMediaIntegrations'));
@@ -181,6 +182,10 @@ const adminRoutes: RouteObject[] = [
   {
     path: "vendors",
     element: <Vendors />
+  },
+  {
+    path: "vendors/commission-charts",
+    element: <CommissionChart />
   }
 ];
 
