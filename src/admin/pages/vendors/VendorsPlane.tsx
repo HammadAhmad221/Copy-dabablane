@@ -1063,8 +1063,8 @@ const VendorsPlane = () => {
                     {vendors.length === 0 ? (
                         <Card className="p-6 text-center">
                             <p className="text-gray-500">No vendor plans found.</p>
-                            <Button 
-                                onClick={() => handleOpenDialog()} 
+                            <Button
+                                onClick={() => handleOpenDialog()}
                                 className="mt-3 bg-[#00897B] hover:bg-[#00796B]"
                             >
                                 <Plus className="h-4 w-4 mr-2" />
@@ -1267,15 +1267,15 @@ const VendorsPlane = () => {
                     </div>
 
                     <DialogFooter className="gap-2 sm:gap-3 mt-6">
-                        <Button 
-                            variant="outline" 
+                        <Button
+                            variant="outline"
                             onClick={() => setIsDialogOpen(false)}
                             className="flex-1 sm:flex-none h-10 text-sm"
                         >
                             Cancel
                         </Button>
-                        <Button 
-                            onClick={handleSubmit} 
+                        <Button
+                            onClick={handleSubmit}
                             className="flex-1 sm:flex-none h-10 text-sm bg-[#00897B] hover:bg-[#00796B]"
                             disabled={isLoading}
                         >
