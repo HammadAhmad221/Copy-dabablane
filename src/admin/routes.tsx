@@ -1,5 +1,7 @@
 import { lazy } from 'react';
 import { RouteObject } from 'react-router-dom';
+// import PromoCodeManagement from './pages/vendors/PromoCodeManagement';
+// import SubscriptionManagement from './pages/vendors/SubscriptionManagement';
 
 // Lazy loaded pages
 const Dashboard = lazy(() => import('./pages/dashboard/Dashboard'));
@@ -16,6 +18,9 @@ const Reservations = lazy(() => import('./pages/reservations-orders/Reservations
 const Orders = lazy(() => import('./pages/reservations-orders/Orders'));
 const Merchants = lazy(() => import('./pages/merchants-management/Merchants'));
 const Offers = lazy(() => import('./pages/merchants-management/Offers'));
+const CommissionChart = lazy(() => import('./pages/vendors/CommissionChart'));
+const SubscriptionManagement = lazy(() => import('./pages/vendors/SubscriptionManagement'));
+const PromoCodeManagement = lazy(() => import('./pages/vendors/PromoCodeManagement'));
 const Coupons = lazy(() => import('./pages/coupons/Coupons'));
 const Settings = lazy(() => import('./pages/general-settings/Settings'));
 const SocialMediaIntegrations = lazy(() => import('./pages/integrations/SocialMediaIntegrations'));
@@ -36,6 +41,8 @@ const Cities = lazy(() => import('./pages/cities/Cities'));
 const Customers = lazy(() => import('./pages/users/Customers'));
 const DynamiqueBanner = lazy(() => import('./pages/DynamiqueBanner'));
 const Vendors = lazy(() => import('./pages/vendors/Vendors'));
+const InvoiceConfig = lazy(() => import('./pages/vendors/InvoiceConfig'));
+const VendorsPlane = lazy(() => import('./pages/vendors/VendorsPlane'));
 
 const adminRoutes: RouteObject[] = [
   {
@@ -181,7 +188,29 @@ const adminRoutes: RouteObject[] = [
   {
     path: "vendors",
     element: <Vendors />
+  },
+  {
+    path: "vendors/commission-charts",
+    element: <CommissionChart />
+  },
+  {
+    path: "vendors/subscription-management",
+    element: <SubscriptionManagement />
+  },
+  {
+    path: "vendors/promo-code-management",
+    element: <PromoCodeManagement />
+  },
+
+  {
+    path: "vendors/invoice-config",
+    element: <InvoiceConfig />
+  },
+  {
+    path: "vendors/planes",
+    element: <VendorsPlane />
   }
 ];
 
-export default adminRoutes; 
+export default adminRoutes;
+
