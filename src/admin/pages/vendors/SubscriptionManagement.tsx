@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Card } from "@/admin/components/ui/card";
 import { Button } from "@/admin/components/ui/button";
 import { Input } from "@/admin/components/ui/input";
@@ -51,14 +51,8 @@ interface OfferPlan {
   isActive: boolean;
 }
 
-interface AddOn {
-  id: string;
-  name: string;
-  price: number;
-  description: string;
-  maxQuantity: number;
-  isVisible: boolean;
-}
+import { AddOn } from '@/admin/lib/add-ons/types';
+import { useAddOns } from '@/admin/lib/add-ons/useAddOns';
 
 interface ContactInfo {
   facturationEmail: string;
@@ -68,7 +62,16 @@ interface ContactInfo {
 
 const SubscriptionManagement = () => {
   const [activeTab, setActiveTab] = useState('plans');
-  
+  const {
+    addOns,
+    isLoading,
+    error,
+    fetchAddOns,
+    createAddOn,
+    updateAddOn,
+    deleteAddOn
+  } = useAddOns();
+
   // Offer Plans State
   const [plans, setPlans] = useState<OfferPlan[]>([
     {
@@ -98,17 +101,12 @@ const SubscriptionManagement = () => {
     }
   ]);
 
-  // Add-ons State
-  const [addOns, setAddOns] = useState<AddOn[]>([
-    {
-      id: '1',
-      name: 'Extra Storage',
-      price: 5.00,
-      description: 'Additional 10GB storage',
-      maxQuantity: 5,
-      isVisible: true
+  // Effect to load add-ons on mount and when tab is selected
+  React.useEffect(() => {
+    if (activeTab === 'addons') {
+      fetchAddOns();
     }
-  ]);
+  }, [activeTab, fetchAddOns]);
 
   // Contact Info State
   const [contactInfo, setContactInfo] = useState<ContactInfo>({
@@ -137,11 +135,11 @@ const SubscriptionManagement = () => {
   });
 
   const [addOnForm, setAddOnForm] = useState<Partial<AddOn>>({
-    name: '',
-    price: 0,
-    description: '',
-    maxQuantity: 1,
-    isVisible: true
+    title: '',
+    price_ht: 0,
+    tooltip: '',
+    max_quantity: 1,
+    is_active: true
   });
 
   // Plan Handlers
@@ -173,7 +171,7 @@ const SubscriptionManagement = () => {
     }
 
     const duration = `${planForm.durationValue} ${planForm.durationType}${planForm.durationValue! > 1 ? 's' : ''}`;
-    
+
     if (editingPlan) {
       setPlans(plans.map(p => p.id === editingPlan.id ? {
         ...planForm,
@@ -202,46 +200,58 @@ const SubscriptionManagement = () => {
   const handleOpenAddOnDialog = (addOn?: AddOn) => {
     if (addOn) {
       setEditingAddOn(addOn);
-      setAddOnForm(addOn);
+      setAddOnForm({
+        title: addOn.title,
+        price_ht: addOn.price_ht,
+        tooltip: addOn.tooltip,
+        max_quantity: addOn.max_quantity,
+        is_active: addOn.is_active
+      });
     } else {
       setEditingAddOn(null);
       setAddOnForm({
-        name: '',
-        price: 0,
-        description: '',
-        maxQuantity: 1,
-        isVisible: true
+        title: '',
+        price_ht: 0,
+        tooltip: '',
+        max_quantity: 1,
+        is_active: true
       });
     }
     setAddOnDialog(true);
   };
 
-  const handleSaveAddOn = () => {
-    if (!addOnForm.name || !addOnForm.price) {
+  const handleSaveAddOn = async () => {
+    if (!addOnForm.title || !addOnForm.price_ht) {
       toast.error('Please fill all required fields');
       return;
     }
 
     if (editingAddOn) {
-      setAddOns(addOns.map(a => a.id === editingAddOn.id ? {
-        ...addOnForm,
-        id: editingAddOn.id
-      } as AddOn : a));
-      toast.success('Add-on updated successfully');
+      const success = await updateAddOn(editingAddOn.id!, addOnForm as AddOn);
+      if (success) {
+        toast.success('Add-on updated successfully');
+        setAddOnDialog(false);
+      } else {
+        toast.error('Failed to update add-on');
+      }
     } else {
-      const newAddOn: AddOn = {
-        ...addOnForm,
-        id: Date.now().toString()
-      } as AddOn;
-      setAddOns([...addOns, newAddOn]);
-      toast.success('Add-on created successfully');
+      const success = await createAddOn(addOnForm as AddOn);
+      if (success) {
+        toast.success('Add-on created successfully');
+        setAddOnDialog(false);
+      } else {
+        toast.error('Failed to create add-on');
+      }
     }
-    setAddOnDialog(false);
   };
 
-  const handleDeleteAddOn = (id: string) => {
-    setAddOns(addOns.filter(a => a.id !== id));
-    toast.success('Add-on deleted successfully');
+  const handleDeleteAddOn = async (id: number) => {
+    const success = await deleteAddOn(id);
+    if (success) {
+      toast.success('Add-on deleted successfully');
+    } else {
+      toast.error('Failed to delete add-on');
+    }
   };
 
   // Contact Info Handlers
@@ -377,39 +387,55 @@ const SubscriptionManagement = () => {
                 </Button>
               </div>
 
+              {/* Error State */}
+              {error && (
+                <div className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg">
+                  {error}
+                </div>
+              )}
+
+              {/* Loading State */}
+              {isLoading && (
+                <div className="flex items-center justify-center p-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#00897B]"></div>
+                </div>
+              )}
+
               {/* Desktop Table */}
               <div className="hidden md:block rounded-md border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Add-on Name</TableHead>
+                      <TableHead>Title</TableHead>
                       <TableHead>Price</TableHead>
                       <TableHead>Max Quantity</TableHead>
-                      <TableHead>Visibility</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Description</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {addOns.map((addOn) => (
                       <TableRow key={addOn.id}>
-                        <TableCell className="font-medium">{addOn.name}</TableCell>
-                        <TableCell>${addOn.price.toFixed(2)}</TableCell>
-                        <TableCell>{addOn.maxQuantity}</TableCell>
+                        <TableCell className="font-medium">{addOn.title}</TableCell>
+                        <TableCell>${(Number(addOn.price_ht) || 0).toFixed(2)}</TableCell>
+                        <TableCell>{Number(addOn.max_quantity) || 0}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            {addOn.isVisible ? (
-                              <><Eye className="h-4 w-4 text-green-600" /> Visible</>
+                            {addOn.is_active ? (
+                              <><Eye className="h-4 w-4 text-green-600" /> Active</>
                             ) : (
-                              <><EyeOff className="h-4 w-4 text-gray-400" /> Hidden</>
+                              <><EyeOff className="h-4 w-4 text-gray-400" /> Inactive</>
                             )}
                           </div>
                         </TableCell>
+                        <TableCell>{addOn.tooltip}</TableCell>
                         <TableCell>
                           <div className="flex gap-2 justify-end">
                             <Button variant="outline" size="sm" onClick={() => handleOpenAddOnDialog(addOn)}>
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button variant="destructive" size="sm" onClick={() => handleDeleteAddOn(addOn.id)}>
+                            <Button variant="destructive" size="sm" onClick={() => handleDeleteAddOn(addOn.id!)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -426,26 +452,26 @@ const SubscriptionManagement = () => {
                   <Card key={addOn.id} className="p-4">
                     <div className="space-y-3">
                       <div className="flex items-start justify-between">
-                        <h4 className="font-semibold">{addOn.name}</h4>
+                        <h4 className="font-semibold">{addOn.title}</h4>
                         <div className="flex items-center gap-2 text-sm">
-                          {addOn.isVisible ? (
-                            <><Eye className="h-4 w-4 text-green-600" /> Visible</>
+                          {addOn.is_active ? (
+                            <><Eye className="h-4 w-4 text-green-600" /> Active</>
                           ) : (
-                            <><EyeOff className="h-4 w-4 text-gray-400" /> Hidden</>
+                            <><EyeOff className="h-4 w-4 text-gray-400" /> Inactive</>
                           )}
                         </div>
                       </div>
-                      <p className="text-sm text-gray-600">{addOn.description}</p>
+                      <p className="text-sm text-gray-600">{addOn.tooltip}</p>
                       <div className="text-sm space-y-1">
-                        <p><span className="font-medium">Price:</span> ${addOn.price.toFixed(2)}</p>
-                        <p><span className="font-medium">Max Quantity:</span> {addOn.maxQuantity}</p>
+                        <p><span className="font-medium">Price:</span> ${(Number(addOn.price_ht) || 0).toFixed(2)}</p>
+                        <p><span className="font-medium">Max Quantity:</span> {Number(addOn.max_quantity) || 0}</p>
                       </div>
                       <div className="flex gap-2">
                         <Button variant="outline" size="sm" className="flex-1" onClick={() => handleOpenAddOnDialog(addOn)}>
                           <Edit className="h-4 w-4 mr-2" />
                           Edit
                         </Button>
-                        <Button variant="destructive" size="sm" className="flex-1" onClick={() => handleDeleteAddOn(addOn.id)}>
+                        <Button variant="destructive" size="sm" className="flex-1" onClick={() => handleDeleteAddOn(addOn.id!)}>
                           <Trash2 className="h-4 w-4 mr-2" />
                           Delete
                         </Button>
@@ -469,7 +495,7 @@ const SubscriptionManagement = () => {
                     <Input
                       type="email"
                       value={contactInfo.facturationEmail}
-                      onChange={(e) => setContactInfo({...contactInfo, facturationEmail: e.target.value})}
+                      onChange={(e) => setContactInfo({ ...contactInfo, facturationEmail: e.target.value })}
                       className="mt-2"
                       placeholder="facturation@company.com"
                     />
@@ -482,7 +508,7 @@ const SubscriptionManagement = () => {
                     <Input
                       type="email"
                       value={contactInfo.contactEmail}
-                      onChange={(e) => setContactInfo({...contactInfo, contactEmail: e.target.value})}
+                      onChange={(e) => setContactInfo({ ...contactInfo, contactEmail: e.target.value })}
                       className="mt-2"
                       placeholder="contact@company.com"
                     />
@@ -495,7 +521,7 @@ const SubscriptionManagement = () => {
                     <Input
                       type="tel"
                       value={contactInfo.phoneNumber}
-                      onChange={(e) => setContactInfo({...contactInfo, phoneNumber: e.target.value})}
+                      onChange={(e) => setContactInfo({ ...contactInfo, phoneNumber: e.target.value })}
                       className="mt-2"
                       placeholder="+1 234 567 890"
                     />
@@ -524,7 +550,7 @@ const SubscriptionManagement = () => {
               <Label>Plan Name *</Label>
               <Input
                 value={planForm.name}
-                onChange={(e) => setPlanForm({...planForm, name: e.target.value})}
+                onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
                 placeholder="e.g., Premium Plan"
                 className="mt-2"
               />
@@ -535,7 +561,7 @@ const SubscriptionManagement = () => {
                 <Input
                   type="number"
                   value={planForm.price}
-                  onChange={(e) => setPlanForm({...planForm, price: parseFloat(e.target.value)})}
+                  onChange={(e) => setPlanForm({ ...planForm, price: parseFloat(e.target.value) })}
                   placeholder="49.99"
                   className="mt-2"
                 />
@@ -545,7 +571,7 @@ const SubscriptionManagement = () => {
                 <Input
                   type="number"
                   value={planForm.displayOrder}
-                  onChange={(e) => setPlanForm({...planForm, displayOrder: parseInt(e.target.value)})}
+                  onChange={(e) => setPlanForm({ ...planForm, displayOrder: parseInt(e.target.value) })}
                   className="mt-2"
                 />
               </div>
@@ -556,7 +582,7 @@ const SubscriptionManagement = () => {
                 <Input
                   type="number"
                   value={planForm.durationValue}
-                  onChange={(e) => setPlanForm({...planForm, durationValue: parseInt(e.target.value)})}
+                  onChange={(e) => setPlanForm({ ...planForm, durationValue: parseInt(e.target.value) })}
                   placeholder="1"
                   className="mt-2"
                 />
@@ -565,7 +591,7 @@ const SubscriptionManagement = () => {
                 <Label>Duration Type</Label>
                 <Select
                   value={planForm.durationType}
-                  onValueChange={(value: 'month' | 'year') => setPlanForm({...planForm, durationType: value})}
+                  onValueChange={(value: 'month' | 'year') => setPlanForm({ ...planForm, durationType: value })}
                 >
                   <SelectTrigger className="mt-2">
                     <SelectValue />
@@ -581,7 +607,7 @@ const SubscriptionManagement = () => {
               <Label>Description</Label>
               <Textarea
                 value={planForm.description}
-                onChange={(e) => setPlanForm({...planForm, description: e.target.value})}
+                onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })}
                 placeholder="Describe what's included in this plan"
                 rows={3}
                 className="mt-2"
@@ -591,7 +617,7 @@ const SubscriptionManagement = () => {
               <Label>Promo Code (Optional)</Label>
               <Input
                 value={planForm.promoCode}
-                onChange={(e) => setPlanForm({...planForm, promoCode: e.target.value})}
+                onChange={(e) => setPlanForm({ ...planForm, promoCode: e.target.value })}
                 placeholder="PROMO10"
                 className="mt-2"
               />
@@ -599,14 +625,14 @@ const SubscriptionManagement = () => {
             <div className="flex items-center space-x-2">
               <Switch
                 checked={planForm.isRecommended}
-                onCheckedChange={(checked) => setPlanForm({...planForm, isRecommended: checked})}
+                onCheckedChange={(checked) => setPlanForm({ ...planForm, isRecommended: checked })}
               />
               <Label>Mark as Recommended</Label>
             </div>
             <div className="flex items-center space-x-2">
               <Switch
                 checked={planForm.isActive}
-                onCheckedChange={(checked) => setPlanForm({...planForm, isActive: checked})}
+                onCheckedChange={(checked) => setPlanForm({ ...planForm, isActive: checked })}
               />
               <Label>Active</Label>
             </div>
@@ -631,30 +657,30 @@ const SubscriptionManagement = () => {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Add-on Name *</Label>
+              <Label>Title *</Label>
               <Input
-                value={addOnForm.name}
-                onChange={(e) => setAddOnForm({...addOnForm, name: e.target.value})}
-                placeholder="e.g., Extra Storage"
+                value={addOnForm.title}
+                onChange={(e) => setAddOnForm({ ...addOnForm, title: e.target.value })}
+                placeholder="e.g., Gold Support"
                 className="mt-2"
               />
             </div>
             <div>
-              <Label>Price ($) *</Label>
+              <Label>Price (HT) *</Label>
               <Input
                 type="number"
-                value={addOnForm.price}
-                onChange={(e) => setAddOnForm({...addOnForm, price: parseFloat(e.target.value)})}
-                placeholder="5.00"
+                value={addOnForm.price_ht}
+                onChange={(e) => setAddOnForm({ ...addOnForm, price_ht: parseFloat(e.target.value) })}
+                placeholder="100.00"
                 className="mt-2"
               />
             </div>
             <div>
-              <Label>Short Description</Label>
+              <Label>Tooltip</Label>
               <Textarea
-                value={addOnForm.description}
-                onChange={(e) => setAddOnForm({...addOnForm, description: e.target.value})}
-                placeholder="Brief description of this add-on"
+                value={addOnForm.tooltip}
+                onChange={(e) => setAddOnForm({ ...addOnForm, tooltip: e.target.value })}
+                placeholder="Brief description or tooltip for this add-on"
                 rows={2}
                 className="mt-2"
               />
@@ -663,18 +689,18 @@ const SubscriptionManagement = () => {
               <Label>Max Quantity</Label>
               <Input
                 type="number"
-                value={addOnForm.maxQuantity}
-                onChange={(e) => setAddOnForm({...addOnForm, maxQuantity: parseInt(e.target.value)})}
-                placeholder="5"
+                value={addOnForm.max_quantity}
+                onChange={(e) => setAddOnForm({ ...addOnForm, max_quantity: parseInt(e.target.value) })}
+                placeholder="2"
                 className="mt-2"
               />
             </div>
             <div className="flex items-center space-x-2">
               <Switch
-                checked={addOnForm.isVisible}
-                onCheckedChange={(checked) => setAddOnForm({...addOnForm, isVisible: checked})}
+                checked={addOnForm.is_active}
+                onCheckedChange={(checked) => setAddOnForm({ ...addOnForm, is_active: checked })}
               />
-              <Label>Visible to Users</Label>
+              <Label>Active</Label>
             </div>
           </div>
           <DialogFooter>
