@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from "@/admin/components/ui/card";
 import { Button } from "@/admin/components/ui/button";
 import { Input } from "@/admin/components/ui/input";
@@ -37,7 +37,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/admin/components/ui/alert-dialog";
-import { Plus, Edit, Trash2, Percent, Calendar, Copy, CheckCircle2 } from "lucide-react";
+import { Plus, Edit, Trash2, Percent, Calendar, Copy } from "lucide-react";
 import { promoCodeApi, PromoCodeApiItem } from '@/admin/lib/api/services/promoCodeService';
 import toast from 'react-hot-toast';
 

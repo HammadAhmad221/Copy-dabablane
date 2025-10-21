@@ -1,17 +1,10 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from "@/admin/components/ui/card";
 import { Button } from "@/admin/components/ui/button";
 import { Input } from "@/admin/components/ui/input";
 import { Textarea } from "@/admin/components/ui/textarea";
 import { Label } from "@/admin/components/ui/label";
 import { Switch } from "@/admin/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/admin/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -34,104 +27,59 @@ import {
   TableHeader,
   TableRow,
 } from "@/admin/components/ui/table";
-import { Plus, Edit, Trash2, Star, Eye, EyeOff, DollarSign, Calendar, Package, Phone, Mail } from "lucide-react";
+import { Plus, Edit, Trash2, Star, Eye, EyeOff } from "lucide-react";
 import toast from 'react-hot-toast';
-
-interface OfferPlan {
-  id: string;
-  name: string;
-  price: number;
-  duration: string;
-  durationValue: number;
-  durationType: 'month' | 'year';
-  description: string;
-  promoCode?: string;
-  isRecommended: boolean;
-  displayOrder: number;
-  isActive: boolean;
-}
-
-import { AddOn } from '@/admin/lib/add-ons/types';
+import { vendorPlanService, VendorPlan } from '@/admin/lib/api/offer-plans';
 import { useAddOns } from '@/admin/lib/add-ons/useAddOns';
+import { AddOn } from '@/admin/lib/add-ons/types';
 
-interface ContactInfo {
-  facturationEmail: string;
-  contactEmail: string;
-  phoneNumber: string;
+interface PlanFormData {
+  title: string;
+  slug: string;
+  price_ht: number;
+  original_price_ht: number;
+  duration_days: number;
+  description: string;
+  is_recommended: boolean;
+  display_order: number;
+  is_active: boolean;
 }
 
 const SubscriptionManagement = () => {
   const [activeTab, setActiveTab] = useState('plans');
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Offer Plans State (using API data)
+  const [plans, setPlans] = useState<VendorPlan[]>([]);
+
+  // Add-ons State using the hook
   const {
     addOns,
-    isLoading,
-    error,
+    isLoading: addOnsLoading,
+    error: addOnsError,
     fetchAddOns,
     createAddOn,
     updateAddOn,
     deleteAddOn
   } = useAddOns();
 
-  // Offer Plans State
-  const [plans, setPlans] = useState<OfferPlan[]>([
-    {
-      id: '1',
-      name: 'Basic Plan',
-      price: 29.99,
-      duration: '1 month',
-      durationValue: 1,
-      durationType: 'month',
-      description: 'Perfect for small businesses',
-      isRecommended: false,
-      displayOrder: 2,
-      isActive: true
-    },
-    {
-      id: '2',
-      name: 'Premium Plan',
-      price: 49.99,
-      duration: '1 month',
-      durationValue: 1,
-      durationType: 'month',
-      description: 'Best for growing businesses',
-      promoCode: 'PREMIUM10',
-      isRecommended: true,
-      displayOrder: 1,
-      isActive: true
-    }
-  ]);
-
-  // Effect to load add-ons on mount and when tab is selected
-  React.useEffect(() => {
-    if (activeTab === 'addons') {
-      fetchAddOns();
-    }
-  }, [activeTab, fetchAddOns]);
-
-  // Contact Info State
-  const [contactInfo, setContactInfo] = useState<ContactInfo>({
-    facturationEmail: 'facturation@company.com',
-    contactEmail: 'contact@company.com',
-    phoneNumber: '+1 234 567 890'
-  });
-
   // Dialog States
   const [planDialog, setPlanDialog] = useState(false);
   const [addOnDialog, setAddOnDialog] = useState(false);
-  const [editingPlan, setEditingPlan] = useState<OfferPlan | null>(null);
+  const [editingPlan, setEditingPlan] = useState<VendorPlan | null>(null);
   const [editingAddOn, setEditingAddOn] = useState<AddOn | null>(null);
 
   // Form States
-  const [planForm, setPlanForm] = useState<Partial<OfferPlan>>({
-    name: '',
-    price: 0,
-    durationValue: 1,
-    durationType: 'month',
+  const [planForm, setPlanForm] = useState<PlanFormData>({
+    title: '',
+    slug: '',
+    price_ht: 0,
+    original_price_ht: 0,
+    duration_days: 30,
     description: '',
-    promoCode: '',
-    isRecommended: false,
-    displayOrder: 1,
-    isActive: true
+    is_recommended: false,
+    display_order: 1,
+    is_active: true
   });
 
   const [addOnForm, setAddOnForm] = useState<Partial<AddOn>>({
@@ -142,58 +90,105 @@ const SubscriptionManagement = () => {
     is_active: true
   });
 
+  // Fetch plans and add-ons on mount
+  useEffect(() => {
+    void fetchVendorPlans();
+    void fetchAddOns();
+  }, []);
+
+  // Fetch all vendor plans from API
+  const fetchVendorPlans = async () => {
+    try {
+      setIsLoading(true);
+      const response = await vendorPlanService.getAllPlans();
+      // Convert string prices to numbers for consistent handling
+      const normalizedPlans = response.data.map(plan => ({
+        ...plan,
+        price_ht: typeof plan.price_ht === 'string' ? parseFloat(plan.price_ht) : plan.price_ht,
+        original_price_ht: typeof plan.original_price_ht === 'string' ? parseFloat(plan.original_price_ht) : plan.original_price_ht,
+      }));
+      setPlans(normalizedPlans);
+    } catch (error) {
+      console.error('Error fetching vendor plans:', error);
+      toast.error('Failed to load vendor plans');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Plan Handlers
-  const handleOpenPlanDialog = (plan?: OfferPlan) => {
+  const handleOpenPlanDialog = (plan?: VendorPlan) => {
     if (plan) {
       setEditingPlan(plan);
-      setPlanForm(plan);
+      setPlanForm({
+        title: plan.title,
+        slug: plan.slug,
+        price_ht: Number(plan.price_ht),
+        original_price_ht: Number(plan.original_price_ht),
+        duration_days: plan.duration_days,
+        description: plan.description,
+        is_recommended: plan.is_recommended,
+        display_order: plan.display_order,
+        is_active: plan.is_active
+      });
     } else {
       setEditingPlan(null);
       setPlanForm({
-        name: '',
-        price: 0,
-        durationValue: 1,
-        durationType: 'month',
+        title: '',
+        slug: '',
+        price_ht: 0,
+        original_price_ht: 0,
+        duration_days: 30,
         description: '',
-        promoCode: '',
-        isRecommended: false,
-        displayOrder: plans.length + 1,
-        isActive: true
+        is_recommended: false,
+        display_order: plans.length + 1,
+        is_active: true
       });
     }
     setPlanDialog(true);
   };
 
-  const handleSavePlan = () => {
-    if (!planForm.name || !planForm.price) {
+  const handleSavePlan = async () => {
+    if (!planForm.title || !planForm.price_ht) {
       toast.error('Please fill all required fields');
       return;
     }
 
-    const duration = `${planForm.durationValue} ${planForm.durationType}${planForm.durationValue! > 1 ? 's' : ''}`;
-
-    if (editingPlan) {
-      setPlans(plans.map(p => p.id === editingPlan.id ? {
-        ...planForm,
-        id: editingPlan.id,
-        duration
-      } as OfferPlan : p));
-      toast.success('Plan updated successfully');
-    } else {
-      const newPlan: OfferPlan = {
-        ...planForm,
-        id: Date.now().toString(),
-        duration
-      } as OfferPlan;
-      setPlans([...plans, newPlan]);
-      toast.success('Plan created successfully');
+    try {
+      setIsLoading(true);
+      if (editingPlan) {
+        await vendorPlanService.updatePlan(editingPlan.id, planForm);
+        toast.success('Plan updated successfully');
+      } else {
+        await vendorPlanService.createPlan(planForm);
+        toast.success('Plan created successfully');
+      }
+      await fetchVendorPlans();
+      setPlanDialog(false);
+    } catch (error) {
+      console.error('Error saving vendor plan:', error);
+      toast.error('Failed to save vendor plan');
+    } finally {
+      setIsLoading(false);
     }
-    setPlanDialog(false);
   };
 
-  const handleDeletePlan = (id: string) => {
-    setPlans(plans.filter(p => p.id !== id));
-    toast.success('Plan deleted successfully');
+  const handleDeletePlan = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this plan?')) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await vendorPlanService.deletePlan(id);
+      toast.success('Plan deleted successfully');
+      await fetchVendorPlans();
+    } catch (error) {
+      console.error('Error deleting vendor plan:', error);
+      toast.error('Failed to delete vendor plan');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Add-on Handlers
@@ -254,11 +249,6 @@ const SubscriptionManagement = () => {
     }
   };
 
-  // Contact Info Handlers
-  const handleSaveContactInfo = () => {
-    toast.success('Contact information updated successfully');
-  };
-
   return (
     <div className="space-y-4 sm:space-y-6 p-2 sm:p-4 lg:p-6">
       <Card className="overflow-hidden">
@@ -267,7 +257,7 @@ const SubscriptionManagement = () => {
           <div className="text-white">
             <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold">Subscription Management</h2>
             <p className="text-white/80 text-sm sm:text-base mt-1">
-              Manage offer plans, add-ons, and contact information
+              Manage subscription plans and add-ons for vendors
             </p>
           </div>
         </div>
@@ -275,106 +265,115 @@ const SubscriptionManagement = () => {
         {/* Tabs */}
         <div className="p-4 sm:p-6">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="plans">Offer Plans</TabsTrigger>
               <TabsTrigger value="addons">Add-ons</TabsTrigger>
-              <TabsTrigger value="contacts">Contacts</TabsTrigger>
             </TabsList>
 
             {/* Offer Plans Tab */}
             <TabsContent value="plans" className="space-y-4">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-semibold">Manage Offer Plans</h3>
-                <Button onClick={() => handleOpenPlanDialog()} className="bg-[#00897B] hover:bg-[#00796B]">
+                <Button onClick={() => handleOpenPlanDialog()} className="bg-[#00897B] hover:bg-[#00796B]" disabled={isLoading}>
                   <Plus className="h-4 w-4 mr-2" />
                   Create Plan
                 </Button>
               </div>
 
-              {/* Desktop Table */}
-              <div className="hidden md:block rounded-md border overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Order</TableHead>
-                      <TableHead>Plan Name</TableHead>
-                      <TableHead>Price</TableHead>
-                      <TableHead>Duration</TableHead>
-                      <TableHead>Promo Code</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {plans.sort((a, b) => a.displayOrder - b.displayOrder).map((plan) => (
-                      <TableRow key={plan.id}>
-                        <TableCell className="font-medium">#{plan.displayOrder}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {plan.name}
-                            {plan.isRecommended && <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />}
-                          </div>
-                        </TableCell>
-                        <TableCell>${plan.price.toFixed(2)}</TableCell>
-                        <TableCell>{plan.duration}</TableCell>
-                        <TableCell>{plan.promoCode || '-'}</TableCell>
-                        <TableCell>
-                          <span className={`px-2 py-1 rounded-full text-xs ${plan.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                            {plan.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2 justify-end">
-                            <Button variant="outline" size="sm" onClick={() => handleOpenPlanDialog(plan)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="destructive" size="sm" onClick={() => handleDeletePlan(plan.id)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              {isLoading ? (
+                <div className="text-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#00897B]"></div>
+                  <p className="mt-2 text-gray-500">Loading plans...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Desktop Table */}
+                  <div className="hidden md:block rounded-md border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Order</TableHead>
+                          <TableHead>Plan Name</TableHead>
+                          <TableHead>Price (HT)</TableHead>
+                          <TableHead>Original Price</TableHead>
+                          <TableHead>Duration (Days)</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {plans.sort((a, b) => a.display_order - b.display_order).map((plan) => (
+                          <TableRow key={plan.id}>
+                            <TableCell className="font-medium">#{plan.display_order}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {plan.title}
+                                {plan.is_recommended && <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />}
+                              </div>
+                            </TableCell>
+                            <TableCell>${Number(plan.price_ht).toFixed(2)}</TableCell>
+                            <TableCell>${Number(plan.original_price_ht).toFixed(2)}</TableCell>
+                            <TableCell>{plan.duration_days} days</TableCell>
+                            <TableCell>
+                              <span className={`px-2 py-1 rounded-full text-xs ${plan.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                {plan.is_active ? 'Active' : 'Inactive'}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-2 justify-end">
+                                <Button variant="outline" size="sm" onClick={() => handleOpenPlanDialog(plan)} disabled={isLoading}>
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button variant="destructive" size="sm" onClick={() => handleDeletePlan(plan.id)} disabled={isLoading}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
+              )}
 
-              {/* Mobile Cards */}
-              <div className="md:hidden space-y-3">
-                {plans.sort((a, b) => a.displayOrder - b.displayOrder).map((plan) => (
-                  <Card key={plan.id} className="p-4">
-                    <div className="space-y-3">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold">{plan.name}</span>
-                            {plan.isRecommended && <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />}
+              {!isLoading && (
+                <div className="md:hidden space-y-3">
+                  {plans.sort((a, b) => a.display_order - b.display_order).map((plan) => (
+                    <Card key={plan.id} className="p-4">
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold">{plan.title}</span>
+                              {plan.is_recommended && <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />}
+                            </div>
+                            <p className="text-sm text-gray-500">Order #{plan.display_order}</p>
                           </div>
-                          <p className="text-sm text-gray-500">Order #{plan.displayOrder}</p>
+                          <span className={`px-2 py-1 rounded-full text-xs ${plan.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            {plan.is_active ? 'Active' : 'Inactive'}
+                          </span>
                         </div>
-                        <span className={`px-2 py-1 rounded-full text-xs ${plan.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                          {plan.isActive ? 'Active' : 'Inactive'}
-                        </span>
+                        <div className="text-sm space-y-1">
+                          <p><span className="font-medium">Price:</span> ${Number(plan.price_ht).toFixed(2)}</p>
+                          <p><span className="font-medium">Original:</span> ${Number(plan.original_price_ht).toFixed(2)}</p>
+                          <p><span className="font-medium">Duration:</span> {plan.duration_days} days</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" className="flex-1" onClick={() => handleOpenPlanDialog(plan)} disabled={isLoading}>
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit
+                          </Button>
+                          <Button variant="destructive" size="sm" className="flex-1" onClick={() => handleDeletePlan(plan.id)} disabled={isLoading}>
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </Button>
+                        </div>
                       </div>
-                      <div className="text-sm space-y-1">
-                        <p><span className="font-medium">Price:</span> ${plan.price.toFixed(2)}</p>
-                        <p><span className="font-medium">Duration:</span> {plan.duration}</p>
-                        <p><span className="font-medium">Promo:</span> {plan.promoCode || '-'}</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="flex-1" onClick={() => handleOpenPlanDialog(plan)}>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit
-                        </Button>
-                        <Button variant="destructive" size="sm" className="flex-1" onClick={() => handleDeletePlan(plan.id)}>
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </TabsContent>
 
             {/* Add-ons Tab */}
@@ -388,14 +387,14 @@ const SubscriptionManagement = () => {
               </div>
 
               {/* Error State */}
-              {error && (
+              {addOnsError && (
                 <div className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg">
-                  {error}
+                  {addOnsError}
                 </div>
               )}
 
               {/* Loading State */}
-              {isLoading && (
+              {addOnsLoading && (
                 <div className="flex items-center justify-center p-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#00897B]"></div>
                 </div>
@@ -482,56 +481,6 @@ const SubscriptionManagement = () => {
               </div>
             </TabsContent>
 
-            {/* Contacts Tab */}
-            <TabsContent value="contacts" className="space-y-4">
-              <h3 className="text-lg font-semibold">Contact Information</h3>
-              <Card className="p-6">
-                <div className="space-y-4">
-                  <div>
-                    <Label className="flex items-center gap-2">
-                      <Mail className="h-4 w-4" />
-                      Facturation Email
-                    </Label>
-                    <Input
-                      type="email"
-                      value={contactInfo.facturationEmail}
-                      onChange={(e) => setContactInfo({ ...contactInfo, facturationEmail: e.target.value })}
-                      className="mt-2"
-                      placeholder="facturation@company.com"
-                    />
-                  </div>
-                  <div>
-                    <Label className="flex items-center gap-2">
-                      <Mail className="h-4 w-4" />
-                      Contact Email
-                    </Label>
-                    <Input
-                      type="email"
-                      value={contactInfo.contactEmail}
-                      onChange={(e) => setContactInfo({ ...contactInfo, contactEmail: e.target.value })}
-                      className="mt-2"
-                      placeholder="contact@company.com"
-                    />
-                  </div>
-                  <div>
-                    <Label className="flex items-center gap-2">
-                      <Phone className="h-4 w-4" />
-                      Phone Number
-                    </Label>
-                    <Input
-                      type="tel"
-                      value={contactInfo.phoneNumber}
-                      onChange={(e) => setContactInfo({ ...contactInfo, phoneNumber: e.target.value })}
-                      className="mt-2"
-                      placeholder="+1 234 567 890"
-                    />
-                  </div>
-                  <Button onClick={handleSaveContactInfo} className="bg-[#00897B] hover:bg-[#00796B]">
-                    Save Contact Information
-                  </Button>
-                </div>
-              </Card>
-            </TabsContent>
           </Tabs>
         </div>
       </Card>
@@ -547,60 +496,70 @@ const SubscriptionManagement = () => {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Plan Name *</Label>
+              <Label>Plan Title *</Label>
               <Input
-                value={planForm.name}
-                onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
+                value={planForm.title}
+                onChange={(e) => setPlanForm({...planForm, title: e.target.value})}
                 placeholder="e.g., Premium Plan"
                 className="mt-2"
+                disabled={isLoading}
+              />
+            </div>
+            <div>
+              <Label>Slug *</Label>
+              <Input
+                value={planForm.slug}
+                onChange={(e) => setPlanForm({...planForm, slug: e.target.value})}
+                placeholder="e.g., premium-plan"
+                className="mt-2"
+                disabled={isLoading}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Price ($) *</Label>
+                <Label>Price (HT) *</Label>
                 <Input
                   type="number"
-                  value={planForm.price}
-                  onChange={(e) => setPlanForm({ ...planForm, price: parseFloat(e.target.value) })}
+                  value={planForm.price_ht}
+                  onChange={(e) => setPlanForm({...planForm, price_ht: parseFloat(e.target.value)})}
                   placeholder="49.99"
                   className="mt-2"
+                  disabled={isLoading}
+                />
+              </div>
+              <div>
+                <Label>Original Price (HT)</Label>
+                <Input
+                  type="number"
+                  value={planForm.original_price_ht}
+                  onChange={(e) => setPlanForm({...planForm, original_price_ht: parseFloat(e.target.value)})}
+                  placeholder="59.99"
+                  className="mt-2"
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Duration (Days) *</Label>
+                <Input
+                  type="number"
+                  value={planForm.duration_days}
+                  onChange={(e) => setPlanForm({...planForm, duration_days: parseInt(e.target.value)})}
+                  placeholder="30"
+                  className="mt-2"
+                  disabled={isLoading}
                 />
               </div>
               <div>
                 <Label>Display Order</Label>
                 <Input
                   type="number"
-                  value={planForm.displayOrder}
-                  onChange={(e) => setPlanForm({ ...planForm, displayOrder: parseInt(e.target.value) })}
+                  value={planForm.display_order}
+                  onChange={(e) => setPlanForm({...planForm, display_order: parseInt(e.target.value)})}
                   className="mt-2"
+                  disabled={isLoading}
                 />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Duration Value</Label>
-                <Input
-                  type="number"
-                  value={planForm.durationValue}
-                  onChange={(e) => setPlanForm({ ...planForm, durationValue: parseInt(e.target.value) })}
-                  placeholder="1"
-                  className="mt-2"
-                />
-              </div>
-              <div>
-                <Label>Duration Type</Label>
-                <Select
-                  value={planForm.durationType}
-                  onValueChange={(value: 'month' | 'year') => setPlanForm({ ...planForm, durationType: value })}
-                >
-                  <SelectTrigger className="mt-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="month">Month(s)</SelectItem>
-                    <SelectItem value="year">Year(s)</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </div>
             <div>
@@ -611,36 +570,30 @@ const SubscriptionManagement = () => {
                 placeholder="Describe what's included in this plan"
                 rows={3}
                 className="mt-2"
-              />
-            </div>
-            <div>
-              <Label>Promo Code (Optional)</Label>
-              <Input
-                value={planForm.promoCode}
-                onChange={(e) => setPlanForm({ ...planForm, promoCode: e.target.value })}
-                placeholder="PROMO10"
-                className="mt-2"
+                disabled={isLoading}
               />
             </div>
             <div className="flex items-center space-x-2">
               <Switch
-                checked={planForm.isRecommended}
-                onCheckedChange={(checked) => setPlanForm({ ...planForm, isRecommended: checked })}
+                checked={planForm.is_recommended}
+                onCheckedChange={(checked) => setPlanForm({...planForm, is_recommended: checked})}
+                disabled={isLoading}
               />
               <Label>Mark as Recommended</Label>
             </div>
             <div className="flex items-center space-x-2">
               <Switch
-                checked={planForm.isActive}
-                onCheckedChange={(checked) => setPlanForm({ ...planForm, isActive: checked })}
+                checked={planForm.is_active}
+                onCheckedChange={(checked) => setPlanForm({...planForm, is_active: checked})}
+                disabled={isLoading}
               />
               <Label>Active</Label>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPlanDialog(false)}>Cancel</Button>
-            <Button onClick={handleSavePlan} className="bg-[#00897B] hover:bg-[#00796B]">
-              {editingPlan ? 'Update' : 'Create'} Plan
+            <Button variant="outline" onClick={() => setPlanDialog(false)} disabled={isLoading}>Cancel</Button>
+            <Button onClick={handleSavePlan} className="bg-[#00897B] hover:bg-[#00796B]" disabled={isLoading}>
+              {isLoading ? 'Saving...' : editingPlan ? 'Update' : 'Create'} Plan
             </Button>
           </DialogFooter>
         </DialogContent>

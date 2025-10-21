@@ -2,8 +2,8 @@ export interface VendorPlan {
   id: number;
   title: string;
   slug: string;
-  price_ht: number;
-  original_price_ht: number;
+  price_ht: number | string; // API returns string, but we normalize to number
+  original_price_ht: number | string; // API returns string, but we normalize to number
   duration_days: number;
   description: string;
   is_recommended: boolean;
