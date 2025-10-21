@@ -1,8 +1,7 @@
 import axios from 'axios';
 
 // Base API URL configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-// Keep ADMIN_API_PATH empty since BACK_AUTH_ENDPOINTS already includes the /api prefix
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://dev.dabablane.com/api';
 const ADMIN_API_PATH = '';
 
 // Main authenticated admin API client
@@ -11,8 +10,7 @@ export const adminApiClient = axios.create({
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    'X-Auth-Token': import.meta.env.VITE_API_TOKEN
+    'Accept': 'application/json'
   },
 });
 
@@ -29,11 +27,19 @@ export const adminGuestApiClient = axios.create({
 
 // Request interceptor to add auth token
 adminApiClient.interceptors.request.use((config) => {
-  // Update token on each request to ensure it's current
-  const token = localStorage.getItem('authToken');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  // Use the hardcoded token for now (this should be replaced with proper auth later)
+  const token = '666|4s6ttd05NEXXPesmwPw78cJdKHYFEVf2DNKpNSRl346a613d';
+  
+  // Set headers
+  config.headers = config.headers || {};
+  config.headers.Authorization = `Bearer ${token}`;
+  config.headers['Content-Type'] = 'application/json';
+  config.headers.Accept = 'application/json';
+  
+  const fullUrl = `${config.baseURL || ''}${config.url || ''}`;
+  console.log('Making request to:', fullUrl);
+  console.log('Request headers:', config.headers);
+  
   return config;
 });
 
