@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { VendorPlan } from '@/admin/lib/api/offer-plans';
 import { toast } from 'react-hot-toast';
 import { Card } from "@/admin/components/ui/card";
 import { Button } from "@/admin/components/ui/button";
@@ -16,26 +17,11 @@ import {
     TableRow,
 } from "@/admin/components/ui/table";
 
-// Hardcoded vendor plan interface
-interface VendorPlan {
-    id: number;
-    title: string;
-    slug: string;
-    price_ht: number;
-    original_price_ht: number;
-    duration_days: number;
-    description: string;
-    is_recommended: boolean;
-    display_order: number;
-    is_active: boolean;
-}
-
-interface FormData extends Omit<VendorPlan, 'id'> {}
+interface FormData extends Omit<VendorPlan, 'id' | 'created_at' | 'updated_at'> {}
 
 const VendorsPlane = () => {
-    const [isLoading, setIsLoading] = useState(false);
     // Hardcoded vendor plans data
-    const [vendors, setVendors] = useState<VendorPlan[]>([
+    const initialVendors: VendorPlan[] = [
         {
             id: 1,
             title: 'Basic Plan',
@@ -43,22 +29,26 @@ const VendorsPlane = () => {
             price_ht: 29.99,
             original_price_ht: 39.99,
             duration_days: 30,
-            description: 'Perfect for small businesses starting out',
+            description: 'Perfect for small businesses getting started',
             is_recommended: false,
-            display_order: 2,
-            is_active: true
+            display_order: 1,
+            is_active: true,
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z'
         },
         {
             id: 2,
             title: 'Premium Plan',
             slug: 'premium-plan',
-            price_ht: 49.99,
-            original_price_ht: 69.99,
+            price_ht: 59.99,
+            original_price_ht: 79.99,
             duration_days: 30,
-            description: 'Best for growing businesses with more features',
+            description: 'Advanced features for growing businesses',
             is_recommended: true,
-            display_order: 1,
-            is_active: true
+            display_order: 2,
+            is_active: true,
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z'
         },
         {
             id: 3,
@@ -67,12 +57,16 @@ const VendorsPlane = () => {
             price_ht: 99.99,
             original_price_ht: 129.99,
             duration_days: 30,
-            description: 'Full-featured plan for large enterprises',
+            description: 'Full-featured solution for large enterprises',
             is_recommended: false,
             display_order: 3,
-            is_active: true
+            is_active: true,
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z'
         }
-    ]);
+    ];
+
+    const [vendors, setVendors] = useState<VendorPlan[]>(initialVendors);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [selectedVendor, setSelectedVendor] = useState<VendorPlan | null>(null);
     const [formData, setFormData] = useState<FormData>({
@@ -87,37 +81,34 @@ const VendorsPlane = () => {
         is_active: true
     });
 
-    const handleCreateOrUpdatePlan = () => {
-        // Validate required fields
-        if (!formData.title || !formData.slug || !formData.price_ht) {
-            toast.error('Please fill all required fields');
-            return;
-        }
+    // Helper function to generate next ID
+    const getNextId = (items: VendorPlan[]) => {
+        return Math.max(...items.map(item => item.id), 0) + 1;
+    };
 
-        setIsLoading(true);
-        
-        // Simulate API delay
-        setTimeout(() => {
-            if (selectedVendor) {
-                // Update existing plan
-                setVendors(vendors.map(v => 
-                    v.id === selectedVendor.id 
-                        ? { ...formData, id: selectedVendor.id }
-                        : v
-                ));
-                toast.success('Plan updated successfully');
-            } else {
-                // Create new plan
-                const newPlan: VendorPlan = {
-                    ...formData,
-                    id: Math.max(...vendors.map(v => v.id), 0) + 1
-                };
-                setVendors([...vendors, newPlan]);
-                toast.success('Plan created successfully');
-            }
-            setIsDialogOpen(false);
-            setIsLoading(false);
-        }, 500);
+    const handleCreateOrUpdatePlan = () => {
+        if (selectedVendor) {
+            // Update existing plan
+            setVendors(prevVendors => 
+                prevVendors.map(vendor => 
+                    vendor.id === selectedVendor.id 
+                        ? { ...vendor, ...formData, updated_at: new Date().toISOString() }
+                        : vendor
+                )
+            );
+            toast.success('Plan updated successfully');
+        } else {
+            // Create new plan
+            const newVendor: VendorPlan = {
+                id: getNextId(vendors),
+                ...formData,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            };
+            setVendors(prevVendors => [...prevVendors, newVendor]);
+            toast.success('Plan created successfully');
+        }
+        setIsDialogOpen(false);
     };
 
     const handleDeletePlan = (id: number) => {
@@ -125,21 +116,14 @@ const VendorsPlane = () => {
             return;
         }
 
-        setIsLoading(true);
-        
-        // Simulate API delay
-        setTimeout(() => {
-            setVendors(vendors.filter(v => v.id !== id));
-            toast.success('Plan deleted successfully');
-            setIsLoading(false);
-        }, 300);
+        setVendors(prevVendors => prevVendors.filter(vendor => vendor.id !== id));
+        toast.success('Plan deleted successfully');
     };
 
     const handleOpenDialog = (vendor?: VendorPlan) => {
         if (vendor) {
             setSelectedVendor(vendor);
-            const { id, ...vendorData } = vendor;
-            setFormData(vendorData);
+            setFormData(vendor);
         } else {
             setSelectedVendor(null);
             setFormData({
@@ -150,7 +134,7 @@ const VendorsPlane = () => {
                 duration_days: 30,
                 description: '',
                 is_recommended: false,
-                display_order: vendors.length + 1,
+                display_order: 1,
                 is_active: true
             });
         }
@@ -167,9 +151,9 @@ const VendorsPlane = () => {
                 {/* Header */}
                 <div className="p-4 sm:p-6 lg:p-8 bg-gradient-to-r from-[#00897B] to-[#00796B]">
                     <div className="text-white">
-                        <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold">Vendor Plans (Demo)</h2>
+                        <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold">Vendor Plans</h2>
                         <p className="text-white/80 text-sm sm:text-base mt-1">
-                            Preview vendor subscription plans with sample data
+                            Manage subscription plans for vendors
                         </p>
                     </div>
                 </div>
@@ -185,10 +169,7 @@ const VendorsPlane = () => {
                         </Button>
                     </div>
 
-                    {isLoading ? (
-                        <div className="text-center py-4">Loading...</div>
-                    ) : (
-                        <>
+                    <>
                             {/* Desktop Table */}
                             <div className="hidden md:block rounded-md border overflow-x-auto">
                                 <Table>
@@ -288,8 +269,7 @@ const VendorsPlane = () => {
                                     </Card>
                                 ))}
                             </div>
-                        </>
-                    )}
+                    </>
                 </div>
             </Card>
 
@@ -399,7 +379,7 @@ const VendorsPlane = () => {
                             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                                 Cancel
                             </Button>
-                            <Button onClick={handleCreateOrUpdatePlan} disabled={isLoading}
+                            <Button onClick={handleCreateOrUpdatePlan}
                                 className="bg-[#00897B] hover:bg-[#00796B]">
                                 {selectedVendor ? 'Update' : 'Create'}
                             </Button>

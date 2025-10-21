@@ -29,7 +29,7 @@ import {
 } from "@/admin/components/ui/table";
 import { Plus, Edit, Trash2, Star, Eye, EyeOff } from "lucide-react";
 import toast from 'react-hot-toast';
-import { vendorPlanService, VendorPlan } from '@/admin/lib/api/vendor-plans';
+import { vendorPlanService, VendorPlan } from '@/admin/lib/api/offer-plans';
 import { useAddOns } from '@/admin/lib/add-ons/useAddOns';
 import { AddOn } from '@/admin/lib/add-ons/types';
 
