@@ -145,7 +145,6 @@ export const blaneApi = {
       });
       return response.data;
     } catch (error) {
-      console.error('Error updating blane:', error);
       throw error;
     }
   },

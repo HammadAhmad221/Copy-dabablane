@@ -1,6 +1,6 @@
 import { adminApiClient as apiClient } from '../client';
 import BACK_COUPON_ENDPOINTS from '../endpoints/coupon';
-import { Coupon, CouponFormData, CouponResponse, CouponFilters } from '../types/coupon';
+import { Coupon, CouponFormData, CouponResponse } from '../types/coupon';
 import { ApiResponse } from '../types/api';
 
 interface GetCouponsParams {

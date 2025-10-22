@@ -59,7 +59,6 @@ export const useVendors = (): UseVendorsState & UseVendorsActions => {
         lastPage: response.meta.last_page
       });
     } catch (error: any) {
-      console.error('Error fetching vendors:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Erreur lors du chargement des vendeurs';
       setError(errorMessage);
       toast.error(errorMessage);

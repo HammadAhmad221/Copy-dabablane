@@ -61,7 +61,6 @@ export function BlaneViewDialog({
         setTimeout(() => setCopied(false), 2000);
       })
       .catch(err => {
-        console.error('Failed to copy:', err);
         toast.error('Failed to copy link');
       });
   };
@@ -82,7 +81,6 @@ export function BlaneViewDialog({
         toast.success('Share link regenerated successfully');
       }
     } catch (error) {
-      console.error('Error regenerating share link:', error);
       toast.error('Failed to regenerate share link');
     } finally {
       setLoading(false);

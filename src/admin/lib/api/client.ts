@@ -1,8 +1,7 @@
 import axios from 'axios';
 
 // Base API URL configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-// Keep ADMIN_API_PATH empty since BACK_AUTH_ENDPOINTS already includes the /api prefix
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://dev.dabablane.com/api';
 const ADMIN_API_PATH = '';
 
 // Main authenticated admin API client
@@ -10,9 +9,7 @@ export const adminApiClient = axios.create({
   baseURL: `${API_BASE_URL}${ADMIN_API_PATH}`,
   timeout: 30000,
   headers: {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    'X-Auth-Token': import.meta.env.VITE_API_TOKEN
+    'Accept': 'application/json'
   },
 });
 
@@ -21,7 +18,6 @@ export const adminGuestApiClient = axios.create({
   baseURL: `${API_BASE_URL}${ADMIN_API_PATH}`,
   timeout: 30000,
   headers: {
-    'Content-Type': 'application/json',
     'Accept': 'application/json',
     'X-Auth-Token': import.meta.env.VITE_API_TOKEN
   },
@@ -29,11 +25,32 @@ export const adminGuestApiClient = axios.create({
 
 // Request interceptor to add auth token
 adminApiClient.interceptors.request.use((config) => {
-  // Update token on each request to ensure it's current
+  // Get token from localStorage
   const token = localStorage.getItem('authToken');
+  
+  // Set headers
+  config.headers = config.headers || {};
+  
+  // Add authorization header if token exists
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  
+  // Accept JSON responses by default
+  if (!config.headers.Accept) {
+    config.headers.Accept = 'application/json';
+  }
+
+  // For FormData requests, let the browser/axios set the correct multipart boundary
+  // Otherwise default to JSON when not explicitly provided
+  const isFormData = typeof FormData !== 'undefined' && config.data instanceof FormData;
+  if (isFormData) {
+    // Ensure we do NOT force JSON content type
+    delete (config.headers as any)['Content-Type'];
+  } else if (!config.headers['Content-Type']) {
+    config.headers['Content-Type'] = 'application/json';
+  }
+  
   return config;
 });
 

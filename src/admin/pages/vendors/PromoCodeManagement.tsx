@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from "@/admin/components/ui/card";
 import { Button } from "@/admin/components/ui/button";
 import { Input } from "@/admin/components/ui/input";
@@ -37,7 +37,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/admin/components/ui/alert-dialog";
-import { Plus, Edit, Trash2, Percent, Calendar, Copy, CheckCircle2 } from "lucide-react";
+import { Plus, Edit, Trash2, Percent, Calendar, Copy } from "lucide-react";
+import { promoCodeApi, PromoCodeApiItem } from '@/admin/lib/api/services/promoCodeService';
 import toast from 'react-hot-toast';
 
 interface PromoCode {
@@ -53,41 +54,8 @@ interface PromoCode {
 }
 
 const PromoCodeManagement = () => {
-  const [promoCodes, setPromoCodes] = useState<PromoCode[]>([
-    {
-      id: '1',
-      code: 'WELCOME20',
-      discountPercentage: 20,
-      startDate: '2024-10-01',
-      endDate: '2024-10-31',
-      isActive: true,
-      usageCount: 15,
-      maxUsage: 100,
-      applicablePlans: ['all']
-    },
-    {
-      id: '2',
-      code: 'PREMIUM10',
-      discountPercentage: 10,
-      startDate: '2024-10-01',
-      endDate: '2024-12-31',
-      isActive: true,
-      usageCount: 8,
-      maxUsage: 50,
-      applicablePlans: ['premium']
-    },
-    {
-      id: '3',
-      code: 'SUMMER25',
-      discountPercentage: 25,
-      startDate: '2024-06-01',
-      endDate: '2024-08-31',
-      isActive: false,
-      usageCount: 45,
-      maxUsage: 50,
-      applicablePlans: ['all']
-    }
-  ]);
+  const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const [promoDialog, setPromoDialog] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState(false);
@@ -111,7 +79,12 @@ const PromoCodeManagement = () => {
   const handleOpenPromoDialog = (promo?: PromoCode) => {
     if (promo) {
       setEditingPromo(promo);
-      setPromoForm(promo);
+      // Ensure date inputs get YYYY-MM-DD format
+      setPromoForm({
+        ...promo,
+        startDate: promo.startDate ? String(promo.startDate).slice(0, 10) : '',
+        endDate: promo.endDate ? String(promo.endDate).slice(0, 10) : '',
+      });
     } else {
       setEditingPromo(null);
       setPromoForm({
@@ -126,6 +99,43 @@ const PromoCodeManagement = () => {
       });
     }
     setPromoDialog(true);
+  };
+
+  // Load promo codes from API
+  const loadPromoCodes = async () => {
+    try {
+      setLoading(true);
+      const data = await promoCodeApi.getAll();
+      // Expect data to be an array or object containing data; try to normalize
+      const items: PromoCodeApiItem[] = Array.isArray(data) ? data : data.data || [];
+      const mapped = items.map((it) => {
+        const normalize = (d: any) => {
+          if (!d) return '';
+          const s = String(d);
+          // If it contains a T or space/time, take first 10 chars (YYYY-MM-DD)
+          if (s.includes('T')) return s.slice(0, 10);
+          if (s.includes(' ')) return s.split(' ')[0];
+          return s.slice(0, 10);
+        };
+        return {
+          id: String(it.id),
+          code: it.code,
+          discountPercentage: Number(it.discount_percentage),
+          startDate: normalize(it.valid_from),
+          endDate: normalize(it.valid_until),
+          isActive: Boolean(it.is_active),
+          usageCount: 0,
+          maxUsage: undefined,
+          applicablePlans: ['all'],
+        } as PromoCode;
+      });
+      setPromoCodes(mapped);
+    } catch (err) {
+      console.error('Failed to load promo codes', err);
+      toast.error('Failed to load promo codes');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSavePromo = () => {
@@ -148,12 +158,23 @@ const PromoCodeManagement = () => {
     }
 
     if (editingPromo) {
-      setPromoCodes(promoCodes.map(p => p.id === editingPromo.id ? {
-        ...promoForm,
-        id: editingPromo.id,
-        usageCount: editingPromo.usageCount
-      } as PromoCode : p));
-      toast.success('Promo code updated successfully');
+      // Update via API
+      (async () => {
+        try {
+          await promoCodeApi.update(editingPromo.id, {
+            code: promoForm.code!,
+            discount_percentage: promoForm.discountPercentage!,
+            valid_from: promoForm.startDate!,
+            valid_until: promoForm.endDate!,
+            is_active: !!promoForm.isActive,
+          } as any);
+          toast.success('Promo code updated successfully');
+          await loadPromoCodes();
+        } catch (err) {
+          console.error(err);
+          toast.error('Failed to update promo code');
+        }
+      })();
     } else {
       // Check if code already exists
       if (promoCodes.some(p => p.code.toLowerCase() === promoForm.code!.toLowerCase())) {
@@ -161,14 +182,23 @@ const PromoCodeManagement = () => {
         return;
       }
 
-      const newPromo: PromoCode = {
-        ...promoForm,
-        id: Date.now().toString(),
-        usageCount: 0,
-        code: promoForm.code!.toUpperCase()
-      } as PromoCode;
-      setPromoCodes([...promoCodes, newPromo]);
-      toast.success('Promo code created successfully');
+      // Create via API
+      (async () => {
+        try {
+          await promoCodeApi.create({
+            code: promoForm.code!.toUpperCase(),
+            discount_percentage: promoForm.discountPercentage!,
+            valid_from: promoForm.startDate!,
+            valid_until: promoForm.endDate!,
+            is_active: !!promoForm.isActive,
+          } as any);
+          toast.success('Promo code created successfully');
+          await loadPromoCodes();
+        } catch (err) {
+          console.error(err);
+          toast.error('Failed to create promo code');
+        }
+      })();
     }
     setPromoDialog(false);
   };
@@ -180,19 +210,42 @@ const PromoCodeManagement = () => {
 
   const handleDeleteConfirm = () => {
     if (promoToDelete) {
-      setPromoCodes(promoCodes.filter(p => p.id !== promoToDelete.id));
-      toast.success('Promo code deleted successfully');
-      setDeleteDialog(false);
-      setPromoToDelete(null);
+      (async () => {
+        try {
+          await promoCodeApi.delete(promoToDelete.id);
+          toast.success('Promo code deleted successfully');
+          await loadPromoCodes();
+        } catch (err) {
+          console.error(err);
+          toast.error('Failed to delete promo code');
+        } finally {
+          setDeleteDialog(false);
+          setPromoToDelete(null);
+        }
+      })();
     }
   };
 
   const handleToggleStatus = (id: string) => {
-    setPromoCodes(promoCodes.map(p => 
-      p.id === id ? { ...p, isActive: !p.isActive } : p
-    ));
     const promo = promoCodes.find(p => p.id === id);
-    toast.success(`Promo code ${promo?.isActive ? 'deactivated' : 'activated'}`);
+    if (!promo) return;
+
+    (async () => {
+      try {
+        await promoCodeApi.update(id, {
+          code: promo.code,
+          discount_percentage: promo.discountPercentage,
+          valid_from: promo.startDate,
+          valid_until: promo.endDate,
+          is_active: !promo.isActive,
+        } as any);
+        toast.success(`Promo code ${promo.isActive ? 'deactivated' : 'activated'}`);
+        await loadPromoCodes();
+      } catch (err) {
+        console.error(err);
+        toast.error('Failed to update promo code status');
+      }
+    })();
   };
 
   const handleCopyCode = (code: string) => {
@@ -208,6 +261,11 @@ const PromoCodeManagement = () => {
       (filterStatus === 'inactive' && !promo.isActive);
     return matchesSearch && matchesStatus;
   });
+
+  // Load on mount
+  useEffect(() => {
+    loadPromoCodes();
+  }, []);
 
   // Check if promo is expired
   const isExpired = (endDate: string) => {

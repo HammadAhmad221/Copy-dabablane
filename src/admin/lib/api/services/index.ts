@@ -20,4 +20,5 @@ export * from './siteFeedback';
 export * from './shippingDetails';
 export * from './merchants';
 export * from './jobs';
-export * from './jobBatches'; 
+export * from './jobBatches';
+export * from './commissionChartService'; 
