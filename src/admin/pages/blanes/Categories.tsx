@@ -593,7 +593,6 @@ const Categories: React.FC = () => {
                             await fetchCategories(); // Refresh the list
                             toast.success(`Catégorie ${checked ? 'activée' : 'désactivée'} avec succès`);
                           } catch (error) {
-                            console.error('Error updating category status:', error);
                             // Show more specific error message based on the error response
                             const errorMessage = error.response?.data?.message 
                               || error.response?.data?.error 

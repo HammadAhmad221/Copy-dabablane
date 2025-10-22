@@ -566,7 +566,6 @@ const VendorsPlane = () => {
                                         <Table>
                                             <TableHeader>
                                                 <TableRow>
-                                                    <TableHead>ID</TableHead>
                                                     <TableHead>Name</TableHead>
                                                     <TableHead>Email</TableHead>
                                                 </TableRow>
@@ -574,14 +573,13 @@ const VendorsPlane = () => {
                                             <TableBody>
                                                 {(safeVendorList).map((v) => (
                                                     <TableRow key={v.id}>
-                                                        <TableCell>{v.id}</TableCell>
                                                         <TableCell>{(v as any).name ?? '-'}</TableCell>
                                                         <TableCell>{(v as any).email ?? '-'}</TableCell>
                                                     </TableRow>
                                                 ))}
                                                 {safeVendorList.length === 0 ? (
                                                     <TableRow>
-                                                        <TableCell colSpan={3} className="text-center text-sm text-gray-500">No vendors found</TableCell>
+                                                        <TableCell colSpan={2} className="text-center text-sm text-gray-500">No vendors found</TableCell>
                                                     </TableRow>
                                                 ) : null}
                                             </TableBody>

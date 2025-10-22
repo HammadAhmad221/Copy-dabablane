@@ -46,7 +46,6 @@ export const useNotifications = () => {
       setHasMore(paginatedData.next_page_url !== null);
     } catch (error) {
       toast.error('Failed to fetch notifications');
-      console.error('Error fetching notifications:', error);
     } finally {
       setIsLoading(false);
     }
@@ -75,7 +74,6 @@ export const useNotifications = () => {
       toast.success('Notification marked as read');
     } catch (error) {
       toast.error('Failed to mark notification as read');
-      console.error('Error marking notification as read:', error);
     }
   }, []);
 
@@ -89,7 +87,6 @@ export const useNotifications = () => {
       toast.success('All notifications marked as read');
     } catch (error) {
       toast.error('Failed to mark all notifications as read');
-      console.error('Error marking all notifications as read:', error);
     }
   }, []);
 
@@ -104,7 +101,6 @@ export const useNotifications = () => {
       toast.success('Notification deleted');
     } catch (error) {
       toast.error('Failed to delete notification');
-      console.error('Error deleting notification:', error);
     }
   }, [notifications]);
 
@@ -116,7 +112,6 @@ export const useNotifications = () => {
       toast.success('All notifications deleted');
     } catch (error) {
       toast.error('Failed to delete all notifications');
-      console.error('Error deleting all notifications:', error);
     }
   }, []);
 

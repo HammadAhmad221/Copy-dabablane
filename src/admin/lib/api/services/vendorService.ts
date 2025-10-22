@@ -6,12 +6,10 @@ import {
   UpdateVendorStatusRequest,
   VendorFilters,
   VendorListResponse,
-  VendorSchema,
   CreateVendorRequestSchema,
   UpdateVendorRequestSchema,
   UpdateVendorStatusRequestSchema,
-  VendorFiltersSchema,
-  VendorListResponseSchema
+  VendorFiltersSchema
 } from '../types/vendor';
 
 export const vendorApi = {
@@ -22,7 +20,7 @@ export const vendorApi = {
       try {
         VendorFiltersSchema.parse(filters);
       } catch (error) {
-        console.warn('Filter validation failed, proceeding with raw filters:', error);
+        // Validation failed, proceed with raw filters
       }
     }
 
@@ -46,17 +44,12 @@ export const vendorApi = {
         meta: response.data.meta
       };
       
-      try {
-        return VendorListResponseSchema.parse(result);
-      } catch (error) {
-        console.warn('Response validation failed, returning raw data:', error);
-        return result as VendorListResponse;
-      }
+      return result as VendorListResponse;
     }
     
     // Fallback for old API response structure
     if (Array.isArray(response.data)) {
-      const result = {
+      return {
         data: response.data,
         meta: {
           total: response.data.length,
@@ -66,18 +59,11 @@ export const vendorApi = {
           from: (page - 1) * limit + 1,
           to: Math.min(page * limit, response.data.length)
         }
-      };
-      
-      try {
-        return VendorListResponseSchema.parse(result);
-      } catch (error) {
-        console.warn('Response validation failed, returning raw data:', error);
-        return result as VendorListResponse;
-      }
+      } as VendorListResponse;
     }
     
     // Handle wrapped response without meta
-    const result = {
+    return {
       data: response.data?.data || response.data || [],
       meta: {
         total: response.data?.total || response.data?.length || 0,
@@ -87,61 +73,34 @@ export const vendorApi = {
         from: ((response.data?.page || page) - 1) * (response.data?.limit || limit) + 1,
         to: Math.min((response.data?.page || page) * (response.data?.limit || limit), response.data?.total || response.data?.length || 0)
       }
-    };
-    
-    try {
-      return VendorListResponseSchema.parse(result);
-    } catch (error) {
-      console.warn('Response validation failed, returning raw data:', error);
-      return result as VendorListResponse;
-    }
+    } as VendorListResponse;
   },
 
   // Get vendor by ID
   getVendorById: async (id: string): Promise<Vendor> => {
     const response = await adminApiClient.get(`/vendors/${id}`);
-    try {
-      return VendorSchema.parse(response.data);
-    } catch (error) {
-      console.warn('Vendor validation failed, returning raw data:', error);
-      return response.data as Vendor;
-    }
+    return response.data as Vendor;
   },
 
   // Create new vendor
   createVendor: async (vendorData: CreateVendorRequest): Promise<Vendor> => {
     const validatedData = CreateVendorRequestSchema.parse(vendorData);
     const response = await adminApiClient.post('/vendors', validatedData);
-    try {
-      return VendorSchema.parse(response.data);
-    } catch (error) {
-      console.warn('Vendor validation failed, returning raw data:', error);
-      return response.data as Vendor;
-    }
+    return response.data as Vendor;
   },
 
   // Update vendor
   updateVendor: async (id: string, vendorData: UpdateVendorRequest): Promise<Vendor> => {
     const validatedData = UpdateVendorRequestSchema.parse(vendorData);
     const response = await adminApiClient.put(`/vendors/${id}`, validatedData);
-    try {
-      return VendorSchema.parse(response.data);
-    } catch (error) {
-      console.warn('Vendor validation failed, returning raw data:', error);
-      return response.data as Vendor;
-    }
+    return response.data as Vendor;
   },
 
   // Update vendor status
   updateVendorStatus: async (id: string, statusData: UpdateVendorStatusRequest): Promise<Vendor> => {
     const validatedData = UpdateVendorStatusRequestSchema.parse(statusData);
     const response = await adminApiClient.patch(`/changeVendorStatus/${id}`, validatedData);
-    try {
-      return VendorSchema.parse(response.data);
-    } catch (error) {
-      console.warn('Vendor validation failed, returning raw data:', error);
-      return response.data as Vendor;
-    }
+    return response.data as Vendor;
   },
 
   // Delete vendor

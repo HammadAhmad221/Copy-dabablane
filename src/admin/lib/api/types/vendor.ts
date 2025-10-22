@@ -117,7 +117,15 @@ export interface Vendor {
   coverPhotoUrl?: string | null;
   rcCertificateUrl?: string | null;
   status: VendorStatus;
-  cover_media?: (string | { url: string } | null)[];
+  cover_media?: (string | {
+    id?: number;
+    user_id?: number;
+    media_url?: string;
+    media_type?: string;
+    created_at?: string;
+    updated_at?: string;
+    url?: string;
+  } | null)[];
 }
 
 export interface CreateVendorRequest {

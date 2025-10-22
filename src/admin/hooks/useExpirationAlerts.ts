@@ -53,7 +53,6 @@ export const useExpirationAlerts = () => {
       }, 500);
     } catch (error) {
       toast.error('Failed to load expiration alerts');
-      console.error('Error loading expiration alerts:', error);
       setIsLoading(false);
     }
   };

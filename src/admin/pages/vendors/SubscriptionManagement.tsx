@@ -216,27 +216,45 @@ const SubscriptionManagement = () => {
   };
 
   const handleSaveAddOn = async () => {
-    if (!addOnForm.title || !addOnForm.price_ht) {
-      toast.error('Please fill all required fields');
+    // Validation
+    if (!addOnForm.title || addOnForm.title.trim() === '') {
+      toast.error('Please enter a title');
+      return;
+    }
+    
+    if (!addOnForm.price_ht || addOnForm.price_ht <= 0) {
+      toast.error('Please enter a valid price');
       return;
     }
 
-    if (editingAddOn) {
-      const success = await updateAddOn(editingAddOn.id!, addOnForm as AddOn);
-      if (success) {
-        toast.success('Add-on updated successfully');
-        setAddOnDialog(false);
+    try {
+      if (editingAddOn) {
+        const success = await updateAddOn(editingAddOn.id!, addOnForm as AddOn);
+        if (success) {
+          toast.success('Add-on updated successfully');
+          setAddOnDialog(false);
+        } else {
+          toast.error(addOnsError || 'Failed to update add-on');
+        }
       } else {
-        toast.error('Failed to update add-on');
+        const success = await createAddOn(addOnForm as AddOn);
+        if (success) {
+          toast.success('Add-on created successfully');
+          setAddOnDialog(false);
+          // Reset form
+          setAddOnForm({
+            title: '',
+            price_ht: 0,
+            tooltip: '',
+            max_quantity: 1,
+            is_active: true
+          });
+        } else {
+          toast.error(addOnsError || 'Failed to create add-on');
+        }
       }
-    } else {
-      const success = await createAddOn(addOnForm as AddOn);
-      if (success) {
-        toast.success('Add-on created successfully');
-        setAddOnDialog(false);
-      } else {
-        toast.error('Failed to create add-on');
-      }
+    } catch (error) {
+      toast.error('An unexpected error occurred');
     }
   };
 
