@@ -13,10 +13,14 @@ import { Label } from "../../components/ui/label";
 import { motion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { Upload, Building2 } from "lucide-react";
+import { invoiceConfigService } from "../../lib/api/invoice-config";
 
 interface InvoiceTemplate {
   logo: string;
   prefix: string;
+  billingEmail: string;
+  contactEmail: string;
+  contactPhone: string;
   companyInfo: {
     name: string;
     address: string;
@@ -38,6 +42,9 @@ export default function InvoiceConfig() {
   const [template, setTemplate] = useState<InvoiceTemplate>({
     logo: "", // Empty means use default logo
     prefix: "INV-",
+    billingEmail: "",
+    contactEmail: "",
+    contactPhone: "",
     companyInfo: {
       name: "",
       address: "",
@@ -45,6 +52,8 @@ export default function InvoiceConfig() {
       legalMentions: "",
     },
   });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [initialTemplate, setInitialTemplate] = useState<InvoiceTemplate | null>(null);
 
   useEffect(() => {
     loadSavedTemplate();
@@ -52,36 +61,77 @@ export default function InvoiceConfig() {
 
   const loadSavedTemplate = async () => {
     try {
-      // TODO: Replace with actual API call
-      // Simulating API call to fetch saved template
-      const savedTemplate = {
-        logo: "", // Empty to show default logo initially
-        prefix: "INV-",
-        companyInfo: {
-          name: "Company Name",
-          address: "Company Address",
-          taxId: "TAX-123456",
-          legalMentions: "Legal information goes here",
-        },
-      };
-      setTemplate(savedTemplate);
-    } catch (error) {
+      const res = await invoiceConfigService.getConfiguration();
+      const cfg = res?.data;
+      if (cfg) {
+        const newTemplate = {
+          logo: cfg.invoice_logo_url || "",
+          prefix: cfg.invoice_prefix || "INV-",
+          billingEmail: cfg.billing_email || "",
+          contactEmail: cfg.contact_email || "",
+          contactPhone: cfg.contact_phone || "",
+          companyInfo: {
+            name: "",
+            address: "",
+            taxId: "",
+            legalMentions: cfg.invoice_legal_mentions || "",
+          },
+        };
+        
+        setTemplate(newTemplate);
+        setInitialTemplate(newTemplate);
+        setLogoFile(null);
+      }
+    } catch (error: any) {
+      console.error('Load configuration error:', error?.response?.data || error);
       toast({
         title: "Error",
-        description: "Failed to load invoice template",
+        description: error?.response?.data?.message || "Failed to load invoice template",
         variant: "destructive",
       });
     }
   };
 
+  const handleReset = () => {
+    if (initialTemplate) {
+      setTemplate(initialTemplate);
+    } else {
+      setTemplate({
+        logo: "",
+        prefix: "INV-",
+        billingEmail: "",
+        contactEmail: "",
+        contactPhone: "",
+        companyInfo: {
+          name: "",
+          address: "",
+          taxId: "",
+          legalMentions: "",
+        },
+      });
+    }
+    setLogoFile(null);
+    
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = '';
+    }
+    
+    toast({
+      title: "Reset",
+      description: "Form has been reset to saved values",
+    });
+  };
+
   const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Validate file type
-      if (!file.type.startsWith("image/")) {
+      // Validate file type (restrict to png/jpeg per backend requirements)
+      const allowedTypes = ["image/png", "image/jpeg", "image/jpg"];
+      if (!allowedTypes.includes(file.type)) {
         toast({
-          title: "Invalid File",
-          description: "Please upload an image file",
+          title: "Invalid File Type",
+          description: "Please upload a PNG or JPEG image",
           variant: "destructive",
         });
         return;
@@ -99,6 +149,7 @@ export default function InvoiceConfig() {
 
       // Create a preview URL for the uploaded image
       const previewUrl = URL.createObjectURL(file);
+      setLogoFile(file);
       setTemplate((prev) => ({
         ...prev,
         logo: previewUrl,
@@ -116,6 +167,13 @@ export default function InvoiceConfig() {
       ...prev,
       logo: "",
     }));
+    setLogoFile(null);
+    
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = '';
+    }
+    
     toast({
       title: "Logo Removed",
       description: "Default logo will be used",
@@ -148,17 +206,65 @@ export default function InvoiceConfig() {
     setIsLoading(true);
 
     try {
-      // TODO: Replace with actual API call to save template
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Basic client-side validation for required fields
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!template.billingEmail || !template.contactEmail || !template.contactPhone || !template.companyInfo.legalMentions || !template.prefix) {
+        toast({
+          title: "Missing required fields",
+          description: "Please fill billing email, contact email, contact phone, legal mentions and prefix.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+      if (!emailRegex.test(template.billingEmail)) {
+        toast({ title: "Invalid billing email", description: "Enter a valid billing email.", variant: "destructive" });
+        setIsLoading(false);
+        return;
+      }
+      if (!emailRegex.test(template.contactEmail)) {
+        toast({ title: "Invalid contact email", description: "Enter a valid contact email.", variant: "destructive" });
+        setIsLoading(false);
+        return;
+      }
+      if (template.contactPhone.length < 6) {
+        toast({ title: "Invalid phone", description: "Enter a valid contact phone number.", variant: "destructive" });
+        setIsLoading(false);
+        return;
+      }
+
+      // Ensure a logo file is provided (backend validation complains on invoice_logo_path)
+      if (!logoFile) {
+        toast({ title: "Logo required", description: "Please upload an invoice logo image before saving.", variant: "destructive" });
+        setIsLoading(false);
+        return;
+      }
+
+      const payload = {
+        billing_email: template.billingEmail,
+        contact_email: template.contactEmail,
+        contact_phone: template.contactPhone,
+        invoice_legal_mentions: template.companyInfo.legalMentions || "",
+        invoice_prefix: template.prefix || "",
+        invoice_logo_path: logoFile,
+      };
+
+      const res = await invoiceConfigService.createConfiguration(payload);
+      await loadSavedTemplate();
+      setLogoFile(null);
 
       toast({
         title: "Success",
-        description: "Invoice template saved successfully",
+        description: res?.message || "Invoice template saved successfully",
       });
     } catch (error) {
+      const errData = (error as any)?.response?.data;
+      console.error('Create configuration error:', errData || error);
+      const logoMsgs = errData?.errors?.invoice_logo_path;
+      const firstLogoMsg = Array.isArray(logoMsgs) && logoMsgs.length ? logoMsgs[0] : null;
       toast({
         title: "Error",
-        description: "Failed to save invoice template",
+        description: firstLogoMsg || errData?.message || "Failed to save invoice template",
         variant: "destructive",
       });
     } finally {
@@ -232,7 +338,7 @@ export default function InvoiceConfig() {
                       Upload Logo
                       <Input
                         type="file"
-                        accept="image/*"
+                        accept="image/png,image/jpeg"
                         onChange={handleLogoUpload}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       />
@@ -246,7 +352,7 @@ export default function InvoiceConfig() {
                         onClick={handleRemoveLogo}
                         className="text-red-600 hover:text-red-700 hover:bg-red-50"
                       >
-                        {/* Remove Logo */}
+                        Remove Logo
                       </Button>
                     )}
                   </div>
@@ -271,65 +377,102 @@ export default function InvoiceConfig() {
                 />
               </div>
 
-              {/* Company Information */}
-              <div className="space-y-4 pt-4">
-                <h3 className="text-lg font-semibold border-b pb-2">
-                  Company Information
-                </h3>
+              <h3 className="text-lg font-semibold border-b pb-2">
+                Company Information
+              </h3>
 
+              <div>
+                <Label className="text-sm font-semibold">Company Name</Label>
+                <Input
+                  value={template.companyInfo.name}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange(e, "name", true)
+                  }
+                  placeholder="Enter company name"
+                  className="mt-2"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-sm font-semibold">Company Name</Label>
+                  <Label className="text-sm font-semibold">Billing Email</Label>
                   <Input
-                    value={template.companyInfo.name}
+                    type="email"
+                    value={template.billingEmail}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      handleInputChange(e, "name", true)
+                      handleInputChange(e, "billingEmail")
                     }
-                    placeholder="Enter company name"
+                    placeholder="facturation@dabablane.com"
                     className="mt-2"
                   />
                 </div>
 
                 <div>
-                  <Label className="text-sm font-semibold">
-                    Company Address
-                  </Label>
-                  <Textarea
-                    value={template.companyInfo.address}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                      handleInputChange(e, "address", true)
-                    }
-                    placeholder="Enter company address"
-                    rows={3}
-                    className="mt-2"
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-sm font-semibold">Tax ID</Label>
+                  <Label className="text-sm font-semibold">Contact Email</Label>
                   <Input
-                    value={template.companyInfo.taxId}
+                    type="email"
+                    value={template.contactEmail}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      handleInputChange(e, "taxId", true)
+                      handleInputChange(e, "contactEmail")
                     }
-                    placeholder="Enter tax ID"
+                    placeholder="contact@dabablane.com"
                     className="mt-2"
                   />
                 </div>
 
                 <div>
-                  <Label className="text-sm font-semibold">
-                    Legal Mentions
-                  </Label>
-                  <Textarea
-                    value={template.companyInfo.legalMentions}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                      handleInputChange(e, "legalMentions", true)
+                  <Label className="text-sm font-semibold">Contact Phone</Label>
+                  <Input
+                    value={template.contactPhone}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      handleInputChange(e, "contactPhone")
                     }
-                    placeholder="Enter legal mentions"
-                    rows={4}
+                    placeholder="+212615170064"
                     className="mt-2"
                   />
                 </div>
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold">
+                  Company Address
+                </Label>
+                <Textarea
+                  value={template.companyInfo.address}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    handleInputChange(e, "address", true)
+                  }
+                  placeholder="Enter company address"
+                  rows={3}
+                  className="mt-2"
+                />
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold">Tax ID</Label>
+                <Input
+                  value={template.companyInfo.taxId}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange(e, "taxId", true)
+                  }
+                  placeholder="Enter tax ID"
+                  className="mt-2"
+                />
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold">
+                  Legal Mentions
+                </Label>
+                <Textarea
+                  value={template.companyInfo.legalMentions}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    handleInputChange(e, "legalMentions", true)
+                  }
+                  placeholder="Enter legal mentions"
+                  rows={4}
+                  className="mt-2"
+                />
               </div>
             </div>
 
@@ -344,7 +487,7 @@ export default function InvoiceConfig() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={loadSavedTemplate}
+                onClick={handleReset}
               >
                 Reset
               </Button>

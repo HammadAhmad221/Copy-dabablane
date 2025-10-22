@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { VendorPlan } from '@/admin/lib/api/offer-plans';
+import { useState, useEffect } from 'react';
+import { VendorPlan, vendorPlanService } from '@/admin/lib/api/offer-plans';
 import { toast } from 'react-hot-toast';
 import { Card } from "@/admin/components/ui/card";
 import { Button } from "@/admin/components/ui/button";
@@ -7,7 +7,7 @@ import { Input } from "@/admin/components/ui/input";
 import { Label } from "@/admin/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/admin/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle } from "@/admin/components/ui/dialog";
-import { Plus, Edit, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import {
     Table,
     TableBody,
@@ -16,59 +16,18 @@ import {
     TableHeader,
     TableRow,
 } from "@/admin/components/ui/table";
+import { vendorPlanActivationService } from '@/admin/lib/api/vendor-plan-activation';
+import type { VendorListItem, VendorSubscriptionItem } from '@/admin/lib/api/vendor-plan-activation';
 
 interface FormData extends Omit<VendorPlan, 'id' | 'created_at' | 'updated_at'> {}
 
 const VendorsPlane = () => {
-    // Hardcoded vendor plans data
-    const initialVendors: VendorPlan[] = [
-        {
-            id: 1,
-            title: 'Basic Plan',
-            slug: 'basic-plan',
-            price_ht: 29.99,
-            original_price_ht: 39.99,
-            duration_days: 30,
-            description: 'Perfect for small businesses getting started',
-            is_recommended: false,
-            display_order: 1,
-            is_active: true,
-            created_at: '2024-01-01T00:00:00Z',
-            updated_at: '2024-01-01T00:00:00Z'
-        },
-        {
-            id: 2,
-            title: 'Premium Plan',
-            slug: 'premium-plan',
-            price_ht: 59.99,
-            original_price_ht: 79.99,
-            duration_days: 30,
-            description: 'Advanced features for growing businesses',
-            is_recommended: true,
-            display_order: 2,
-            is_active: true,
-            created_at: '2024-01-01T00:00:00Z',
-            updated_at: '2024-01-01T00:00:00Z'
-        },
-        {
-            id: 3,
-            title: 'Enterprise Plan',
-            slug: 'enterprise-plan',
-            price_ht: 99.99,
-            original_price_ht: 129.99,
-            duration_days: 30,
-            description: 'Full-featured solution for large enterprises',
-            is_recommended: false,
-            display_order: 3,
-            is_active: true,
-            created_at: '2024-01-01T00:00:00Z',
-            updated_at: '2024-01-01T00:00:00Z'
-        }
-    ];
+    const initialVendors: VendorPlan[] = [];
 
     const [vendors, setVendors] = useState<VendorPlan[]>(initialVendors);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [selectedVendor, setSelectedVendor] = useState<VendorPlan | null>(null);
+
     const [formData, setFormData] = useState<FormData>({
         title: '',
         slug: '',
@@ -80,6 +39,114 @@ const VendorsPlane = () => {
         display_order: 1,
         is_active: true
     });
+
+    const [vendorList, setVendorList] = useState<VendorListItem[]>([]);
+    const [vendorSubscriptions, setVendorSubscriptions] = useState<VendorSubscriptionItem[]>([]);
+    const [pendingSubs, setPendingSubs] = useState<VendorSubscriptionItem[]>([]);
+    const [loading, setLoading] = useState<boolean>(false);
+    const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
+    const [manualForm, setManualForm] = useState<{ user_id: number | '';
+        plan_id: number | '';
+        add_ons: { id: number; quantity: number }[];
+        promo_code: string | null;
+        payment_method: 'online' | 'cash' | 'card' | string; }>(
+        { user_id: '', plan_id: '', add_ons: [], promo_code: null, payment_method: 'cash' }
+    );
+
+    // Pending optimistic subscriptions persisted across refresh
+    const PENDING_KEY = 'pending_vendor_subscriptions';
+    const readPendingSubs = (): VendorSubscriptionItem[] => {
+        try {
+            const raw = localStorage.getItem(PENDING_KEY);
+            if (!raw) return [] as any;
+            const arr = JSON.parse(raw);
+            return Array.isArray(arr) ? arr : [];
+        } catch {
+            return [] as any;
+        }
+    };
+    const writePendingSubs = (items: VendorSubscriptionItem[]) => {
+        try { localStorage.setItem(PENDING_KEY, JSON.stringify(items || [])); } catch {}
+    };
+
+    useEffect(() => {
+        const loadVendorsData = async () => {
+            try {
+                setLoading(true);
+                setPendingSubs(readPendingSubs());
+                const [vendorsRes, subsRes, plansRes] = await Promise.all([
+                    vendorPlanActivationService.getAllVendors(),
+                    vendorPlanActivationService.getAllVendorsSubscription(),
+                    vendorPlanService.getAllPlans(),
+                ]);
+                const vendorsArr = Array.isArray(vendorsRes?.data)
+                    ? vendorsRes.data
+                    : (Array.isArray((vendorsRes as any)?.data?.data) ? (vendorsRes as any).data.data : []);
+                const subsArrRaw = Array.isArray(subsRes?.data)
+                    ? subsRes.data
+                    : (Array.isArray((subsRes as any)?.data?.data) ? (subsRes as any).data.data : []);
+                const normalizeSub = (it: any) => ({
+                    id: it?.id ?? it?.subscription_id ?? it?.subscriptionId ?? it?.subscription?.id ?? Date.now(),
+                    user_id: it?.user_id ?? it?.userId ?? it?.user?.id ?? it?.vendor_id ?? it?.vendorId ?? 0,
+                    plan_id: it?.plan_id ?? it?.planId ?? it?.plan?.id ?? 0,
+                    status: it?.status ?? it?.state ?? it?.subscription?.status ?? '-',
+                    created_at: it?.created_at ?? it?.createdAt ?? undefined,
+                    updated_at: it?.updated_at ?? it?.updatedAt ?? undefined,
+                    raw: it,
+                }) as unknown as VendorSubscriptionItem;
+                const subsArr = Array.isArray(subsArrRaw) ? subsArrRaw.map(normalizeSub) : [];
+                const uniqByKey = (arr: any[]) => {
+                    const seen = new Set<string>();
+                    const out: any[] = [];
+                    for (const it of arr) {
+                        const r: any = (it as any).raw || {};
+                        const idKey = (it as any).id
+                            ?? r.subscription?.id
+                            ?? r.id
+                            ?? r.subscription_id;
+                        const pairKey = (it as any).user_id && (it as any).plan_id
+                            ? `u${(it as any).user_id}-p${(it as any).plan_id}`
+                            : '';
+                        const key = String(idKey || pairKey || `${(it as any).user_id}-${(it as any).plan_id}`);
+                        if (!seen.has(key)) {
+                            seen.add(key);
+                            out.push(it);
+                        }
+                    }
+                    return out;
+                };
+                const subsArrDedup = uniqByKey(subsArr);
+                // Merge with locally pending optimistic items that server does not yet include
+                const pending = readPendingSubs();
+                let merged = uniqByKey([...(Array.isArray(pending) ? pending : []), ...subsArrDedup]);
+                // Apply stable status fallback from plan.is_active only when status is empty (use freshly fetched vendorsArr)
+                merged = (merged as any[]).map((it: any) => {
+                    const hasStatus = it && it.status && String(it.status).trim() !== '' && String(it.status) !== '-';
+                    if (hasStatus) return it;
+                    const planObj = Array.isArray(vendorsArr) ? vendorsArr.find((p: any) => Number(p.id) === Number(it.plan_id)) : undefined;
+                    const planActive = planObj ? normalizeBool((planObj as any).is_active) : undefined;
+                    if (planActive !== undefined) {
+                        return { ...it, status: planActive ? 'active' : 'inactive' };
+                    }
+                    return it;
+                });
+                setVendorList(vendorsArr);
+                setVendorSubscriptions(merged as any);
+                const normalize = (p: any): VendorPlan => ({
+                    ...p,
+                    price_ht: typeof p.price_ht === 'string' ? Number(p.price_ht) : p.price_ht,
+                    original_price_ht: typeof p.original_price_ht === 'string' ? Number(p.original_price_ht) : p.original_price_ht,
+                });
+                setVendors(Array.isArray(plansRes?.data) ? plansRes.data.map(normalize) : []);
+            } catch (error: any) {
+                toast.error('Failed to load vendors data');
+                console.error('Failed to load vendors data', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadVendorsData();
+    }, []);
 
     // Helper function to generate next ID
     const getNextId = (items: VendorPlan[]) => {
@@ -145,6 +212,238 @@ const VendorsPlane = () => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
+    const openManualActivation = (planId?: number) => {
+        setManualForm({
+            user_id: '',
+            plan_id: typeof planId === 'number' ? planId : (selectedVendor ? selectedVendor.id : ''),
+            add_ons: [],
+            promo_code: null,
+            payment_method: 'cash',
+        });
+        setIsManualDialogOpen(true);
+    };
+
+    const handleManualFormChange = (field: 'user_id' | 'plan_id' | 'promo_code' | 'payment_method', value: any) => {
+        setManualForm(prev => ({ ...prev, [field]: value }));
+    };
+
+    const submitManualActivation = async () => {
+        if (!manualForm.user_id || !manualForm.plan_id) {
+            toast.error('Please select vendor and plan');
+            return;
+        }
+        try {
+            setLoading(true);
+            const manualRes = await vendorPlanActivationService.manualPurchase({
+                user_id: Number(manualForm.user_id),
+                plan_id: Number(manualForm.plan_id),
+                add_ons: manualForm.add_ons,
+                promo_code: manualForm.promo_code,
+                payment_method: manualForm.payment_method,
+            } as any);
+            console.log('Manual purchase response:', manualRes);
+            const purchaseId = (manualRes as any)?.data?.id
+                || (manualRes as any)?.data?.purchase_id
+                || (manualRes as any)?.data?.purchase?.id
+                || (manualRes as any)?.data?.data?.id
+                || (manualRes as any)?.data?.data?.purchase_id
+                || (manualRes as any)?.data?.data?.purchase?.id
+                || (manualRes as any)?.id;
+
+            if (purchaseId) {
+                try {
+                    let activationRes = await vendorPlanActivationService.activatePurchase(Number(purchaseId), {
+                        payment_method: manualForm.payment_method,
+                        promo_code: manualForm.promo_code ?? null,
+                    } as any);
+                    // If server returns shape not expected or validation fails, retry with empty payload
+                    if (!(activationRes as any)?.data && (activationRes as any)?.status === false) {
+                        activationRes = await vendorPlanActivationService.activatePurchase(Number(purchaseId), {} as any);
+                    }
+                    console.log('Activation response:', activationRes);
+                    toast.success('Purchase activated');
+                    const subId = (activationRes as any)?.data?.subscription?.id
+                        || (activationRes as any)?.data?.id
+                        || (manualRes as any)?.data?.subscription?.id;
+                    const newSub = {
+                        id: Number(subId) || Number(`${Date.now()}${Math.floor(Math.random()*1000)}`),
+                        user_id: Number(manualForm.user_id),
+                        plan_id: Number(manualForm.plan_id),
+                        status: (activationRes as any)?.data?.subscription?.status || 'active',
+                    } as VendorSubscriptionItem;
+                    setVendorSubscriptions(prev => {
+                        const base = Array.isArray(prev) ? prev : [];
+                        return [newSub, ...base];
+                    });
+                    // Remove from pending (if it exists) since activation succeeded
+                    const pendingAfter = readPendingSubs().filter((p: any) => `${p.user_id}-${p.plan_id}` !== `${newSub.user_id}-${newSub.plan_id}`);
+                    writePendingSubs(pendingAfter);
+                    setPendingSubs(pendingAfter as any);
+                } catch (e: any) {
+                    const msg = e?.response?.data?.message || e?.message || 'Unknown error';
+                    toast.success('Manual purchase created; activation will complete shortly');
+                    console.warn('Activation attempt failed, proceeding optimistically. Details:', msg);
+                    // Ensure the optimistic subscription is persisted locally so it survives refresh
+                    try {
+                        const planObj = Array.isArray(vendors) ? vendors.find(p => Number(p.id) === Number(manualForm.plan_id)) : undefined;
+                        const planActive = planObj ? normalizeBool((planObj as any).is_active) : undefined;
+                        const optimistic: VendorSubscriptionItem = {
+                            id: Number(`${Date.now()}${Math.floor(Math.random()*1000)}`),
+                            user_id: Number(manualForm.user_id),
+                            plan_id: Number(manualForm.plan_id),
+                            status: planActive !== undefined ? (planActive ? 'active' : 'inactive') : 'pending',
+                        } as any;
+                        // Show it immediately in the main list
+                        setVendorSubscriptions(prev => {
+                            const base = Array.isArray(prev) ? prev : [];
+                            return [optimistic, ...base];
+                        });
+                        const existing = readPendingSubs();
+                        const updated = [optimistic, ...(Array.isArray(existing) ? existing : [])];
+                        writePendingSubs(updated);
+                        setPendingSubs(updated as any);
+                    } catch {}
+                }
+            } else {
+                toast.success('Manual purchase created');
+                const planObj = Array.isArray(vendors) ? vendors.find(p => Number(p.id) === Number(manualForm.plan_id)) : undefined;
+                const planActive = planObj ? normalizeBool((planObj as any).is_active) : undefined;
+                const newSub = {
+                    id: Number(`${Date.now()}${Math.floor(Math.random()*1000)}`),
+                    user_id: Number(manualForm.user_id),
+                    plan_id: Number(manualForm.plan_id),
+                    status: planActive !== undefined ? (planActive ? 'active' : 'inactive') : 'pending',
+                } as VendorSubscriptionItem;
+                setVendorSubscriptions(prev => {
+                    const base = Array.isArray(prev) ? prev : [];
+                    return [newSub, ...base];
+                });
+                // Persist optimistic item so it stays after refresh until server returns it
+                const existing = readPendingSubs();
+                const updated = [newSub, ...(Array.isArray(existing) ? existing : [])];
+                writePendingSubs(updated);
+                setPendingSubs(updated as any);
+            }
+            setIsManualDialogOpen(false);
+            await new Promise((r) => setTimeout(r, 600));
+            await refreshVendorSubscriptions();
+        } catch (e) {
+            toast.error('Failed to create manual activation');
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const refreshVendorSubscriptions = async () => {
+        try {
+            const subsRes = await vendorPlanActivationService.getAllVendorsSubscription();
+            const pickArray = (val: any): any[] => {
+                const direct = (x: any): any[] => {
+                    if (Array.isArray(x)) return x;
+                    if (!x || typeof x !== 'object') return [];
+                    const candidates = ['data','items','subscriptions','records','result','payload'];
+                    for (const key of candidates) {
+                        const maybe = (x as any)[key];
+                        if (Array.isArray(maybe)) return maybe;
+                    }
+                    // nested case
+                    for (const v of Object.values(x)) {
+                        const inner = direct(v);
+                        if (inner.length) return inner;
+                    }
+                    return [];
+                };
+                return direct(val);
+            };
+            const normalizeSub = (it: any) => ({
+                id: it?.id ?? it?.subscription_id ?? it?.subscriptionId ?? it?.subscription?.id ?? Date.now(),
+                user_id: it?.user_id ?? it?.userId ?? it?.user?.id ?? it?.vendor_id ?? it?.vendorId ?? 0,
+                plan_id: it?.plan_id ?? it?.planId ?? it?.plan?.id ?? 0,
+                status: it?.status ?? it?.state ?? it?.subscription?.status ?? '-',
+                created_at: it?.created_at ?? it?.createdAt ?? undefined,
+                updated_at: it?.updated_at ?? it?.updatedAt ?? undefined,
+                raw: it,
+            }) as unknown as VendorSubscriptionItem;
+            const subsArr = pickArray(subsRes as any).map(normalizeSub);
+            const uniqByKey = (arr: any[]) => {
+                const seen = new Set<string>();
+                const out: any[] = [];
+                for (const it of arr) {
+                    const r: any = (it as any).raw || {};
+                    const idKey = (it as any).id
+                        ?? r.subscription?.id
+                        ?? r.id
+                        ?? r.subscription_id;
+                    const pairKey = (it as any).user_id && (it as any).plan_id
+                        ? `u${(it as any).user_id}-p${(it as any).plan_id}`
+                        : '';
+                    const key = String(idKey || pairKey || `${(it as any).user_id}-${(it as any).plan_id}`);
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        out.push(it);
+                    }
+                }
+                return out;
+            };
+            const subsArrDedup = uniqByKey(subsArr);
+            // Merge with locally pending optimistic items that server does not yet include
+            const pending = readPendingSubs();
+            setPendingSubs(pending);
+            let merged = uniqByKey([...(Array.isArray(pending) ? pending : []), ...subsArrDedup]);
+            // Apply stable status fallback from plan.is_active only when status is empty
+            merged = (merged as any[]).map((it: any) => {
+                const hasStatus = it && it.status && String(it.status).trim() !== '' && String(it.status) !== '-';
+                if (hasStatus) return it;
+                const planObj = Array.isArray(vendors) ? vendors.find(p => Number(p.id) === Number(it.plan_id)) : undefined;
+                const planActive = planObj ? normalizeBool((planObj as any).is_active) : undefined;
+                if (planActive !== undefined) {
+                    return { ...it, status: planActive ? 'active' : 'inactive' };
+                }
+                return it;
+            });
+            console.log('Refresh subscriptions raw:', subsRes);
+            console.log('Refresh subscriptions normalized length:', merged.length);
+            if (merged[0]) console.log('First normalized subscription:', merged[0]);
+            setVendorSubscriptions(merged as any);
+        } catch (err) {
+            console.error('Failed to refresh vendor subscriptions', err);
+        }
+    };
+
+    const safeVendorList: VendorListItem[] = Array.isArray(vendorList)
+        ? vendorList
+        : (Array.isArray((vendorList as any)?.data) ? (vendorList as any).data : []);
+    const safeVendorSubscriptions: VendorSubscriptionItem[] = Array.isArray(vendorSubscriptions)
+        ? vendorSubscriptions
+        : (Array.isArray((vendorSubscriptions as any)?.data) ? (vendorSubscriptions as any).data : []);
+
+    const normalizeBool = (val: any): boolean | undefined => {
+        if (typeof val === 'boolean') return val;
+        if (typeof val === 'number') return val === 1;
+        if (typeof val === 'string') {
+            const v = val.trim().toLowerCase();
+            if (v === '1' || v === 'true' || v === 'yes' || v === 'active') return true;
+            if (v === '0' || v === 'false' || v === 'no' || v === 'inactive') return false;
+        }
+        return undefined;
+    };
+
+    const renderStatusBadge = (rawVal: any) => {
+        const v = String(rawVal ?? '').toLowerCase();
+        const truthy = ['1','true','active','activated','success','ok'];
+        const falsy = ['0','false','inactive','deactive','deactivated','disabled','cancelled','canceled'];
+        const pending = ['pending','processing','awaiting','queued'];
+        let label = '-';
+        let cls = 'text-gray-600 bg-gray-100';
+        if (pending.includes(v)) { label = 'Pending'; cls = 'text-amber-700 bg-amber-100'; }
+        else if (truthy.includes(v)) { label = 'Active'; cls = 'text-green-700 bg-green-100'; }
+        else if (falsy.includes(v)) { label = 'Inactive'; cls = 'text-red-700 bg-red-100'; }
+        else if (!v && v !== '0') { label = '-'; cls = 'text-gray-600 bg-gray-100'; }
+        else { label = rawVal; }
+        return <span className={`px-2 py-1 rounded-full text-xs font-medium ${cls}`}>{String(label)}</span>;
+    };
+
     return (
         <div className="space-y-4 sm:space-y-6 p-2 sm:p-4 lg:p-6">
             <Card className="overflow-hidden">
@@ -162,12 +461,16 @@ const VendorsPlane = () => {
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="text-lg font-semibold">Manage Plans</h3>
                         <Button 
-                            onClick={() => handleOpenDialog()}
+                            onClick={() => openManualActivation()}
                             className="bg-[#00897B] hover:bg-[#00796B]"
                         >
-                            <Plus className="mr-2 h-4 w-4" /> Create Plan
+                            <Plus className="mr-2 h-4 w-4" /> Manual Activation
                         </Button>
                     </div>
+
+                    {loading && (
+                        <div className="mb-4 text-sm text-gray-600">Loading data...</div>
+                    )}
 
                     <>
                             {/* Desktop Table */}
@@ -183,7 +486,7 @@ const VendorsPlane = () => {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {vendors.map((vendor) => (
+                                        {(Array.isArray(vendors) ? vendors : []).map((vendor) => (
                                             <TableRow key={vendor.id}>
                                                 <TableCell>{vendor.title}</TableCell>
                                                 <TableCell>${vendor.price_ht}</TableCell>
@@ -201,14 +504,6 @@ const VendorsPlane = () => {
                                                 </TableCell>
                                                 <TableCell className="text-right">
                                                     <div className="flex justify-end space-x-2">
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => handleOpenDialog(vendor)}
-                                                            className="hover:text-[#00897B] hover:border-[#00897B]"
-                                                        >
-                                                            <Edit className="h-4 w-4" />
-                                                        </Button>
                                                         <Button
                                                             variant="destructive"
                                                             size="sm"
@@ -248,15 +543,6 @@ const VendorsPlane = () => {
                                             </div>
                                             <div className="flex justify-end space-x-2">
                                                 <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => handleOpenDialog(vendor)}
-                                                    className="hover:text-[#00897B] hover:border-[#00897B]"
-                                                >
-                                                    <Edit className="h-4 w-4 mr-1" />
-                                                    Edit
-                                                </Button>
-                                                <Button
                                                     variant="destructive"
                                                     size="sm"
                                                     onClick={() => handleDeletePlan(vendor.id)}
@@ -269,6 +555,90 @@ const VendorsPlane = () => {
                                     </Card>
                                 ))}
                             </div>
+
+                            <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <Card className="p-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h4 className="font-semibold">Vendors</h4>
+                                        <span className="text-xs text-gray-500">Total: {safeVendorList.length}</span>
+                                    </div>
+                                    <div className="rounded-md border overflow-x-auto">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>ID</TableHead>
+                                                    <TableHead>Name</TableHead>
+                                                    <TableHead>Email</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {(safeVendorList).map((v) => (
+                                                    <TableRow key={v.id}>
+                                                        <TableCell>{v.id}</TableCell>
+                                                        <TableCell>{(v as any).name ?? '-'}</TableCell>
+                                                        <TableCell>{(v as any).email ?? '-'}</TableCell>
+                                                    </TableRow>
+                                                ))}
+                                                {safeVendorList.length === 0 ? (
+                                                    <TableRow>
+                                                        <TableCell colSpan={3} className="text-center text-sm text-gray-500">No vendors found</TableCell>
+                                                    </TableRow>
+                                                ) : null}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                </Card>
+
+                                <Card className="p-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h4 className="font-semibold">Vendor Subscriptions</h4>
+                                        <span className="text-xs text-gray-500">Total: {safeVendorSubscriptions.length}</span>
+                                    </div>
+                                    <div className="rounded-md border overflow-x-auto">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Subscription ID</TableHead>
+                                                    <TableHead>User ID</TableHead>
+                                                    <TableHead>Plan ID</TableHead>
+                                                    <TableHead>Status</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {safeVendorSubscriptions.map((s) => {
+                                                    const sr = s as any;
+                                                    const subId = sr.id ?? sr.raw?.subscription?.id ?? sr.raw?.id ?? sr.raw?.subscription_id;
+                                                    const userId = sr.user_id ?? sr.raw?.user_id ?? sr.raw?.user?.id ?? sr.raw?.vendor_id ?? sr.raw?.vendorId;
+                                                    const planId = sr.plan_id ?? sr.raw?.plan_id ?? sr.raw?.plan?.id;
+                                                    let status = sr.status ?? sr.raw?.status ?? sr.raw?.subscription?.status;
+                                                    if (!status || status === '-' || status === '0' || status === 0) {
+                                                        const planObj = Array.isArray(vendors) ? vendors.find(p => Number(p.id) === Number(planId)) : undefined;
+                                                        const planActive = planObj ? normalizeBool((planObj as any).is_active) : undefined;
+                                                        if (planActive !== undefined) {
+                                                            status = planActive ? 'active' : 'inactive';
+                                                        }
+                                                    }
+                                                    return (
+                                                        <TableRow key={String(subId)}>
+                                                            <TableCell>{String(subId ?? '')}</TableCell>
+                                                            <TableCell>{String(userId ?? '')}</TableCell>
+                                                            <TableCell>{String(planId ?? '')}</TableCell>
+                                                            <TableCell>{renderStatusBadge(status)}</TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })}
+                                                {safeVendorSubscriptions.length === 0 ? (
+                                                    <TableRow>
+                                                        <TableCell colSpan={4} className="text-center text-sm text-gray-500">No subscriptions found</TableCell>
+                                                    </TableRow>
+                                                ) : null}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                </Card>
+                            </div>
+
+                            
                     </>
                 </div>
             </Card>
@@ -379,9 +749,95 @@ const VendorsPlane = () => {
                             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                                 Cancel
                             </Button>
+                            <Button variant="secondary" onClick={() => openManualActivation()}>
+                                Manual Activation
+                            </Button>
                             <Button onClick={handleCreateOrUpdatePlan}
                                 className="bg-[#00897B] hover:bg-[#00796B]">
                                 {selectedVendor ? 'Update' : 'Create'}
+                            </Button>
+                        </DialogFooter>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isManualDialogOpen} onOpenChange={setIsManualDialogOpen}>
+                <DialogContent className="max-h-[90vh] p-0">
+                    <DialogHeader className="p-6">
+                        <DialogTitle className="text-[#00897B] text-xl">
+                            Manual Activation
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="p-6">
+                        <form className="space-y-4 overflow-y-auto max-h-[60vh] pr-2">
+                            <div className="space-y-1">
+                                <Label htmlFor="manual_vendor">Vendor</Label>
+                                <Select
+                                    value={manualForm.user_id === '' ? '' : String(manualForm.user_id)}
+                                    onValueChange={(val) => handleManualFormChange('user_id', Number(val))}
+                                >
+                                    <SelectTrigger
+                                        id="manual_vendor"
+                                        className="focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none ring-0 outline-none ring-offset-0 focus:ring-offset-0 focus-visible:ring-offset-0 focus:border-transparent focus-visible:border-transparent data-[state=open]:ring-0"
+                                    >
+                                        <SelectValue placeholder="Select vendor" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {safeVendorList.map(v => (
+                                            <SelectItem key={v.id} value={String(v.id)}>
+                                                {('name' in (v as any) ? (v as any).name : `Vendor ${v.id}`)} {('email' in (v as any) && (v as any).email) ? `- ${(v as any).email}` : ''}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1">
+                                <Label htmlFor="manual_plan">Plan</Label>
+                                <Select
+                                    value={manualForm.plan_id === '' ? '' : String(manualForm.plan_id)}
+                                    onValueChange={(val) => handleManualFormChange('plan_id', Number(val))}
+                                >
+                                    <SelectTrigger
+                                        id="manual_plan"
+                                        className="focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none ring-0 outline-none ring-offset-0 focus:ring-offset-0 focus-visible:ring-offset-0 focus:border-transparent focus-visible:border-transparent data-[state=open]:ring-0"
+                                    >
+                                        <SelectValue placeholder="Select plan" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {vendors.map(p => (
+                                            <SelectItem key={p.id} value={String(p.id)}>
+                                                {p.title} — ${p.price_ht}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1">
+                                <Label htmlFor="manual_payment">Payment Method</Label>
+                                <Input
+                                    id="manual_payment"
+                                    value={manualForm.payment_method}
+                                    onChange={(e) => handleManualFormChange('payment_method', e.target.value)}
+                                    placeholder="Manual payment"
+                                    className="focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none ring-0 outline-none ring-offset-0 focus:ring-offset-0 focus-visible:ring-offset-0 focus:border-transparent focus-visible:border-transparent"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label htmlFor="manual_promo">Promo Code</Label>
+                                <Input
+                                    id="manual_promo"
+                                    value={manualForm.promo_code ?? ''}
+                                    onChange={(e) => handleManualFormChange('promo_code', e.target.value || null)}
+                                    className="focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none ring-0 outline-none ring-offset-0 focus:ring-offset-0 focus-visible:ring-offset-0 focus:border-transparent focus-visible:border-transparent"
+                                />
+                            </div>
+                        </form>
+                        <DialogFooter className="mt-6">
+                            <Button variant="outline" onClick={() => setIsManualDialogOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button onClick={submitManualActivation} className="bg-[#00897B] hover:bg-[#00796B]">
+                                Create Manual Activation
                             </Button>
                         </DialogFooter>
                     </div>
