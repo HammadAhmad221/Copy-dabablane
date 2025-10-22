@@ -26,12 +26,9 @@ export const vendorPlanActivationService: VendorPlanActivationService = {
   },
 
   getAllVendors: async () => {
-    // This endpoint requires a different token per provided CURL
-    const response = await apiClient.get<VendorsListResponse>(GET_ALL_VENDORS_URL, {
-      headers: {
-        Authorization: `Bearer 340|HTMaR8zkc0hc6sSVEFlVOm3A9lbDCNVEotPfhnog7afacb10`,
-      },
-    });
+    // Note: Previously used a specific token, now using dynamic token from localStorage
+    // If this endpoint needs a special token, it should be configured via environment variables
+    const response = await apiClient.get<VendorsListResponse>(GET_ALL_VENDORS_URL);
     return response.data;
   },
 

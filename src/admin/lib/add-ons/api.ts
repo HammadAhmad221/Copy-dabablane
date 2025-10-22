@@ -7,9 +7,17 @@ const BASE_URL = 'https://dev.dabablane.com/api/back/v1/admin/subscriptions/add-
 const api = axios.create({
     baseURL: BASE_URL,
     headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer 666|4s6ttd05NEXXPesmwPw78cJdKHYFEVf2DNKpNSRl346a613d'
+        'Content-Type': 'application/json'
     }
+});
+
+// Request interceptor to add dynamic auth token
+api.interceptors.request.use((config) => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
 });
 
 export const addOnsApi = {
