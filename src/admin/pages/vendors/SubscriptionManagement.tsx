@@ -14,6 +14,16 @@ import {
   DialogTitle,
 } from "@/admin/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/admin/components/ui/alert-dialog";
+import {
   Tabs,
   TabsContent,
   TabsList,
@@ -66,6 +76,8 @@ const SubscriptionManagement = () => {
   // Dialog States
   const [planDialog, setPlanDialog] = useState(false);
   const [addOnDialog, setAddOnDialog] = useState(false);
+  const [deletePlanDialog, setDeletePlanDialog] = useState(false);
+  const [planToDelete, setPlanToDelete] = useState<number | null>(null);
   const [editingPlan, setEditingPlan] = useState<VendorPlan | null>(null);
   const [editingAddOn, setEditingAddOn] = useState<AddOn | null>(null);
 
@@ -109,7 +121,6 @@ const SubscriptionManagement = () => {
       }));
       setPlans(normalizedPlans);
     } catch (error) {
-      console.error('Error fetching vendor plans:', error);
       toast.error('Failed to load vendor plans');
     } finally {
       setIsLoading(false);
@@ -166,26 +177,30 @@ const SubscriptionManagement = () => {
       await fetchVendorPlans();
       setPlanDialog(false);
     } catch (error) {
-      console.error('Error saving vendor plan:', error);
       toast.error('Failed to save vendor plan');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleDeletePlan = async (id: number) => {
-    if (!window.confirm('Are you sure you want to delete this plan?')) {
-      return;
-    }
+  const handleDeletePlanClick = (id: number) => {
+    setPlanToDelete(id);
+    setDeletePlanDialog(true);
+  };
+
+  const handleDeletePlanConfirm = async () => {
+    if (!planToDelete) return;
 
     try {
       setIsLoading(true);
-      await vendorPlanService.deletePlan(id);
+      await vendorPlanService.deletePlan(planToDelete);
       toast.success('Plan deleted successfully');
       await fetchVendorPlans();
-    } catch (error) {
-      console.error('Error deleting vendor plan:', error);
-      toast.error('Failed to delete vendor plan');
+      setDeletePlanDialog(false);
+      setPlanToDelete(null);
+    } catch (error: any) {
+      const errorMessage = error.message || error.response?.data?.message || 'Failed to delete vendor plan';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -342,7 +357,7 @@ const SubscriptionManagement = () => {
                                 <Button variant="outline" size="sm" onClick={() => handleOpenPlanDialog(plan)} disabled={isLoading}>
                                   <Edit className="h-4 w-4" />
                                 </Button>
-                                <Button variant="destructive" size="sm" onClick={() => handleDeletePlan(plan.id)} disabled={isLoading}>
+                                <Button variant="destructive" size="sm" onClick={() => handleDeletePlanClick(plan.id)} disabled={isLoading}>
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </div>
@@ -382,7 +397,7 @@ const SubscriptionManagement = () => {
                             <Edit className="h-4 w-4 mr-2" />
                             Edit
                           </Button>
-                          <Button variant="destructive" size="sm" className="flex-1" onClick={() => handleDeletePlan(plan.id)} disabled={isLoading}>
+                          <Button variant="destructive" size="sm" className="flex-1" onClick={() => handleDeletePlanClick(plan.id)} disabled={isLoading}>
                             <Trash2 className="h-4 w-4 mr-2" />
                             Delete
                           </Button>
@@ -682,6 +697,28 @@ const SubscriptionManagement = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Plan Confirmation Dialog */}
+      <AlertDialog open={deletePlanDialog} onOpenChange={setDeletePlanDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Plan</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this plan? This action cannot be undone and will remove the plan permanently.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPlanToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeletePlanConfirm}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
