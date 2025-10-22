@@ -94,7 +94,6 @@ const Settings = () => {
           password_confirmation: '',
         });
       } catch (error) {
-        console.error('Error parsing user data:', error);
         toast.error('Error loading user data');
       }
     }

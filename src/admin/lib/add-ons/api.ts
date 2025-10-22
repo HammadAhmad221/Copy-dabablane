@@ -20,28 +20,52 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
+// Add response interceptor for better error handling
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        throw error;
+    }
+);
+
 export const addOnsApi = {
     // Get all add-ons
     getAllAddOns: async (): Promise<AddOnResponse> => {
-        const response = await api.get('');
-        return response.data;
+        try {
+            const response = await api.get('');
+            return response.data;
+        } catch (error) {
+            throw error;
+        }
     },
 
     // Create new add-on
     createAddOn: async (addOn: AddOn): Promise<AddOnResponse> => {
-        const response = await api.post('', addOn);
-        return response.data;
+        try {
+            const response = await api.post('', addOn);
+            return response.data;
+        } catch (error) {
+            throw error;
+        }
     },
 
     // Update existing add-on
     updateAddOn: async (id: number, addOn: AddOn): Promise<AddOnResponse> => {
-        const response = await api.put(`/${id}`, addOn);
-        return response.data;
+        try {
+            const response = await api.put(`/${id}`, addOn);
+            return response.data;
+        } catch (error) {
+            throw error;
+        }
     },
 
     // Delete add-on
     deleteAddOn: async (id: number): Promise<AddOnResponse> => {
-        const response = await api.delete(`/${id}`);
-        return response.data;
+        try {
+            const response = await api.delete(`/${id}`);
+            return response.data;
+        } catch (error) {
+            throw error;
+        }
     },
 };

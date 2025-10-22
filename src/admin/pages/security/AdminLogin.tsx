@@ -44,7 +44,6 @@ const AdminLogin = () => {
       // to prevent race conditions
       setRedirected(true);
     } catch (err) {
-      console.error('Login error:', err);
       setFormError('Authentication failed. Please check your credentials and try again.');
     }
   };

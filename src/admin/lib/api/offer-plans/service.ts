@@ -17,19 +17,10 @@ interface VendorPlanService {
 
 export const vendorPlanService: VendorPlanService = {
   getAllPlans: async () => {
-    const fullUrl = apiClient.defaults.baseURL + BASE_URL;
-    console.log('Making request to:', fullUrl);
     try {
-      console.log('Request headers:', apiClient.defaults.headers);
       const response = await apiClient.get<VendorPlansListResponse>(BASE_URL);
-      console.log('API Response:', response);
       return response.data;
     } catch (error: any) {
-      console.error('API Error Details:', {
-        config: error.config,
-        status: error.response?.status,
-        data: error.response?.data
-      });
       throw error;
     }
   },
@@ -39,7 +30,6 @@ export const vendorPlanService: VendorPlanService = {
       const response = await apiClient.post<VendorPlanResponse>(BASE_URL, plan);
       return response.data;
     } catch (error: any) {
-      console.error('Error creating plan:', error);
       throw error;
     }
   },
@@ -49,7 +39,6 @@ export const vendorPlanService: VendorPlanService = {
       const response = await apiClient.put<VendorPlanResponse>(`${BASE_URL}/${planId}`, plan);
       return response.data;
     } catch (error: any) {
-      console.error('Error updating plan:', error);
       throw error;
     }
   },
@@ -58,7 +47,6 @@ export const vendorPlanService: VendorPlanService = {
     try {
       await apiClient.delete(`${BASE_URL}/${planId}`);
     } catch (error: any) {
-      console.error('Error deleting plan:', error);
       throw error;
     }
   }

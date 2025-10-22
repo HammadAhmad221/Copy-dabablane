@@ -12,7 +12,6 @@ export const useAddOns = () => {
         setError(null);
         try {
             const response = await addOnsApi.getAllAddOns();
-            console.log('API Response:', response); // Debug log
             // Check if response.data is an array
             let addOnsData: AddOn[] = [];
             
@@ -31,7 +30,6 @@ export const useAddOns = () => {
 
             setAddOns(sanitizedAddOns);
         } catch (err) {
-            console.error('Error fetching add-ons:', err);
             setError(err instanceof Error ? err.message : 'Failed to fetch add-ons');
             setAddOns([]); // Reset add-ons on error
         } finally {
@@ -44,13 +42,21 @@ export const useAddOns = () => {
         setError(null);
         try {
             const response = await addOnsApi.createAddOn(addOn);
-            if (response.success) {
-                fetchAddOns(); // Refresh the list
+            
+            // Handle different response structures
+            const success = response?.success ?? response?.data?.success ?? true;
+            
+            if (success) {
+                await fetchAddOns(); // Refresh the list
                 return true;
             }
+            
+            const errorMsg = response?.message ?? response?.data?.message ?? 'Failed to create add-on';
+            setError(errorMsg);
             return false;
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to create add-on');
+        } catch (err: any) {
+            const errorMsg = err?.response?.data?.message || err?.message || 'Failed to create add-on';
+            setError(errorMsg);
             return false;
         } finally {
             setIsLoading(false);
@@ -62,13 +68,21 @@ export const useAddOns = () => {
         setError(null);
         try {
             const response = await addOnsApi.updateAddOn(id, addOn);
-            if (response.success) {
-                fetchAddOns(); // Refresh the list
+            
+            // Handle different response structures
+            const success = response?.success ?? response?.data?.success ?? true;
+            
+            if (success) {
+                await fetchAddOns(); // Refresh the list
                 return true;
             }
+            
+            const errorMsg = response?.message ?? response?.data?.message ?? 'Failed to update add-on';
+            setError(errorMsg);
             return false;
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to update add-on');
+        } catch (err: any) {
+            const errorMsg = err?.response?.data?.message || err?.message || 'Failed to update add-on';
+            setError(errorMsg);
             return false;
         } finally {
             setIsLoading(false);
@@ -80,13 +94,21 @@ export const useAddOns = () => {
         setError(null);
         try {
             const response = await addOnsApi.deleteAddOn(id);
-            if (response.success) {
-                fetchAddOns(); // Refresh the list
+            
+            // Handle different response structures
+            const success = response?.success ?? response?.data?.success ?? true;
+            
+            if (success) {
+                await fetchAddOns(); // Refresh the list
                 return true;
             }
+            
+            const errorMsg = response?.message ?? response?.data?.message ?? 'Failed to delete add-on';
+            setError(errorMsg);
             return false;
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to delete add-on');
+        } catch (err: any) {
+            const errorMsg = err?.response?.data?.message || err?.message || 'Failed to delete add-on';
+            setError(errorMsg);
             return false;
         } finally {
             setIsLoading(false);
