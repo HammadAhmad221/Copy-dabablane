@@ -1,6 +1,6 @@
 
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Textarea } from "../../components/ui/textarea";
@@ -8,12 +8,9 @@ import { useToast } from "../../hooks/use-toast";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
 } from "../../components/ui/card";
 import { Label } from "../../components/ui/label";
 import { motion } from "framer-motion";
-import { Icon } from "@iconify/react";
 import { Upload, Building2 } from "lucide-react";
 import { invoiceConfigService } from "../../lib/api/invoice-config";
 
@@ -43,7 +40,7 @@ export default function InvoiceConfig() {
   const [isLoading, setIsLoading] = useState(false);
   const [template, setTemplate] = useState<InvoiceTemplate>({
     logo: "", // Empty means use default logo
-    prefix: "INV-",
+    prefix: "",
     billingEmail: "",
     contactEmail: "",
     contactPhone: "",
@@ -55,49 +52,11 @@ export default function InvoiceConfig() {
     },
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [initialTemplate, setInitialTemplate] = useState<InvoiceTemplate | null>(null);
-
-  useEffect(() => {
-    loadSavedTemplate();
-  }, []);
-
-  const loadSavedTemplate = async () => {
-    try {
-      const res = await invoiceConfigService.getConfiguration();
-      const cfg = res?.data;
-      if (cfg) {
-        const newTemplate = {
-          logo: cfg.invoice_logo_url || "",
-          prefix: cfg.invoice_prefix || "INV-",
-          billingEmail: cfg.billing_email || "",
-          contactEmail: cfg.contact_email || "",
-          contactPhone: cfg.contact_phone || "",
-          companyInfo: {
-            name: "",
-            address: "",
-            taxId: "",
-            legalMentions: cfg.invoice_legal_mentions || "",
-          },
-        };
-
-        setTemplate(newTemplate);
-        setInitialTemplate(newTemplate);
-        setLogoFile(null);
-      }
-    } catch (error: any) {
-      console.error('Load configuration error:', error?.response?.data || error);
-      toast({
-        title: "Error",
-        description: error?.response?.data?.message || "Failed to load invoice template",
-        variant: "destructive",
-      });
-    }
-  };
 
   const resetFormToEmpty = () => {
     const emptyTemplate = {
       logo: "",
-      prefix: "INV-",
+      prefix: "",
       billingEmail: "",
       contactEmail: "",
       contactPhone: "",
@@ -119,11 +78,7 @@ export default function InvoiceConfig() {
   };
 
   const handleReset = () => {
-    if (initialTemplate) {
-      setTemplate(initialTemplate);
-    } else {
-      resetFormToEmpty();
-    }
+    resetFormToEmpty();
     setLogoFile(null);
 
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
@@ -133,7 +88,7 @@ export default function InvoiceConfig() {
 
     toast({
       title: "Reset",
-      description: "Form has been reset to saved values",
+      description: "Form has been reset to empty",
     });
   };
 
@@ -274,7 +229,6 @@ export default function InvoiceConfig() {
       });
     } catch (error) {
       const errData = (error as any)?.response?.data;
-      console.error('Create configuration error:', errData || error);
       const logoMsgs = errData?.errors?.invoice_logo_path;
       const firstLogoMsg = Array.isArray(logoMsgs) && logoMsgs.length ? logoMsgs[0] : null;
       toast({

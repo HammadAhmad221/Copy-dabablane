@@ -45,9 +45,21 @@ export const vendorPlanService: VendorPlanService = {
 
   deletePlan: async (planId: number) => {
     try {
-      await apiClient.delete(`${BASE_URL}/${planId}`);
+      const response = await apiClient.delete(`${BASE_URL}/${planId}`);
+      return response.data;
     } catch (error: any) {
-      throw error;
+      // Extract error message from response
+      const errorMessage = error.response?.data?.message 
+        || error.response?.data?.error 
+        || error.message 
+        || 'Failed to delete plan';
+      
+      // Create a more detailed error object
+      const detailedError = new Error(errorMessage);
+      (detailedError as any).status = error.response?.status;
+      (detailedError as any).details = error.response?.data;
+      
+      throw detailedError;
     }
   }
 };
