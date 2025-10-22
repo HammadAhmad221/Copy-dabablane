@@ -25,12 +25,17 @@ export const adminGuestApiClient = axios.create({
 
 // Request interceptor to add auth token
 adminApiClient.interceptors.request.use((config) => {
-  // Use the hardcoded token for now (this should be replaced with proper auth later)
-  const token = '666|4s6ttd05NEXXPesmwPw78cJdKHYFEVf2DNKpNSRl346a613d';
+  // Get token from localStorage
+  const token = localStorage.getItem('authToken');
   
   // Set headers
   config.headers = config.headers || {};
-  config.headers.Authorization = `Bearer ${token}`;
+  
+  // Add authorization header if token exists
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  
   // Accept JSON responses by default
   if (!config.headers.Accept) {
     config.headers.Accept = 'application/json';
