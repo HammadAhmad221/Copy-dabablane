@@ -9,7 +9,6 @@ export const adminApiClient = axios.create({
   baseURL: `${API_BASE_URL}${ADMIN_API_PATH}`,
   timeout: 30000,
   headers: {
-    'Content-Type': 'application/json',
     'Accept': 'application/json'
   },
 });
@@ -32,18 +31,20 @@ adminApiClient.interceptors.request.use((config) => {
   // Set headers
   config.headers = config.headers || {};
   config.headers.Authorization = `Bearer ${token}`;
-  // Only set JSON content-type when the body is not FormData (let axios set multipart boundaries)
-  const isFormData = typeof FormData !== 'undefined' && config.data instanceof FormData;
-  if (!isFormData) {
-    config.headers['Content-Type'] = 'application/json';
-  } else {
-    delete (config.headers as any)['Content-Type'];
+  // Accept JSON responses by default
+  if (!config.headers.Accept) {
+    config.headers.Accept = 'application/json';
   }
-  config.headers.Accept = 'application/json';
-  
-  const fullUrl = `${config.baseURL || ''}${config.url || ''}`;
-  console.log('Making request to:', fullUrl);
-  console.log('Request headers:', config.headers);
+
+  // For FormData requests, let the browser/axios set the correct multipart boundary
+  // Otherwise default to JSON when not explicitly provided
+  const isFormData = typeof FormData !== 'undefined' && config.data instanceof FormData;
+  if (isFormData) {
+    // Ensure we do NOT force JSON content type
+    delete (config.headers as any)['Content-Type'];
+  } else if (!config.headers['Content-Type']) {
+    config.headers['Content-Type'] = 'application/json';
+  }
   
   return config;
 });
