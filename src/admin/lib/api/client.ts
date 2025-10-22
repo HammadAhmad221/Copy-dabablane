@@ -19,7 +19,6 @@ export const adminGuestApiClient = axios.create({
   baseURL: `${API_BASE_URL}${ADMIN_API_PATH}`,
   timeout: 30000,
   headers: {
-    'Content-Type': 'application/json',
     'Accept': 'application/json',
     'X-Auth-Token': import.meta.env.VITE_API_TOKEN
   },
@@ -33,7 +32,13 @@ adminApiClient.interceptors.request.use((config) => {
   // Set headers
   config.headers = config.headers || {};
   config.headers.Authorization = `Bearer ${token}`;
-  config.headers['Content-Type'] = 'application/json';
+  // Only set JSON content-type when the body is not FormData (let axios set multipart boundaries)
+  const isFormData = typeof FormData !== 'undefined' && config.data instanceof FormData;
+  if (!isFormData) {
+    config.headers['Content-Type'] = 'application/json';
+  } else {
+    delete (config.headers as any)['Content-Type'];
+  }
   config.headers.Accept = 'application/json';
   
   const fullUrl = `${config.baseURL || ''}${config.url || ''}`;
