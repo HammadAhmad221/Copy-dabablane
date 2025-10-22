@@ -1,3 +1,5 @@
+
+
 import { useState, useEffect } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -77,7 +79,7 @@ export default function InvoiceConfig() {
             legalMentions: cfg.invoice_legal_mentions || "",
           },
         };
-        
+
         setTemplate(newTemplate);
         setInitialTemplate(newTemplate);
         setLogoFile(null);
@@ -92,31 +94,43 @@ export default function InvoiceConfig() {
     }
   };
 
-  const handleReset = () => {
-    if (initialTemplate) {
-      setTemplate(initialTemplate);
-    } else {
-      setTemplate({
-        logo: "",
-        prefix: "INV-",
-        billingEmail: "",
-        contactEmail: "",
-        contactPhone: "",
-        companyInfo: {
-          name: "",
-          address: "",
-          taxId: "",
-          legalMentions: "",
-        },
-      });
-    }
+  const resetFormToEmpty = () => {
+    const emptyTemplate = {
+      logo: "",
+      prefix: "INV-",
+      billingEmail: "",
+      contactEmail: "",
+      contactPhone: "",
+      companyInfo: {
+        name: "",
+        address: "",
+        taxId: "",
+        legalMentions: "",
+      },
+    };
+
+    setTemplate(emptyTemplate);
     setLogoFile(null);
-    
+
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     if (fileInput) {
       fileInput.value = '';
     }
-    
+  };
+
+  const handleReset = () => {
+    if (initialTemplate) {
+      setTemplate(initialTemplate);
+    } else {
+      resetFormToEmpty();
+    }
+    setLogoFile(null);
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = '';
+    }
+
     toast({
       title: "Reset",
       description: "Form has been reset to saved values",
@@ -168,12 +182,12 @@ export default function InvoiceConfig() {
       logo: "",
     }));
     setLogoFile(null);
-    
+
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     if (fileInput) {
       fileInput.value = '';
     }
-    
+
     toast({
       title: "Logo Removed",
       description: "Default logo will be used",
@@ -250,8 +264,9 @@ export default function InvoiceConfig() {
       };
 
       const res = await invoiceConfigService.createConfiguration(payload);
-      await loadSavedTemplate();
-      setLogoFile(null);
+
+      // Reset form to empty after successful save instead of reloading from API
+      resetFormToEmpty();
 
       toast({
         title: "Success",
@@ -498,3 +513,4 @@ export default function InvoiceConfig() {
     </div>
   );
 }
+
