@@ -151,7 +151,7 @@ const PromoCodeManagement = () => {
 
     const startDate = new Date(promoForm.startDate!);
     const endDate = new Date(promoForm.endDate!);
-    
+
     if (endDate <= startDate) {
       toast.error('End date must be after start date');
       return;
@@ -256,7 +256,7 @@ const PromoCodeManagement = () => {
   // Filter promoCodes
   const filteredPromoCodes = promoCodes.filter(promo => {
     const matchesSearch = promo.code.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || 
+    const matchesStatus = filterStatus === 'all' ||
       (filterStatus === 'active' && promo.isActive) ||
       (filterStatus === 'inactive' && !promo.isActive);
     return matchesSearch && matchesStatus;
@@ -299,8 +299,8 @@ const PromoCodeManagement = () => {
               </p>
             </div>
             <div className="flex justify-start">
-              <Button 
-                onClick={() => handleOpenPromoDialog()} 
+              <Button
+                onClick={() => handleOpenPromoDialog()}
                 className="bg-white text-[#00897B] hover:bg-white/90 w-full sm:w-auto"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -321,8 +321,8 @@ const PromoCodeManagement = () => {
                 className="w-full"
               />
             </div>
-            <Select 
-              value={filterStatus} 
+            <Select
+              value={filterStatus}
               onValueChange={(value: 'all' | 'active' | 'inactive') => setFilterStatus(value)}
             >
               <SelectTrigger className="w-full sm:w-[180px]">
@@ -506,7 +506,7 @@ const PromoCodeManagement = () => {
               <Label>Promo Code *</Label>
               <Input
                 value={promoForm.code}
-                onChange={(e) => setPromoForm({...promoForm, code: e.target.value.toUpperCase()})}
+                onChange={(e) => setPromoForm({ ...promoForm, code: e.target.value.toUpperCase() })}
                 placeholder="WELCOME20"
                 className="mt-2 font-mono"
                 maxLength={20}
@@ -522,7 +522,7 @@ const PromoCodeManagement = () => {
                   min="1"
                   max="100"
                   value={promoForm.discountPercentage}
-                  onChange={(e) => setPromoForm({...promoForm, discountPercentage: parseInt(e.target.value)})}
+                  onChange={(e) => setPromoForm({ ...promoForm, discountPercentage: parseInt(e.target.value) })}
                   placeholder="20"
                 />
                 <Percent className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -535,7 +535,7 @@ const PromoCodeManagement = () => {
                 <Input
                   type="date"
                   value={promoForm.startDate}
-                  onChange={(e) => setPromoForm({...promoForm, startDate: e.target.value})}
+                  onChange={(e) => setPromoForm({ ...promoForm, startDate: e.target.value })}
                   className="mt-2"
                 />
               </div>
@@ -544,7 +544,7 @@ const PromoCodeManagement = () => {
                 <Input
                   type="date"
                   value={promoForm.endDate}
-                  onChange={(e) => setPromoForm({...promoForm, endDate: e.target.value})}
+                  onChange={(e) => setPromoForm({ ...promoForm, endDate: e.target.value })}
                   className="mt-2"
                 />
               </div>
@@ -556,14 +556,14 @@ const PromoCodeManagement = () => {
                 type="number"
                 min="1"
                 value={promoForm.maxUsage || ''}
-                onChange={(e) => setPromoForm({...promoForm, maxUsage: e.target.value ? parseInt(e.target.value) : undefined})}
+                onChange={(e) => setPromoForm({ ...promoForm, maxUsage: e.target.value ? parseInt(e.target.value) : undefined })}
                 placeholder="Leave empty for unlimited"
                 className="mt-2"
               />
               <p className="text-xs text-gray-500 mt-1">Leave empty for unlimited usage</p>
             </div>
 
-            <div>
+            {/* <div>
               <Label>Applicable Plans</Label>
               <Select
                 value={promoForm.applicablePlans?.[0] || 'all'}
@@ -579,12 +579,12 @@ const PromoCodeManagement = () => {
                   <SelectItem value="enterprise">Enterprise Plan Only</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </div> */}
 
             <div className="flex items-center space-x-2 pt-2">
               <Switch
                 checked={promoForm.isActive}
-                onCheckedChange={(checked) => setPromoForm({...promoForm, isActive: checked})}
+                onCheckedChange={(checked) => setPromoForm({ ...promoForm, isActive: checked })}
               />
               <Label>Active (users can use this code)</Label>
             </div>
@@ -604,7 +604,7 @@ const PromoCodeManagement = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Promo Code?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the promo code <code className="font-mono font-bold">{promoToDelete?.code}</code>? 
+              Are you sure you want to delete the promo code <code className="font-mono font-bold">{promoToDelete?.code}</code>?
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
