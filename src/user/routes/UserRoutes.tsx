@@ -12,6 +12,7 @@ const Reservation = lazy(() => import('../pages/Reservation.tsx'));
 const Ecommerce = lazy(() => import('../pages/Ecommerce.tsx'));
 const BtoB = lazy(() => import('../pages/BtoB.tsx'));
 const BlaneDetail = lazy(() => import('../pages/BlaneDetail.tsx'));
+const VendorDetails = lazy(() => import('../pages/VendorDetails.tsx'));
 const PaymentResult = lazy(() => import('../pages/PaymentResult.tsx'));
 const About = lazy(() => import('../pages/About.tsx'));
 const Contact = lazy(() => import('../pages/Contact.tsx'));
@@ -46,6 +47,11 @@ const UserRoutes: React.FC = () => {
           <Route path="blane/:slug" element={
             <Suspense fallback={<Loader />}>
               <BlaneDetail />
+            </Suspense>
+          } />
+          <Route path="vendor/:slug" element={
+            <Suspense fallback={<Loader />}>
+              <VendorDetails />
             </Suspense>
           } />
           <Route path="ecommerce-special" element={
