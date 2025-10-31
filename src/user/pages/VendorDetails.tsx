@@ -6,6 +6,59 @@ import NotFound from './NotFound';
 import BlaneCard from '../components/BlaneCard';
 import Footer from '../components/Footer';
 
+// Dummy data for testing purposes. This will be removed before production.
+const dummyVendor: Vendor = {
+  id: 1,
+  name: 'Albaik Foods',
+  slug: 'test',
+  description: 'Restaurant and well being in a fabulous setting',
+  image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4',
+  blanes: [
+    {
+      id: 1,
+      name: 'Indian Buffet',
+      slug: 'indian-buffet',
+      description: 'A delicious Indian buffet',
+      price_current: 300,
+      price_old: 350,
+      type: 'reservation',
+      rating: 4.5,
+      city: 'Casablanca',
+      images: ['https://images.unsplash.com/photo-1599487488170-d11ec9c172f0'],
+      expiration_date: '2025-12-31',
+      start_date: '2025-01-01',
+    },
+    {
+      id: 2,
+      name: 'Horse Riding',
+      slug: 'horse-riding',
+      description: 'A fun horse riding experience',
+      price_current: 180,
+      price_old: 200,
+      type: 'reservation',
+      rating: 4.5,
+      city: 'Casablanca',
+      images: ['https://images.unsplash.com/photo-1598974357801-92736b1635ba'],
+      expiration_date: '2025-12-31',
+      start_date: '2025-01-01',
+    },
+    {
+        id: 3,
+        name: 'Formula 4+1',
+        slug: 'formula-4-1',
+        description: 'A great formula for you and your friends',
+        price_current: 200,
+        price_old: 250,
+        type: 'reservation',
+        rating: 4.5,
+        city: 'Casablanca',
+        images: ['https://images.unsplash.com/photo-1552529621-2ef09a066d79'],
+        expiration_date: '2025-12-31',
+        start_date: '2025-01-01',
+      },
+  ],
+};
+
 const VendorDetails = () => {
   const { slug } = useParams<{ slug: string }>();
   const [vendor, setVendor] = useState<Vendor | null>(null);
@@ -15,6 +68,13 @@ const VendorDetails = () => {
   useEffect(() => {
     const fetchVendorData = async () => {
       if (!slug) return;
+
+      // Use dummy data for testing when the slug is 'test'
+      if (slug === 'test') {
+        setVendor(dummyVendor);
+        setIsLoading(false);
+        return;
+      }
 
       try {
         setIsLoading(true);
