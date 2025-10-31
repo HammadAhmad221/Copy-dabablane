@@ -168,6 +168,18 @@ export const adminNavItems = [
     title: "Bannière dynamique",
     path: "/admin/dynamique-banner",
     icon: TicketSlash,
+    children: [
+      {
+        id: "desktop-banner",
+        title: "Bannière de bureau",
+        path: "/admin/dynamique-banner",
+      },
+      {
+        id: "mobile-banner",
+        title: "Bannière mobile",
+        path: "/admin/mobile-banner",
+      },
+    ],
   },
   {
     id: "cities",

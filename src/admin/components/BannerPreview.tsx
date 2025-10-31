@@ -1,12 +1,11 @@
-
 import type React from "react"
 import { motion } from "framer-motion"
 
 interface BannerPreviewProps {
   title: string
   description: string
-  buttonText: string
-  buttonLink: string
+  buttonText?: string
+  buttonLink?: string
   imageUrl: string
   type: "hero" | "banner"
   isVideo?: boolean
@@ -59,12 +58,14 @@ const BannerPreview: React.FC<BannerPreviewProps> = ({
         <div className="text-center text-white p-6">
           <h2 className={`font-bold mb-2 ${isHero ? "text-4xl" : "text-2xl"}`}>{title}</h2>
           <p className={`mb-4 ${isHero ? "text-lg" : "text-sm"}`}>{description}</p>
-          <a
-            href={buttonLink}
-            className="inline-block bg-[#00897B] hover:bg-[#00796B] text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300"
-          >
-            {buttonText}
-          </a>
+          {buttonText && buttonLink && (
+            <a
+              href={buttonLink}
+              className="inline-block bg-[#00897B] hover:bg-[#00796B] text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300"
+            >
+              {buttonText}
+            </a>
+          )}
         </div>
       </div>
     </motion.div>
