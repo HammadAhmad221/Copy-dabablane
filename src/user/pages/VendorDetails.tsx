@@ -4,8 +4,6 @@ import { VendorService, Vendor } from '../lib/api/services/vendorService';
 import Loader from '@/user/components/ui/Loader';
 import NotFound from './NotFound';
 import BlaneCard from '../components/BlaneCard';
-import Footer from '../components/Footer';
-
 // Dummy data for testing purposes. This will be removed before production.
 const dummyVendor: Vendor = {
   id: 1,
@@ -128,7 +126,6 @@ const VendorDetails = () => {
           ))}
         </div>
       </div>
-      <Footer />
     </div>
   );
 };
