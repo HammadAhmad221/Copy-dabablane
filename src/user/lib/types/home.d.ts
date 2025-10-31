@@ -53,6 +53,8 @@ export interface Banner {
   image_link2: string;
   btname2: string;
   link2: string;
+  is_video1?: boolean;
+  is_video2?: boolean;
   created_at: string;
   updated_at: string;
 }

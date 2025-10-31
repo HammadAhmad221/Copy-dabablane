@@ -40,6 +40,7 @@ const Contact = lazy(() => import('./pages/contact/Contact'));
 const Cities = lazy(() => import('./pages/cities/Cities'));
 const Customers = lazy(() => import('./pages/users/Customers'));
 const DynamiqueBanner = lazy(() => import('./pages/DynamiqueBanner'));
+const MobileBanner = lazy(() => import('./pages/MobileBanner'));
 const Vendors = lazy(() => import('./pages/vendors/Vendors'));
 const InvoiceConfig = lazy(() => import('./pages/vendors/InvoiceConfig'));
 const VendorsPlane = lazy(() => import('./pages/vendors/VendorsPlane'));
@@ -184,6 +185,10 @@ const adminRoutes: RouteObject[] = [
   {
     path: "dynamique-banner",
     element: <DynamiqueBanner />
+  },
+  {
+    path: "mobile-banner",
+    element: <MobileBanner />
   },
   {
     path: "vendors",

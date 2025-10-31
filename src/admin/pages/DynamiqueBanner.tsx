@@ -9,7 +9,7 @@ import { Textarea } from "@/admin/components/ui/textarea"
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import BannerPreview from "../components/BannerPreview";
 import { bannerApi } from "@/admin/lib/api/services/bannerService"
-import { BannerType } from "@/lib/types/banner";
+import { BannerType } from "@/admin/lib/api/types/banner";
 import { useToast } from "@/admin/hooks/use-toast";
 
 interface BannerFormData {
@@ -114,6 +114,10 @@ function DynamiqueBanner() {
     setLoading(true);
 
     try {
+      if (!banner?.id) {
+        throw new Error("Banner ID is missing. Please refresh the page and try again.");
+      }
+
       const formDataToSend = new FormData();
   
       // Append text fields
@@ -125,6 +129,10 @@ function DynamiqueBanner() {
       formDataToSend.append('description2', formData.description2);
       formDataToSend.append('btname2', formData.btname2);
       formDataToSend.append('link2', formData.link2);
+      
+      // Append video type fields
+      formDataToSend.append('is_video1', formData.isVideo1 ? '1' : '0');
+      formDataToSend.append('is_video2', formData.isVideo2 ? '1' : '0');
   
       // Append files with correct field names
       if (formData.image1 instanceof File) {
@@ -142,7 +150,7 @@ function DynamiqueBanner() {
         duration: 3000,
       });
 
-      const response = await bannerApi.updateBanner(formDataToSend);
+      const response = await bannerApi.updateBanner(banner.id.toString(), formDataToSend);
   
       if (response) {
         toast({
@@ -156,10 +164,10 @@ function DynamiqueBanner() {
       } else {
         throw new Error("No response received from the API");
       }
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to update banner",
+        description: error.message || "Failed to update banner",
         variant: "destructive",
         duration: 3000,
       });
