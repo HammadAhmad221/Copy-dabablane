@@ -1,20 +1,20 @@
 
-import apiClient from "../apiClient"
+import { adminApiClient } from "../client";
 
-const API_URL = "https://dev.dabablane.com/api/back/v1/mobile-banners"
+const API_URL = "/mobile-banners"; // Using relative URL
 
 export const mobileBannerApi = {
   getBanners: () => {
-    return apiClient.get(API_URL)
+    return adminApiClient.get(API_URL);
   },
   createBanner: (formData: FormData) => {
-    return apiClient.post(API_URL, formData, {
+    return adminApiClient.post(API_URL, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
-    })
+    });
   },
   deleteBanner: (id: number) => {
-    return apiClient.delete(`${API_URL}/${id}`)
+    return adminApiClient.delete(`${API_URL}/${id}`);
   },
-}
+};
