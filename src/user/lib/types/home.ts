@@ -49,6 +49,8 @@ export interface Banner {
   description2: string;
   link2: string;
   btname2: string;
+  is_video1?: boolean;
+  is_video2?: boolean;
 }
 
 export interface MenuItem {

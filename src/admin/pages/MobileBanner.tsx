@@ -35,7 +35,21 @@ function MobileBanner() {
     try {
       setLoading(true)
       const response = await mobileBannerApi.getBanners()
-      setBanners(response.data)
+
+      const body: any = response?.data
+      const candidates = [
+        body,
+        body?.data,
+        body?.data?.data,
+        body?.items,
+        body?.mobile_banners,
+        body?.banners,
+        body?.results,
+      ]
+
+      const bannersData = candidates.find((c) => Array.isArray(c)) || []
+
+      setBanners(bannersData)
     } catch (error) {
       toast({
         variant: "destructive",
@@ -53,7 +67,12 @@ function MobileBanner() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    setFormData({ ...formData, [name]: value })
+
+    if (name === "order") {
+      setFormData({ ...formData, order: Number(value) })
+    } else {
+      setFormData({ ...formData, [name]: value })
+    }
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -212,28 +231,54 @@ function MobileBanner() {
       <div className="mt-12">
         <h2 className="text-2xl font-bold text-gray-800 mb-6">Bannières existantes</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          {banners.map((banner) => (
-            <Card key={banner.id} className="border-0 shadow-lg overflow-hidden bg-white">
-              <img src={banner.image_url} alt={banner.title} className="w-full h-48 object-cover" />
-              <CardContent className="p-4">
-                <h3 className="text-lg font-bold">{banner.title}</h3>
-                <p className="text-sm text-gray-600">{banner.description}</p>
-                <div className="flex justify-between items-center mt-4">
-                  <span className={`text-xs font-semibold ${banner.is_active ? "text-green-500" : "text-red-500"}`}>
-                    {banner.is_active ? "Active" : "Inactive"}
-                  </span>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleDelete(banner.id)}
-                    disabled={loading}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          {banners.map((banner, idx) => {
+            const mediaSrc = banner.image_link || banner.image_url || banner.image
+            const isVideoMedia = typeof mediaSrc === "string" && mediaSrc.toLowerCase().endsWith(".mp4")
+            const isActive = typeof banner.is_active === "boolean"
+              ? banner.is_active
+              : Boolean(Number(banner.is_active))
+
+            return (
+              <Card key={banner.id ?? banner.uuid ?? idx} className="border-0 shadow-lg overflow-hidden bg-white">
+                {mediaSrc ? (
+                  isVideoMedia ? (
+                    <video
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      className="w-full h-48 object-cover"
+                    >
+                      <source src={mediaSrc} type="video/mp4" />
+                    </video>
+                  ) : (
+                    <img src={mediaSrc} alt={banner.title} className="w-full h-48 object-cover" />
+                  )
+                ) : (
+                  <div className="w-full h-48 bg-gray-200 flex items-center justify-center text-gray-500">
+                    Aucune image
+                  </div>
+                )}
+                <CardContent className="p-4">
+                  <h3 className="text-lg font-bold">{banner.title || banner.name || ""}</h3>
+                  <p className="text-sm text-gray-600">{banner.description || banner.text || ""}</p>
+                  <div className="flex justify-between items-center mt-4">
+                    <span className={`text-xs font-semibold ${isActive ? "text-green-500" : "text-red-500"}`}>
+                      {isActive ? "Active" : "Inactive"}
+                    </span>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDelete(banner.id)}
+                      disabled={loading}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
       </div>
     </div>

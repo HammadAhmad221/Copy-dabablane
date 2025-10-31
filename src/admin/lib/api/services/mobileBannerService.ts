@@ -1,7 +1,7 @@
 
 import { adminApiClient } from "../client";
 
-const API_URL = "/mobile-banners"; // Using relative URL
+const API_URL = "/back/v1/mobile-banners";
 
 export const mobileBannerApi = {
   getBanners: () => {
