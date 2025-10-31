@@ -4,7 +4,6 @@ import { VendorService, Vendor } from '../lib/api/services/vendorService';
 import Loader from '@/user/components/ui/Loader';
 import NotFound from './NotFound';
 import BlaneCard from '../components/BlaneCard';
-import { Facebook, Instagram, Twitter, Phone } from 'lucide-react';
 import Footer from '../components/Footer';
 
 const VendorDetails = () => {
