@@ -2,6 +2,8 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  phone?: string;
+  city?: string;
   email_verified_at: string | null;
   created_at: string;
   updated_at: string;
@@ -11,6 +13,8 @@ export interface User {
 export interface UserFormData {
   name: string;
   email: string;
+  phone?: string;
+  city?: string;
   password: string;
   password_confirmation?: string;
   roles: string[];
