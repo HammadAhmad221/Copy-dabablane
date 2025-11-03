@@ -19,7 +19,7 @@ const VendorPaymentDetails = () => {
   useEffect(() => {
     const fetchPaymentDetails = async () => {
       if (!id) return;
-      
+
       setIsLoading(true);
       try {
         const data = await vendorPaymentApi.getPaymentById(id);
