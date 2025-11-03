@@ -13,6 +13,7 @@ const Ecommerce = lazy(() => import('../pages/Ecommerce.tsx'));
 const BtoB = lazy(() => import('../pages/BtoB.tsx'));
 const BlaneDetail = lazy(() => import('../pages/BlaneDetail.tsx'));
 const VendorDetails = lazy(() => import('../pages/VendorDetails.tsx'));
+const VendorDetail = lazy(() => import('../pages/VendorDetail.tsx'));
 const PaymentResult = lazy(() => import('../pages/PaymentResult.tsx'));
 const About = lazy(() => import('../pages/About.tsx'));
 const Contact = lazy(() => import('../pages/Contact.tsx'));
