@@ -127,6 +127,11 @@ export const adminNavItems = [
         title: "Vendor Plans",
         path: "/admin/vendors/planes",
       },
+      {
+        id: "vendor-reservation-orders",
+        title: "Réservations & Commandes",
+        path: "/admin/vendors/reservation-orders",
+      },
     ],
   },
   {

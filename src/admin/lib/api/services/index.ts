@@ -22,4 +22,5 @@ export * from './shippingDetails';
 export * from './merchants';
 export * from './jobs';
 export * from './jobBatches';
-export * from './commissionChartService'; 
+export * from './commissionChartService';
+export * from './vendorReservationOrderService'; 

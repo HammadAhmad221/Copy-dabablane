@@ -43,6 +43,7 @@ const DynamiqueBanner = lazy(() => import('./pages/DynamiqueBanner'));
 const MobileBanner = lazy(() => import('./pages/MobileBanner'));
 const Vendors = lazy(() => import('./pages/vendors/Vendors'));
 const VendorDashboard = lazy(() => import('./pages/vendors/VendorDashboard'));
+const VendorReservationOrders = lazy(() => import('./pages/vendors/reservationOrders'));
 const InvoiceConfig = lazy(() => import('./pages/vendors/InvoiceConfig'));
 const VendorsPlane = lazy(() => import('./pages/vendors/VendorsPlane'));
 const CommissionIndex = lazy(() => import('./pages/commission/index'));
@@ -231,6 +232,10 @@ const adminRoutes: RouteObject[] = [
   {
     path: "vendors/planes",
     element: <VendorsPlane />
+  },
+  {
+    path: "vendors/reservation-orders",
+    element: <VendorReservationOrders />
   },
   {
     path: "commission",

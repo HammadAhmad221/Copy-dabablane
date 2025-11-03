@@ -18,8 +18,26 @@ import { toast } from "react-hot-toast";
 import commissionApi from "@/admin/lib/api/services/commissionService";
 import type { Commission } from "@/admin/lib/api/types/commission";
 
+// Hook to detect mobile/tablet screen
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 900); // Changed from 768 to 900 (md breakpoint)
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+  
+  return isMobile;
+};
+
 const CommissionManagement = () => {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [commissions, setCommissions] = useState<Commission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState<string>("");
@@ -72,82 +90,78 @@ const CommissionManagement = () => {
   };
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-[#00897B]">Commission Management</h1>
-          <p className="text-gray-500 mt-1">Manage commission rates for categories and vendors</p>
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 w-full max-w-full overflow-x-hidden">
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:gap-4">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold text-[#00897B] break-words">Commission Management</h1>
+            <p className="text-gray-500 mt-1 text-sm sm:text-base">Manage commission rates for categories and vendors</p>
+          </div>
+          <Button 
+            onClick={() => navigate('/admin/commission/create')} 
+            className="bg-[#00897B] w-full sm:w-auto whitespace-nowrap flex-shrink-0"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            New Commission
+          </Button>
         </div>
-        <Button onClick={() => navigate('/admin/commission/create')} className="bg-[#00897B]">
-          <Plus className="h-4 w-4 mr-2" />
-          New Commission
-        </Button>
       </div>
 
       {/* Filters */}
-      <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <Card className="p-3 sm:p-4 w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div className="space-y-2">
-            <Label>Category ID</Label>
+            <Label className="text-sm">Category ID</Label>
             <Input
               placeholder="Filter by category"
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
+              className="h-10 w-full"
             />
           </div>
           <div className="space-y-2">
-            <Label>Vendor ID</Label>
+            <Label className="text-sm">Vendor ID</Label>
             <Input
               placeholder="Filter by vendor"
               value={vendorFilter}
               onChange={(e) => setVendorFilter(e.target.value)}
+              className="h-10 w-full"
             />
           </div>
         </div>
       </Card>
 
-      {/* Table */}
-      <Card>
-        {isLoading ? (
-          <div className="text-center p-12">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-            <p className="text-gray-500">Loading commissions...</p>
+      {/* Data Display */}
+      {isLoading ? (
+        <Card>
+          <div className="text-center p-8 sm:p-12">
+            <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin mx-auto mb-4 text-[#00897B]" />
+            <p className="text-gray-500 text-sm sm:text-base">Loading commissions...</p>
           </div>
-        ) : commissions.length > 0 ? (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Vendor</TableHead>
-                  <TableHead className="text-right">Commission Rate</TableHead>
-                  <TableHead className="text-right">Partial Rate</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {commissions.map((commission) => (
-                  <TableRow key={commission.id}>
-                    <TableCell className="font-mono">#{commission.id}</TableCell>
-                    <TableCell>{commission.category_name || commission.category_id || '-'}</TableCell>
-                    <TableCell>{commission.vendor_name || commission.vendor_id || '-'}</TableCell>
-                    <TableCell className="text-right font-semibold">
-                      {commission.commission_rate}%
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {commission.partial_commission_rate}%
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={commission.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+        </Card>
+      ) : commissions.length > 0 ? (
+        isMobile ? (
+          /* Mobile/Tablet Card View */
+          <div className="space-y-3 w-full">
+            {commissions.map((commission) => (
+              <Card key={commission.id} className="p-4 border-l-4 border-l-[#00897B] w-full">
+                <div className="space-y-3">
+                  {/* Header Row */}
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs text-gray-500 font-mono">#{commission.id}</span>
+                      <Badge 
+                        className={`ml-2 ${commission.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
+                      >
                         {commission.is_active ? 'Active' : 'Inactive'}
                       </Badge>
-                    </TableCell>
-                    <TableCell className="space-x-2">
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="h-8 w-8 p-0"
                         onClick={() => navigate(`/admin/commission/edit/${commission.id}`)}
                       >
                         <Edit className="h-4 w-4" />
@@ -155,22 +169,114 @@ const CommissionManagement = () => {
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="h-8 w-8 p-0"
                         onClick={() => handleDelete(commission.id)}
                       >
                         <Trash2 className="h-4 w-4 text-red-600" />
                       </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    </div>
+                  </div>
+
+                  {/* Category & Vendor */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="min-w-0">
+                      <Label className="text-xs text-gray-500">Category</Label>
+                      <p className="text-sm font-medium mt-0.5 truncate">
+                        {commission.category_name || commission.category_id || '-'}
+                      </p>
+                    </div>
+                    <div className="min-w-0">
+                      <Label className="text-xs text-gray-500">Vendor</Label>
+                      <p className="text-sm font-medium mt-0.5 truncate">
+                        {commission.vendor_name || commission.vendor_id || '-'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Rates */}
+                  <div className="flex items-center justify-between pt-2 border-t gap-4">
+                    <div className="flex-1">
+                      <Label className="text-xs text-gray-500">Commission Rate</Label>
+                      <p className="text-lg font-bold text-[#00897B] mt-0.5">
+                        {commission.commission_rate}%
+                      </p>
+                    </div>
+                    <div className="text-right flex-1">
+                      <Label className="text-xs text-gray-500">Partial Rate</Label>
+                      <p className="text-base font-semibold text-gray-700 mt-0.5">
+                        {commission.partial_commission_rate}%
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))}
           </div>
         ) : (
-          <div className="text-center p-12">
-            <p className="text-gray-500">No commissions found</p>
+          /* Desktop Table View */
+          <Card className="w-full overflow-hidden">
+            <div className="overflow-x-auto w-full">
+              <Table className="w-full">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="whitespace-nowrap min-w-[60px]">ID</TableHead>
+                    <TableHead className="whitespace-nowrap min-w-[100px]">Category</TableHead>
+                    <TableHead className="whitespace-nowrap min-w-[100px]">Vendor</TableHead>
+                    <TableHead className="text-right whitespace-nowrap min-w-[120px]">Commission Rate</TableHead>
+                    <TableHead className="text-right whitespace-nowrap min-w-[100px]">Partial Rate</TableHead>
+                    <TableHead className="whitespace-nowrap min-w-[80px]">Status</TableHead>
+                    <TableHead className="whitespace-nowrap min-w-[100px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {commissions.map((commission) => (
+                    <TableRow key={commission.id}>
+                      <TableCell className="font-mono whitespace-nowrap">#{commission.id}</TableCell>
+                      <TableCell className="whitespace-nowrap">{commission.category_name || commission.category_id || '-'}</TableCell>
+                      <TableCell className="whitespace-nowrap">{commission.vendor_name || commission.vendor_id || '-'}</TableCell>
+                      <TableCell className="text-right font-semibold whitespace-nowrap">
+                        {commission.commission_rate}%
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap">
+                        {commission.partial_commission_rate}%
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <Badge className={commission.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                          {commission.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate(`/admin/commission/edit/${commission.id}`)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(commission.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-600" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        )
+      ) : (
+        <Card>
+          <div className="text-center p-8 sm:p-12">
+            <p className="text-gray-500 text-sm sm:text-base">No commissions found</p>
           </div>
-        )}
-      </Card>
+        </Card>
+      )}
     </div>
   );
 };
