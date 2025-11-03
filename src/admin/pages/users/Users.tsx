@@ -40,8 +40,12 @@ import {
 import { Eye, Pencil, Trash, Plus, Download, Loader2, EyeOff } from "lucide-react";
 import { format } from 'date-fns';
 import { userApi } from '@/admin/lib/api/services/userService';
-import { User, UserFormData, UserFilters, UserResponse } from '@/lib/types/user';
+import { User, UserFormData, UserFilters, UserResponse } from '@/admin/lib/api/types/user';
 import { toast } from 'react-hot-toast';
+import { cityApi } from '@/admin/lib/api/services/cityService';
+import { CityType } from '@/admin/lib/api/types/cities';
+import { PhoneInput } from '@/user/components/ui/PhoneInput';
+import { parsePhoneNumberFromAPI, validateInternationalPhone } from '@/user/lib/utils/phoneValidation';
 import {
   Pagination,
   PaginationContent,
@@ -280,6 +284,16 @@ const ViewDialog: React.FC<{
                 icon={<Icon icon="lucide:mail" className="h-5 w-5" />}
               />
               <InfoField 
+                label="Phone"
+                value={user.phone || 'Not provided'}
+                icon={<Icon icon="lucide:phone" className="h-5 w-5" />}
+              />
+              <InfoField 
+                label="City"
+                value={user.city || 'Not provided'}
+                icon={<Icon icon="lucide:map-pin" className="h-5 w-5" />}
+              />
+              <InfoField 
                 label="Roles"
                 value={user.roles?.join(', ') || 'No roles assigned'}
                 icon={<Icon icon="lucide:shield" className="h-5 w-5" />}
@@ -325,27 +339,106 @@ const UserFormDialog: React.FC<{
   onClose: () => void;
   onSubmit: (data: UserFormData) => void;
 }> = ({ user, isOpen, onClose, onSubmit }) => {
+  const [countryCode, setCountryCode] = useState('212');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneError, setPhoneError] = useState<string>('');
+  
   const [formData, setFormData] = useState<UserFormData>(() => ({
     name: user?.name || '',
     email: user?.email || '',
+    phone: user?.phone || '',
+    city: user?.city || '',
     password: '',
     password_confirmation: '',
     roles: user?.roles || [],
   }));
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [cities, setCities] = useState<CityType[]>([]);
+  const [isLoadingCities, setIsLoadingCities] = useState(false);
 
-  // Reset form when user changes
+  // Fetch cities when dialog opens
+  const fetchCities = useCallback(async () => {
+    try {
+      setIsLoadingCities(true);
+      const response = await cityApi.getCities({ paginationSize: 1000 });
+      setCities(response.data || []);
+    } catch (error) {
+      toast.error('Failed to fetch cities');
+    } finally {
+      setIsLoadingCities(false);
+    }
+  }, []);
+
   useEffect(() => {
-    setFormData({
-      name: user?.name || '',
-      email: user?.email || '',
-      password: '',
-      password_confirmation: '',
-      roles: user?.roles || [],
-    });
-    setErrors({});
-  }, [user]);
+    if (isOpen) {
+      fetchCities();
+    }
+  }, [isOpen, fetchCities]);
+
+  // Reset form when user changes or dialog opens
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    try {
+      const parsedPhone = user?.phone ? parsePhoneNumberFromAPI(user.phone) : { countryCode: '212', phoneNumber: '' };
+      setCountryCode(parsedPhone.countryCode);
+      setPhoneNumber(parsedPhone.phoneNumber);
+      setFormData({
+        name: user?.name || '',
+        email: user?.email || '',
+        phone: user?.phone || '',
+        city: user?.city || '',
+        password: '',
+        password_confirmation: '',
+        roles: user?.roles || [],
+      });
+      setErrors({});
+      setPhoneError('');
+    } catch (error) {
+      console.error('Error parsing phone number:', error);
+      setCountryCode('212');
+      setPhoneNumber('');
+      setFormData({
+        name: user?.name || '',
+        email: user?.email || '',
+        phone: user?.phone || '',
+        city: user?.city || '',
+        password: '',
+        password_confirmation: '',
+        roles: user?.roles || [],
+      });
+      setErrors({});
+      setPhoneError('');
+    }
+  }, [user, isOpen]);
+
+  // Handle phone validation
+  const handlePhoneValidation = (result: { isValid: boolean; errorMessage?: string; formattedNumber?: string }) => {
+    setPhoneError(result.errorMessage || '');
+    if (result.isValid && result.formattedNumber) {
+      const cleanNumber = result.formattedNumber.replace(/\s/g, '');
+      setFormData(prev => ({ ...prev, phone: cleanNumber }));
+    }
+  };
+
+  // Update phone in formData when country code or phone number changes
+  useEffect(() => {
+    if (countryCode && phoneNumber) {
+      const fullNumber = `+${countryCode}${phoneNumber}`;
+      const validation = validateInternationalPhone(countryCode, phoneNumber);
+      if (validation.isValid) {
+        setFormData(prev => ({ ...prev, phone: fullNumber }));
+        setPhoneError('');
+      } else if (!phoneNumber) {
+        // If phone number is empty, clear the phone field
+        setFormData(prev => ({ ...prev, phone: '' }));
+      }
+    } else if (!phoneNumber) {
+      // If no phone number, clear the phone field
+      setFormData(prev => ({ ...prev, phone: '' }));
+    }
+  }, [countryCode, phoneNumber]);
 
   const handleGeneratePassword = () => {
     const newPassword = generatePassword();
@@ -446,6 +539,49 @@ const UserFormDialog: React.FC<{
         )}
       </div>
       <div className="grid gap-2">
+        <Label htmlFor="phone">Numéro de Téléphone</Label>
+        <PhoneInput
+          countryCode={countryCode}
+          phoneNumber={phoneNumber}
+          onCountryCodeChange={(value) => setCountryCode(value)}
+          onPhoneNumberChange={(value) => setPhoneNumber(value)}
+          onValidationChange={handlePhoneValidation}
+        />
+        {phoneError && (
+          <p className="text-sm text-red-500">{phoneError}</p>
+        )}
+        {errors.phone && (
+          <p className="text-sm text-red-500">{errors.phone}</p>
+        )}
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="city">Ville</Label>
+        <Select
+          value={formData.city || undefined}
+          onValueChange={(value) => setFormData({ ...formData, city: value })}
+        >
+          <SelectTrigger className={errors.city ? "border-red-500" : ""}>
+            <SelectValue placeholder="Sélectionnez une ville" />
+          </SelectTrigger>
+          <SelectContent>
+            {isLoadingCities ? (
+              <div className="px-2 py-1.5 text-sm text-gray-500">Chargement des villes...</div>
+            ) : cities.length > 0 ? (
+              cities.map((city) => (
+                <SelectItem key={city.id} value={city.name}>
+                  {city.name}
+                </SelectItem>
+              ))
+            ) : (
+              <div className="px-2 py-1.5 text-sm text-gray-500">Aucune ville disponible</div>
+            )}
+          </SelectContent>
+        </Select>
+        {errors.city && (
+          <p className="text-sm text-red-500">{errors.city}</p>
+        )}
+      </div>
+      <div className="grid gap-2">
         <Label htmlFor="password">
           {user ? 'Nouveau Mot de Passe (laissez vide pour conserver l\'actuel)' : 'Mot de Passe'}
         </Label>
@@ -490,7 +626,7 @@ const UserFormDialog: React.FC<{
       <div className="grid gap-2">
         <Label htmlFor="role">Rôle</Label>
         <Select
-          value={formData.roles[0]}
+          value={formData.roles[0] || undefined}
           onValueChange={(value) => setFormData({ ...formData, roles: [value] })}
         >
           <SelectTrigger className={errors.roles ? "border-red-500" : ""}>
@@ -551,6 +687,8 @@ const Users = () => {
   const [formData, setFormData] = useState<UserFormData>({
     name: "",
     email: "",
+    phone: "",
+    city: "",
     password: "",
     roles :[],
   });
@@ -674,6 +812,8 @@ const Users = () => {
       const response = await userApi.createUser({
         name: data.name,
         email: data.email,
+        phone: data.phone || '',
+        city: data.city || '',
         password: data.password,
         password_confirmation: data.password,
         roles: data.roles
@@ -703,6 +843,8 @@ const Users = () => {
       const updateData: Partial<UserFormData> = {
         name: data.name,
         email: data.email,
+        phone: data.phone || '',
+        city: data.city || '',
         roles: data.roles
       };
 
@@ -736,9 +878,9 @@ const Users = () => {
   };
 
   // Delete user
-  const handleDelete = async (userId: number) => {
+  const handleDelete = async (userId: string | number) => {
     try {
-      await userApi.deleteUser(userId.toString());
+      await userApi.deleteUser(typeof userId === 'string' ? userId : userId.toString());
       toast.success('User deleted successfully');
       setIsDeleteDialogOpen(false);
       setSelectedUser(null);
@@ -845,6 +987,8 @@ const Users = () => {
             setFormData({
               name: user.name,
               email: user.email,
+              phone: user.phone || '',
+              city: user.city || '',
               password: '',
               roles: user.roles || [],
             });
@@ -997,6 +1141,8 @@ const Users = () => {
                               setFormData({
                                 name: user.name,
                                 email: user.email,
+                                phone: user.phone || '',
+                                city: user.city || '',
                                 password: '',
                                 roles: user.roles || [],
                               });
@@ -1073,7 +1219,7 @@ const Users = () => {
         onClose={() => {
           setIsAddDialogOpen(false);
           setSelectedUser(null);
-          setFormData({ name: '', email: '', password: '', roles: [] });
+          setFormData({ name: '', email: '', phone: '', city: '', password: '', roles: [] });
         }}
         onSubmit={handleSubmit}
       />

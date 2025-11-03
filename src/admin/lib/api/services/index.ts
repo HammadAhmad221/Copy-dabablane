@@ -9,6 +9,7 @@ export * from './customerService';
 export * from './blanimgs';
 export * from './bannerService';
 export * from './Analytics';
+export * from './VendorAnalytics';
 export * from './notification';
 export * from './autho';
 export * from './ratingService';

@@ -18,7 +18,8 @@ interface UseVendorsState {
 
 interface UseVendorsActions {
   fetchVendors: (filters?: VendorFilters, page?: number, limit?: number) => Promise<void>;
-  updateVendorStatus: (vendor: Vendor, status: VendorStatus) => Promise<void>;
+  updateVendorStatus: (vendor: Vendor, status: VendorStatus, comment?: string) => Promise<void>;
+  updateVendor: (vendorData: any) => Promise<void>;
   deleteVendor: (vendor: Vendor) => Promise<void>;
   setPagination: (pagination: Partial<UseVendorsState['pagination']>) => void;
   setError: (error: string | null) => void;
@@ -40,17 +41,17 @@ export const useVendors = (): UseVendorsState & UseVendorsActions => {
     try {
       setLoading(true);
       setError(null);
-      
+
       // Use provided values or defaults, don't depend on current state
       const currentPage = page || 1;
       const currentLimit = limit || 10;
-      
+
       const response = await vendorApi.getVendors(filters, currentLimit, currentPage);
-      
+
       // Ensure we have valid data
       const vendorsData = Array.isArray(response.data) ? response.data : [];
       setVendors(vendorsData);
-      
+
       // Update pagination state using meta object
       setPaginationState({
         currentPage: response.meta.current_page,
@@ -67,9 +68,9 @@ export const useVendors = (): UseVendorsState & UseVendorsActions => {
     }
   }, []); // Remove dependencies to prevent circular updates
 
-  const updateVendorStatus = useCallback(async (vendor: Vendor, newStatus: VendorStatus) => {
+  const updateVendorStatus = useCallback(async (vendor: Vendor, newStatus: VendorStatus, comment?: string) => {
     const originalStatus = vendor.status;
-    
+
     setActionLoading(prev => new Set(prev).add(vendor.id));
 
     try {
@@ -78,15 +79,20 @@ export const useVendors = (): UseVendorsState & UseVendorsActions => {
         v.id === vendor.id ? { ...v, status: newStatus } : v
       ));
 
-      await vendorApi.updateVendorStatus(String(vendor.id), { status: newStatus });
-      
+      const requestData: any = { status: newStatus };
+      if (comment) {
+        requestData.comment = comment;
+      }
+
+      await vendorApi.updateVendorStatus(String(vendor.id), requestData);
+
       toast.success(`Statut mis à jour vers ${newStatus}`);
     } catch (error: any) {
       // Revert on failure
       setVendors(prev => prev.map(v =>
         v.id === vendor.id ? { ...v, status: originalStatus } : v
       ));
-      
+
       const errorMessage = error.response?.data?.message || error.message || 'Échec de la mise à jour du statut';
       toast.error(errorMessage);
     } finally {
@@ -98,10 +104,24 @@ export const useVendors = (): UseVendorsState & UseVendorsActions => {
     }
   }, []);
 
+  const updateVendor = useCallback(async (vendorData: any): Promise<void> => {
+    try {
+      const updatedVendor = await vendorApi.updateVendorInfo(vendorData);
+      setVendors(prev => prev.map(v => 
+        v.id === updatedVendor.id ? updatedVendor : v
+      ));
+      toast.success('Vendeur mis à jour avec succès');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'Erreur lors de la mise à jour du vendeur';
+      toast.error(errorMessage);
+      throw error;
+    }
+  }, []);
+
   const deleteVendor = useCallback(async (vendor: Vendor) => {
     if (window.confirm(`Êtes-vous sûr de vouloir supprimer le vendeur "${vendor.name}" ?`)) {
       setActionLoading(prev => new Set(prev).add(vendor.id));
-      
+
       try {
         await vendorApi.deleteVendor(String(vendor.id));
         setVendors(prev => prev.filter(v => v.id !== vendor.id));
@@ -131,8 +151,10 @@ export const useVendors = (): UseVendorsState & UseVendorsActions => {
     actionLoading,
     fetchVendors,
     updateVendorStatus,
+    updateVendor,
     deleteVendor,
     setPagination,
     setError
   };
 };
+
