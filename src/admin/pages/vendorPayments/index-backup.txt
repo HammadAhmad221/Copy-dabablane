@@ -1,0 +1,9 @@
+# BACKUP - API INTEGRATED VERSION
+# If the file reverts again, this backup can be restored
+
+The index.tsx file should import vendorPaymentApi and fetch real data from:
+- GET /back/v1/vendor-payments
+- With filters: vendor_id, transfer_status, payment_type, start_date, end_date, etc.
+
+All API integrations have been completed but the file keeps reverting.
+

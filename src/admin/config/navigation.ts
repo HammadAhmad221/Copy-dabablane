@@ -11,6 +11,8 @@ import {
   TicketSlash,
   MapPin,
   Store,
+  Percent,
+  DollarSign,
 } from "lucide-react";
 
 export const adminNavItems = [
@@ -96,6 +98,11 @@ export const adminNavItems = [
         path: "/admin/vendors",
       },
       {
+        id: "vendor-dashboard",
+        title: "Tableau de bord du vendeur",
+        path: "/admin/vendors/dashboard",
+      },
+      {
         id: "commission-charts",
         title: "Commission Charts",
         path: "/admin/vendors/commission-charts",
@@ -150,6 +157,52 @@ export const adminNavItems = [
     title: "Coupons",
     path: "/admin/coupons",
     icon: Tag,
+  },
+  {
+    id: "commission-management",
+    title: "Gestion des commissions",
+    path: "/admin/commission",
+    icon: Percent,
+    children: [
+      {
+        id: "commissions",
+        title: "Taux de commission",
+        path: "/admin/commission",
+      },
+      {
+        id: "commission-settings",
+        title: "Paramètres",
+        path: "/admin/commission/settings",
+      },
+    ],
+  },
+  {
+    id: "vendor-payments",
+    title: "Paiements des vendeurs",
+    path: "/admin/vendor-payments",
+    icon: DollarSign,
+    children: [
+      {
+        id: "payments-list",
+        title: "Liste des paiements",
+        path: "/admin/vendor-payments",
+      },
+      {
+        id: "payment-report",
+        title: "Rapport de transfert",
+        path: "/admin/vendor-payments/report",
+      },
+      {
+        id: "manual-transfer",
+        title: "Transfert manuel",
+        path: "/admin/vendor-payments/manual-transfer",
+      },
+      {
+        id: "payment-history",
+        title: "Historique",
+        path: "/admin/vendor-payments/history",
+      },
+    ],
   },
   {
     id: "analytics",

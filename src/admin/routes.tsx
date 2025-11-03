@@ -42,8 +42,21 @@ const Customers = lazy(() => import('./pages/users/Customers'));
 const DynamiqueBanner = lazy(() => import('./pages/DynamiqueBanner'));
 const MobileBanner = lazy(() => import('./pages/MobileBanner'));
 const Vendors = lazy(() => import('./pages/vendors/Vendors'));
+const VendorDashboard = lazy(() => import('./pages/vendors/VendorDashboard'));
 const InvoiceConfig = lazy(() => import('./pages/vendors/InvoiceConfig'));
 const VendorsPlane = lazy(() => import('./pages/vendors/VendorsPlane'));
+const CommissionIndex = lazy(() => import('./pages/commission/index'));
+const CommissionCreate = lazy(() => import('./pages/commission/create'));
+const CommissionEdit = lazy(() => import('./pages/commission/edit'));
+const CommissionSettings = lazy(() => import('./pages/commission/settings'));
+const CommissionVendor = lazy(() => import('./pages/commission/vendor'));
+
+// Vendor Payments
+const VendorPaymentsIndex = lazy(() => import('./pages/vendorPayments/index'));
+const VendorPaymentDetails = lazy(() => import('./pages/vendorPayments/details'));
+const VendorPaymentReport = lazy(() => import('./pages/vendorPayments/report'));
+const VendorPaymentHistory = lazy(() => import('./pages/vendorPayments/history'));
+const ManualTransfer = lazy(() => import('./pages/vendorPayments/manual-transfer'));
 
 const adminRoutes: RouteObject[] = [
   {
@@ -195,6 +208,10 @@ const adminRoutes: RouteObject[] = [
     element: <Vendors />
   },
   {
+    path: "vendors/dashboard",
+    element: <VendorDashboard />
+  },
+  {
     path: "vendors/commission-charts",
     element: <CommissionChart />
   },
@@ -214,6 +231,46 @@ const adminRoutes: RouteObject[] = [
   {
     path: "vendors/planes",
     element: <VendorsPlane />
+  },
+  {
+    path: "commission",
+    element: <CommissionIndex />
+  },
+  {
+    path: "commission/create",
+    element: <CommissionCreate />
+  },
+  {
+    path: "commission/edit/:id",
+    element: <CommissionEdit />
+  },
+  {
+    path: "commission/settings",
+    element: <CommissionSettings />
+  },
+  {
+    path: "commission/vendor/:vendorId",
+    element: <CommissionVendor />
+  },
+  {
+    path: "vendor-payments",
+    element: <VendorPaymentsIndex />
+  },
+  {
+    path: "vendor-payments/details/:id",
+    element: <VendorPaymentDetails />
+  },
+  {
+    path: "vendor-payments/report",
+    element: <VendorPaymentReport />
+  },
+  {
+    path: "vendor-payments/history",
+    element: <VendorPaymentHistory />
+  },
+  {
+    path: "vendor-payments/manual-transfer",
+    element: <ManualTransfer />
   }
 ];
 
