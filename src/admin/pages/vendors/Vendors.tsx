@@ -19,7 +19,7 @@ import {
   DialogTrigger,
 } from "@/admin/components/ui/dialog";
 import { format } from "date-fns";
-import { EyeIcon, MoreVerticalIcon } from "lucide-react";
+import { EyeIcon, MoreVerticalIcon, PencilIcon } from "lucide-react";
 import { Vendor, VendorStatus } from "@/admin/lib/api/types/vendor";
 import { getVendorStatusLabel } from "@/admin/lib/constants/vendor";
 import { useVendors } from "@/admin/hooks/useVendors";
@@ -53,18 +53,513 @@ import {
 } from "@/admin/components/ui/tooltip";
 import { Badge } from "@/admin/components/ui/badge";
 import ImageLightbox from "@/admin/components/ui/ImageLightbox";
+import { Label } from "@/admin/components/ui/label";
+import { Textarea } from "@/admin/components/ui/textarea";
+
+// Status Change Dialog Component
+const StatusChangeDialog = React.memo(({
+  vendor,
+  onStatusChange,
+  actionLoading
+}: {
+  vendor: Vendor;
+  onStatusChange: (vendor: Vendor, status: VendorStatus, comment?: string) => Promise<void>;
+  actionLoading: Set<number>;
+}) => {
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [selectedStatus, setSelectedStatus] = React.useState<VendorStatus | null>(null);
+  const [comment, setComment] = React.useState('');
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  const requiresComment = (status: VendorStatus) => {
+    return status === 'inActive' || status === 'suspended' || status === 'waiting';
+  };
+
+  const handleStatusSelect = (value: string) => {
+    const status = value as VendorStatus;
+    if (requiresComment(status)) {
+      setSelectedStatus(status);
+      setDialogOpen(true);
+      setComment('');
+    } else {
+      // Directly submit for statuses that don't require comment
+      onStatusChange(vendor, status);
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (!selectedStatus || !comment.trim()) {
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await onStatusChange(vendor, selectedStatus, comment);
+      setDialogOpen(false);
+      setSelectedStatus(null);
+      setComment('');
+    } catch (error) {
+      console.error('Error updating status:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setDialogOpen(false);
+    setSelectedStatus(null);
+    setComment('');
+  };
+
+  return (
+    <>
+      <Select
+        value={vendor.status}
+        onValueChange={handleStatusSelect}
+        disabled={actionLoading.has(vendor.id)}
+      >
+        <SelectTrigger className="w-full h-8 text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="active">{getVendorStatusLabel('active')}</SelectItem>
+          <SelectItem value="pending">{getVendorStatusLabel('pending')}</SelectItem>
+          <SelectItem value="inActive">{getVendorStatusLabel('inActive')}</SelectItem>
+          <SelectItem value="suspended">{getVendorStatusLabel('suspended')}</SelectItem>
+          <SelectItem value="waiting">{getVendorStatusLabel('waiting')}</SelectItem>
+        </SelectContent>
+      </Select>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Changer le statut vers {selectedStatus && getVendorStatusLabel(selectedStatus)}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="comment">
+                Veuillez décrire la raison du changement de statut *
+              </Label>
+              <Textarea
+                id="comment"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder={selectedStatus ? `Expliquez pourquoi vous changez le statut vers ${getVendorStatusLabel(selectedStatus)}...` : '...'}
+                rows={5}
+                required
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-4">
+            <Button
+              variant="outline"
+              onClick={handleCancel}
+              disabled={isSubmitting}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleConfirm}
+              disabled={isSubmitting || !comment.trim()}
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Enregistrement...
+                </>
+              ) : (
+                'Confirmer'
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+});
+StatusChangeDialog.displayName = 'StatusChangeDialog';
+
+// Edit Vendor Dialog Component
+const EditVendorDialog = React.memo(({
+  vendor,
+  onSave,
+  actionLoading
+}: {
+  vendor: Vendor;
+  onSave: (vendorData: any) => Promise<void>;
+  actionLoading: Set<number>;
+}) => {
+  const [open, setOpen] = React.useState(false);
+  const [formData, setFormData] = React.useState({
+    name: vendor.name || '',
+    email: vendor.email || '',
+    phone: vendor.phone || '',
+    city: vendor.city || '',
+    landline: vendor.landline || '',
+    businessCategory: vendor.businessCategory || '',
+    subCategory: vendor.subCategory || '',
+    description: vendor.description || '',
+    address: vendor.address || '',
+    ice: vendor.ice || '',
+    rc: vendor.rc || '',
+    vat: vendor.vat || '',
+    distict: vendor.distict || '',
+    subdistrict: vendor.subdistrict || '',
+    logoUrl: vendor.logoUrl || '',
+    facebook: vendor.facebook || '',
+    tiktok: vendor.tiktok || '',
+    instagram: vendor.instagram || '',
+    cover_media_urls: Array.isArray(vendor.cover_media) 
+      ? vendor.cover_media.map((m: any) => typeof m === 'string' ? m : (m?.media_url || m?.url || '')).filter(Boolean)
+      : [],
+    rcCertificateUrl: vendor.rcCertificateUrl || '',
+    ribUrl: vendor.ribUrl || '',
+  });
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      // The API expects all fields including empty strings
+      const payload: any = { ...formData };
+      // Ensure empty strings are sent as empty strings, not undefined
+      Object.keys(payload).forEach(key => {
+        if (payload[key] === null || payload[key] === undefined) {
+          payload[key] = '';
+        }
+      });
+      await onSave(payload);
+      setOpen(false);
+    } catch (error) {
+      console.error('Error updating vendor:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Update form data when vendor changes
+  React.useEffect(() => {
+    setFormData({
+      name: vendor.name || '',
+      email: vendor.email || '',
+      phone: vendor.phone || '',
+      city: vendor.city || '',
+      landline: vendor.landline || '',
+      businessCategory: vendor.businessCategory || '',
+      subCategory: vendor.subCategory || '',
+      description: vendor.description || '',
+      address: vendor.address || '',
+      ice: vendor.ice || '',
+      rc: vendor.rc || '',
+      vat: vendor.vat || '',
+      distict: vendor.distict || '',
+      subdistrict: vendor.subdistrict || '',
+      logoUrl: vendor.logoUrl || '',
+      facebook: vendor.facebook || '',
+      tiktok: vendor.tiktok || '',
+      instagram: vendor.instagram || '',
+      cover_media_urls: Array.isArray(vendor.cover_media) 
+        ? vendor.cover_media.map((m: any) => typeof m === 'string' ? m : (m?.media_url || m?.url || '')).filter(Boolean)
+        : [],
+      rcCertificateUrl: vendor.rcCertificateUrl || '',
+      ribUrl: vendor.ribUrl || '',
+    });
+  }, [vendor]);
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleArrayChange = (field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value.split(',').map(v => v.trim()).filter(Boolean)
+    }));
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="outline"
+          size="icon"
+          disabled={actionLoading.has(vendor.id)}
+          className="h-8 w-8"
+        >
+          {actionLoading.has(vendor.id) ? (
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+          ) : (
+            <PencilIcon className="h-4 w-4" />
+          )}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-[95vw] md:max-w-5xl max-h-[90vh] overflow-y-auto p-4 md:p-6">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold">Modifier le Vendeur</DialogTitle>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Basic Information */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Informations de Base</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nom *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => handleInputChange('email', e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Téléphone Mobile *</Label>
+                <Input
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => handleInputChange('phone', e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="landline">Téléphone Fixe</Label>
+                <Input
+                  id="landline"
+                  value={formData.landline}
+                  onChange={(e) => handleInputChange('landline', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="city">Ville *</Label>
+                <Input
+                  id="city"
+                  value={formData.city}
+                  onChange={(e) => handleInputChange('city', e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="address">Adresse</Label>
+                <Input
+                  id="address"
+                  value={formData.address}
+                  onChange={(e) => handleInputChange('address', e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Business Information */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Informations de l'Entreprise</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="businessCategory">Catégorie d'Activité</Label>
+                <Input
+                  id="businessCategory"
+                  value={formData.businessCategory}
+                  onChange={(e) => handleInputChange('businessCategory', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="subCategory">Sous-Catégorie</Label>
+                <Input
+                  id="subCategory"
+                  value={formData.subCategory}
+                  onChange={(e) => handleInputChange('subCategory', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => handleInputChange('description', e.target.value)}
+                  rows={4}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Registration Information */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Informations d'Enregistrement</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="ice">ICE</Label>
+                <Input
+                  id="ice"
+                  value={formData.ice}
+                  onChange={(e) => handleInputChange('ice', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rc">RC</Label>
+                <Input
+                  id="rc"
+                  value={formData.rc}
+                  onChange={(e) => handleInputChange('rc', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="vat">TVA</Label>
+                <Input
+                  id="vat"
+                  value={formData.vat}
+                  onChange={(e) => handleInputChange('vat', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="distict">District</Label>
+                <Input
+                  id="distict"
+                  value={formData.distict}
+                  onChange={(e) => handleInputChange('distict', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="subdistrict">Sous-District</Label>
+                <Input
+                  id="subdistrict"
+                  value={formData.subdistrict}
+                  onChange={(e) => handleInputChange('subdistrict', e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Social Media */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Réseaux Sociaux</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="facebook">Facebook</Label>
+                <Input
+                  id="facebook"
+                  type="url"
+                  value={formData.facebook}
+                  onChange={(e) => handleInputChange('facebook', e.target.value)}
+                  placeholder="https://www.facebook.com/..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tiktok">TikTok</Label>
+                <Input
+                  id="tiktok"
+                  type="url"
+                  value={formData.tiktok}
+                  onChange={(e) => handleInputChange('tiktok', e.target.value)}
+                  placeholder="https://www.tiktok.com/..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="instagram">Instagram</Label>
+                <Input
+                  id="instagram"
+                  type="url"
+                  value={formData.instagram}
+                  onChange={(e) => handleInputChange('instagram', e.target.value)}
+                  placeholder="https://www.instagram.com/..."
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Media Files */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Fichiers Médias</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="logoUrl">Logo URL</Label>
+                <Input
+                  id="logoUrl"
+                  value={formData.logoUrl}
+                  onChange={(e) => handleInputChange('logoUrl', e.target.value)}
+                  placeholder="nom-fichier.png"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rcCertificateUrl">Certificat RC URL</Label>
+                <Input
+                  id="rcCertificateUrl"
+                  value={formData.rcCertificateUrl}
+                  onChange={(e) => handleInputChange('rcCertificateUrl', e.target.value)}
+                  placeholder="nom-fichier.png"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ribUrl">RIB URL</Label>
+                <Input
+                  id="ribUrl"
+                  value={formData.ribUrl}
+                  onChange={(e) => handleInputChange('ribUrl', e.target.value)}
+                  placeholder="nom-fichier.pdf"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-3">
+                <Label htmlFor="cover_media_urls">URLs des Médias de Couverture (séparées par des virgules)</Label>
+                <Input
+                  id="cover_media_urls"
+                  value={formData.cover_media_urls.join(', ')}
+                  onChange={(e) => handleArrayChange('cover_media_urls', e.target.value)}
+                  placeholder="image1.jpg, image2.png, video1.mp4"
+                />
+                <p className="text-xs text-gray-500">Entrez les noms de fichiers séparés par des virgules</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Form Actions */}
+          <div className="flex justify-end gap-4 pt-4 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+              disabled={isSubmitting}
+            >
+              Annuler
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Enregistrement...
+                </>
+              ) : (
+                'Enregistrer'
+              )}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+});
+EditVendorDialog.displayName = 'EditVendorDialog';
 
 // Memoized Vendor Row Component for better performance
 const VendorRow = React.memo(({
   vendor,
   onStatusChange,
   actionLoading,
-  onImageClick
+  onImageClick,
+  onEdit
 }: {
   vendor: Vendor;
-  onStatusChange: (vendor: Vendor, status: VendorStatus) => void;
+  onStatusChange: (vendor: Vendor, status: VendorStatus, comment?: string) => Promise<void>;
   actionLoading: Set<number>;
   onImageClick: (images: string[], index: number) => void;
+  onEdit: (vendorData: any) => Promise<void>;
 }) => {
   const isActionLoading = actionLoading.has(vendor.id);
 
@@ -107,38 +602,34 @@ const VendorRow = React.memo(({
       <TableCell className="w-[140px] min-w-[120px]">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <Select
-              value={vendor.status}
-              onValueChange={(value) => onStatusChange(vendor, value as VendorStatus)}
-              disabled={isActionLoading}
-            >
-              <SelectTrigger className="w-full h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">{getVendorStatusLabel('active')}</SelectItem>
-                <SelectItem value="pending">{getVendorStatusLabel('pending')}</SelectItem>
-                <SelectItem value="suspended">{getVendorStatusLabel('suspended')}</SelectItem>
-                <SelectItem value="blocked">{getVendorStatusLabel('blocked')}</SelectItem>
-              </SelectContent>
-            </Select>
+            <StatusChangeDialog
+              vendor={vendor}
+              onStatusChange={onStatusChange}
+              actionLoading={actionLoading}
+            />
           </div>
           <Badge
             className={cn(
               "text-white whitespace-nowrap text-xs",
               vendor.status === "active" ? "bg-green-500" :
                 vendor.status === "pending" ? "bg-blue-500" :
-                  vendor.status === "suspended" ? "bg-orange-500" :
-                    vendor.status === "blocked" ? "bg-red-500" : "bg-gray-500"
+                  vendor.status === "inActive" ? "bg-gray-500" :
+                    vendor.status === "suspended" ? "bg-orange-500" :
+                      vendor.status === "waiting" ? "bg-yellow-500" : "bg-gray-500"
             )}
           >
             {getVendorStatusLabel(vendor.status)}
           </Badge>
         </div>
       </TableCell>
-      <TableCell className="text-right w-[80px] min-w-[60px]">
+      <TableCell className="text-right w-[120px] min-w-[100px]">
         <div className="flex items-center justify-end">
           <div className="flex items-center gap-2">
+            <EditVendorDialog
+              vendor={vendor}
+              onSave={onEdit}
+              actionLoading={actionLoading}
+            />
             <Dialog>
               <DialogTrigger asChild>
                 <Button
@@ -170,8 +661,9 @@ const VendorRow = React.memo(({
                             "text-white font-medium shadow-sm",
                             vendor.status === "active" ? "bg-green-500" :
                               vendor.status === "pending" ? "bg-blue-500" :
-                                vendor.status === "suspended" ? "bg-orange-500" :
-                                  vendor.status === "blocked" ? "bg-red-500" : "bg-gray-500"
+                                vendor.status === "inActive" ? "bg-gray-500" :
+                                  vendor.status === "suspended" ? "bg-orange-500" :
+                                    vendor.status === "waiting" ? "bg-yellow-500" : "bg-gray-500"
                           )}
                         >
                           {getVendorStatusLabel(vendor.status)}
@@ -576,6 +1068,8 @@ const Vendors: React.FC = () => {
     actionLoading,
     fetchVendors,
     updateVendorStatus,
+    updateVendor,
+    setPagination,
   } = useVendors();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -642,14 +1136,19 @@ const Vendors: React.FC = () => {
     return sortedVendors.slice(startIndex, endIndex);
   }, [sortedVendors, pagination.currentPage, pagination.perPage]);
   // Update total count for client-side filtering
-  const clientSidePagination = useMemo(() => ({
-    ...pagination,
-    total: filteredVendors.length,
-    lastPage: Math.ceil(filteredVendors.length / pagination.perPage),
-  }), [pagination, filteredVendors.length]);
+  const clientSidePagination = useMemo(() => {
+    const total = filteredVendors.length || 0;
+    const perPage = pagination.perPage || 10;
+    const lastPage = total > 0 ? Math.max(1, Math.ceil(total / perPage)) : 1;
+    return {
+      ...pagination,
+      total,
+      lastPage,
+    };
+  }, [pagination, filteredVendors.length]);
   // Debounced search with proper implementation
   const debouncedSearch = useCallback(
-    debounce(async (term: string, status: string) => {
+    debounce(async () => {
       setIsSearching(true);
       try {
         // The filtering is handled by useMemo above
@@ -670,7 +1169,7 @@ const Vendors: React.FC = () => {
     setSearchTerm(value);
     setIsSearching(true);
     // Trigger debounced search for loading state
-    debouncedSearch(value, statusFilter);
+    debouncedSearch();
   };
   // Handle status filter change
   const handleStatusFilterChange = (value: string) => {
@@ -700,14 +1199,15 @@ const Vendors: React.FC = () => {
   // Handle pagination (client-side)
   const handlePageChange = useCallback((page: number) => {
     if (page !== pagination.currentPage && page >= 1 && page <= clientSidePagination.lastPage && !isPaginationLoading && !loading) {
-      // For client-side pagination, we just update the page
       setIsPaginationLoading(true);
+      setPagination({ currentPage: page });
+      // Smooth scroll to top
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       setTimeout(() => {
-        // Update your pagination state here
         setIsPaginationLoading(false);
-      }, 100);
+      }, 150);
     }
-  }, [pagination.currentPage, clientSidePagination.lastPage, isPaginationLoading, loading]);
+  }, [pagination.currentPage, clientSidePagination.lastPage, isPaginationLoading, loading, setPagination]);
 
   // Handle page size change
   const handlePageSizeChange = useCallback(async (newPageSize: number) => {
@@ -726,9 +1226,19 @@ const Vendors: React.FC = () => {
   }, [fetchVendors, pagination.perPage, loading, isPaginationLoading]);
 
   // Memoized status change handler
-  const handleStatusChangeMemo = useCallback((vendor: Vendor, newStatus: VendorStatus) => {
-    updateVendorStatus(vendor, newStatus);
+  const handleStatusChangeMemo = useCallback(async (vendor: Vendor, newStatus: VendorStatus, comment?: string) => {
+    await updateVendorStatus(vendor, newStatus, comment);
   }, [updateVendorStatus]);
+
+  // Handle vendor edit
+  const handleEditVendor = useCallback(async (vendorData: any) => {
+    // The API expects all fields in the request body, so we pass the complete vendorData
+    // Note: The API endpoint /updateVendor uses the authenticated user's token to identify the vendor
+    // But we need to ensure we're sending all required fields
+    await updateVendor(vendorData);
+    // Refresh the vendor list after update
+    await fetchVendors({}, pagination.currentPage, pagination.perPage);
+  }, [updateVendor, fetchVendors, pagination.currentPage, pagination.perPage]);
 
   // Handle image click to open lightbox
   const handleImageClick = (images: string[], index: number) => {
@@ -814,10 +1324,11 @@ const Vendors: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Tous</SelectItem>
-                      <SelectItem value="active">Actif</SelectItem>
-                      <SelectItem value="pending">En attente</SelectItem>
-                      <SelectItem value="suspended">Suspendu</SelectItem>
-                      <SelectItem value="blocked">Bloqué</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="inActive">inActive</SelectItem>
+                      <SelectItem value="suspended">Suspended</SelectItem>
+                      <SelectItem value="waiting">Waiting</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -937,8 +1448,9 @@ const Vendors: React.FC = () => {
                               "text-white text-xs px-1 py-0.5 sm:px-2 sm:py-1",
                               vendor.status === "active" ? "bg-green-500" :
                                 vendor.status === "pending" ? "bg-blue-500" :
-                                  vendor.status === "suspended" ? "bg-orange-500" :
-                                    vendor.status === "blocked" ? "bg-red-500" : "bg-gray-500"
+                                  vendor.status === "inActive" ? "bg-gray-500" :
+                                    vendor.status === "suspended" ? "bg-orange-500" :
+                                      vendor.status === "waiting" ? "bg-yellow-500" : "bg-gray-500"
                             )}
                           >
                             {getVendorStatusLabel(vendor.status)}
@@ -949,25 +1461,21 @@ const Vendors: React.FC = () => {
                       {/* Actions */}
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1 sm:gap-2 pt-1 sm:pt-2 border-t border-gray-100">
                         <div className="flex-1">
-                          <Select
-                            value={vendor.status}
-                            onValueChange={(value) => handleStatusChangeMemo(vendor, value as VendorStatus)}
-                            disabled={actionLoading.has(vendor.id)}
-                          >
-                            <SelectTrigger className="w-full h-7 sm:h-9 text-xs sm:text-sm">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="active">{getVendorStatusLabel('active')}</SelectItem>
-                              <SelectItem value="pending">{getVendorStatusLabel('pending')}</SelectItem>
-                              <SelectItem value="suspended">{getVendorStatusLabel('suspended')}</SelectItem>
-                              <SelectItem value="blocked">{getVendorStatusLabel('blocked')}</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <StatusChangeDialog
+                            vendor={vendor}
+                            onStatusChange={handleStatusChangeMemo}
+                            actionLoading={actionLoading}
+                          />
                         </div>
 
-                        <Dialog>
-                          <DialogTrigger asChild>
+                        <div className="flex items-center gap-2">
+                          <EditVendorDialog
+                            vendor={vendor}
+                            onSave={handleEditVendor}
+                            actionLoading={actionLoading}
+                          />
+                          <Dialog>
+                            <DialogTrigger asChild>
                             <Button
                               variant="outline"
                               size="sm"
@@ -1001,8 +1509,9 @@ const Vendors: React.FC = () => {
                                         "text-white font-medium shadow-sm",
                                         vendor.status === "active" ? "bg-green-500" :
                                           vendor.status === "pending" ? "bg-blue-500" :
-                                            vendor.status === "suspended" ? "bg-orange-500" :
-                                              vendor.status === "blocked" ? "bg-red-500" : "bg-gray-500"
+                                            vendor.status === "inActive" ? "bg-gray-500" :
+                                              vendor.status === "suspended" ? "bg-orange-500" :
+                                                vendor.status === "waiting" ? "bg-yellow-500" : "bg-gray-500"
                                       )}
                                     >
                                       {getVendorStatusLabel(vendor.status)}
@@ -1047,8 +1556,9 @@ const Vendors: React.FC = () => {
                                 </div>
                               </div>
                             </div>
-                          </DialogContent>
-                        </Dialog>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
                       </div>
                     </div>
                   </Card>
@@ -1132,50 +1642,47 @@ const Vendors: React.FC = () => {
                         </TableCell>
                         <TableCell className="w-[120px] min-w-[100px]">
                           <div className="flex flex-col gap-2">
-                            <Select
-                              value={vendor.status}
-                              onValueChange={(value) => handleStatusChangeMemo(vendor, value as VendorStatus)}
-                              disabled={actionLoading.has(vendor.id)}
-                            >
-                              <SelectTrigger className="w-full h-8 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="active">{getVendorStatusLabel('active')}</SelectItem>
-                                <SelectItem value="pending">{getVendorStatusLabel('pending')}</SelectItem>
-                                <SelectItem value="suspended">{getVendorStatusLabel('suspended')}</SelectItem>
-                                <SelectItem value="blocked">{getVendorStatusLabel('blocked')}</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            <StatusChangeDialog
+                              vendor={vendor}
+                              onStatusChange={handleStatusChangeMemo}
+                              actionLoading={actionLoading}
+                            />
                             <Badge
                               className={cn(
                                 "text-white text-xs w-fit",
                                 vendor.status === "active" ? "bg-green-500" :
                                   vendor.status === "pending" ? "bg-blue-500" :
-                                    vendor.status === "suspended" ? "bg-orange-500" :
-                                      vendor.status === "blocked" ? "bg-red-500" : "bg-gray-500"
+                                    vendor.status === "inActive" ? "bg-gray-500" :
+                                      vendor.status === "suspended" ? "bg-orange-500" :
+                                        vendor.status === "waiting" ? "bg-yellow-500" : "bg-gray-500"
                               )}
                             >
                               {getVendorStatusLabel(vendor.status)}
                             </Badge>
                           </div>
                         </TableCell>
-                        <TableCell className="text-right w-[80px] min-w-[60px]">
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                disabled={actionLoading.has(vendor.id)}
-                                className="h-8 w-8"
-                              >
-                                {actionLoading.has(vendor.id) ? (
-                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
-                                ) : (
-                                  <EyeIcon className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </DialogTrigger>
+                        <TableCell className="text-right w-[120px] min-w-[100px]">
+                          <div className="flex items-center justify-end gap-2">
+                            <EditVendorDialog
+                              vendor={vendor}
+                              onSave={handleEditVendor}
+                              actionLoading={actionLoading}
+                            />
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  disabled={actionLoading.has(vendor.id)}
+                                  className="h-8 w-8"
+                                >
+                                  {actionLoading.has(vendor.id) ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                                  ) : (
+                                    <EyeIcon className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </DialogTrigger>
                             <DialogContent className="max-w-[95vw] md:max-w-4xl max-h-[90vh] overflow-y-auto p-4 md:p-6">
                               <DialogHeader>
                                 <DialogTitle className="flex items-center gap-3">
@@ -1192,8 +1699,9 @@ const Vendors: React.FC = () => {
                                           "text-white font-medium shadow-sm",
                                           vendor.status === "active" ? "bg-green-500" :
                                             vendor.status === "pending" ? "bg-blue-500" :
-                                              vendor.status === "suspended" ? "bg-orange-500" :
-                                                vendor.status === "blocked" ? "bg-red-500" : "bg-gray-500"
+                                              vendor.status === "inActive" ? "bg-gray-500" :
+                                                vendor.status === "suspended" ? "bg-orange-500" :
+                                                  vendor.status === "waiting" ? "bg-yellow-500" : "bg-gray-500"
                                         )}
                                       >
                                         {getVendorStatusLabel(vendor.status)}
@@ -1235,6 +1743,7 @@ const Vendors: React.FC = () => {
                               </div>
                             </DialogContent>
                           </Dialog>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -1345,6 +1854,7 @@ const Vendors: React.FC = () => {
                         onStatusChange={handleStatusChangeMemo}
                         actionLoading={actionLoading}
                         onImageClick={handleImageClick}
+                        onEdit={handleEditVendor}
                       />
                     ))
                   )}
@@ -1354,12 +1864,12 @@ const Vendors: React.FC = () => {
           </motion.div>
 
           {/* Pagination */}
-          {clientSidePagination.total > 0 && (
+          {!loading && vendors.length > 0 && (
             <motion.div
               initial="hidden"
               animate="visible"
               variants={animationVariants.fadeIn}
-              className="p-4 border-t"
+              className="p-4 border-t bg-white"
             >
               <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                 {/* Pagination Info */}
@@ -1367,11 +1877,17 @@ const Vendors: React.FC = () => {
                   {isPaginationLoading && (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
                   )}
-                  Affichage de {clientSidePagination.total > 0 ? ((clientSidePagination.currentPage - 1) * clientSidePagination.perPage) + 1 : 0} à {Math.min(clientSidePagination.currentPage * clientSidePagination.perPage, clientSidePagination.total)} sur {clientSidePagination.total} vendeurs
+                  {clientSidePagination.total > 0 ? (
+                    <>
+                      Affichage de {((clientSidePagination.currentPage - 1) * clientSidePagination.perPage) + 1} à {Math.min(clientSidePagination.currentPage * clientSidePagination.perPage, clientSidePagination.total)} sur {clientSidePagination.total} vendeur{clientSidePagination.total > 1 ? 's' : ''}
+                    </>
+                  ) : (
+                    <span>Aucun vendeur trouvé</span>
+                  )}
                 </div>
 
                 {/* Pagination Controls */}
-                {clientSidePagination.lastPage > 1 && (
+                {clientSidePagination.total > 0 && clientSidePagination.lastPage > 1 && (
                   <Pagination>
                     <PaginationContent>
                       <PaginationItem>
@@ -1439,3 +1955,7 @@ const Vendors: React.FC = () => {
 };
 
 export default Vendors;
+
+
+
+
