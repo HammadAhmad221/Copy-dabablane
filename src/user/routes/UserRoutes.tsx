@@ -89,6 +89,11 @@ const UserRoutes: React.FC = () => {
               <BlaneDetail />
             </Suspense>
           } />
+          <Route path=":vendorSlug" element={
+            <Suspense fallback={<Loader />}>
+              <VendorDetail />
+            </Suspense>
+          } />
           <Route path="*" element={
             <Suspense fallback={<Loader />}>
               <NotFound />
