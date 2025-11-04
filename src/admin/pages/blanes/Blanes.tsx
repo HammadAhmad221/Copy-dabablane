@@ -382,7 +382,7 @@ const Blanes: React.FC = () => {
     setIsLoading(true);
     try {
       let response;
-      
+
       // If vendor filter is selected, use commerce_name parameter
       if (selectedVendorFilter !== 'all') {
         const selectedVendor = vendors.find(v => String(v.id) === selectedVendorFilter);
@@ -435,14 +435,14 @@ const Blanes: React.FC = () => {
       setIsLoading(false);
     }
   }, [
-    pagination.currentPage, 
-    pagination.perPage, 
-    sortBy, 
-    sortOrder, 
-    searchTerm, 
-    selectedCategoryFilter, 
-    selectedSubcategoryFilter, 
-    selectedVendorFilter, 
+    pagination.currentPage,
+    pagination.perPage,
+    sortBy,
+    sortOrder,
+    searchTerm,
+    selectedCategoryFilter,
+    selectedSubcategoryFilter,
+    selectedVendorFilter,
     vendors
   ]);
 
@@ -889,8 +889,8 @@ const Blanes: React.FC = () => {
                       selectedVendorFilter !== "all"
                         ? "Désélectionnez le vendeur d'abord"
                         : selectedCategoryFilter === "all"
-                        ? "Sélectionnez d'abord une catégorie"
-                        : "Filtrer par sous-catégorie"
+                          ? "Sélectionnez d'abord une catégorie"
+                          : "Filtrer par sous-catégorie"
                     } />
                   </SelectTrigger>
                   <SelectContent>

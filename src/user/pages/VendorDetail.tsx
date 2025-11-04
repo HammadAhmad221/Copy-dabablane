@@ -1,22 +1,40 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Star, ChevronLeft, ChevronRight, MapPin, Facebook, Instagram, Phone } from 'lucide-react';
-import { BlaneService } from '@/user/lib/api/services/blaneService';
 import { Blane } from '@/user/lib/types/home';
 import Loader from '@/user/components/ui/Loader';
 import { getPlaceholderImage } from '@/user/lib/utils/home';
 
+const VENDOR_MEDIA_BASE_URL = 'https://dev.dabablane.com/storage/uploads/vendor_images/';
+
+const buildVendorAssetUrl = (path?: string | null): string => {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  return `${VENDOR_MEDIA_BASE_URL}${path}`;
+};
+
+const sanitizeUrl = (value?: string | null): string | undefined => {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+};
+
 interface VendorInfo {
+  id: number;
   name: string;
   description: string;
-  rating: number;
-  location: string;
-  cover_images: string[];
-  social_media?: {
+  city: string;
+  coverImages: string[];
+  social: {
     facebook?: string;
     instagram?: string;
     tiktok?: string;
     phone?: string;
+    landline?: string;
   };
 }
 
@@ -29,6 +47,7 @@ const VendorDetail = () => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
+    let isActive = true;
     const fetchVendorData = async () => {
       if (!slug) return;
 
@@ -36,67 +55,127 @@ const VendorDetail = () => {
         setLoading(true);
         setError(null);
 
-        // Fetch blanes for this vendor using search parameter
-        const response = await BlaneService.getAllBlanes({
-          search: slug.replace(/-/g, ' '),
-          pagination_size: 50,
-          include: 'blaneImages',
+        // HARDCODED DATA FROM CURL
+        const hardcodedVendor = {
+          id: 17,
+          name: 'John Doe',
+          company_name: 'Vendor Co.',
+          phone: '+1234567890',
+          city: 'New York',
+          landline: '+12025550123',
+          description: 'A premium dining experience with a focus on local cuisine.',
+          address: '123 Main Street, New York, NY 10001',
+          logoUrl: '17563555662kA8n4FZE2.png',
+          coverPhotoUrl: '17563555662kA8n4FZE2.png',
+          facebook: 'http://www.facebook.com',
+          tiktok: 'http://www.tiktok.com',
+          instagram: 'http://www.instagram.com',
+        };
+
+        const hardcodedBlanes = [
+          {
+            id: 541,
+            name: 'Drawing Paper',
+            description: 'test',
+            price_current: '300.00',
+            price_old: null,
+            slug: 'drawing-paper',
+            rating: '0',
+            blane_images: [
+              {
+                id: 641,
+                image_link: 'https://dev.dabablane.com/storage/uploads/blanes_images/1761731045rMOokcI1Y4.jpg',
+              },
+            ],
+          },
+          {
+            id: 540,
+            name: 'Digital order',
+            description: 'formation IA',
+            price_current: '1000.00',
+            price_old: '800.00',
+            slug: 'digital-order',
+            rating: '0',
+            blane_images: [
+              {
+                id: 639,
+                image_link: 'https://dev.dabablane.com/storage/uploads/blanes_images/1761730273sYL1Deja22.jpg',
+              },
+            ],
+          },
+          {
+            id: 538,
+            name: 'test 1',
+            description: 'test 1',
+            price_current: '500.00',
+            price_old: null,
+            slug: 'test-1',
+            rating: '0',
+            blane_images: [
+              {
+                id: 637,
+                image_link: 'https://dev.dabablane.com/storage/uploads/blanes_images/1761650368rC5YIHkOkh.jpg',
+              },
+            ],
+          },
+        ] as any[];
+
+        if (isActive) setBlanes(hardcodedBlanes);
+
+        const blaneImages = hardcodedBlanes
+          .flatMap((blane) => blane.blane_images?.map((img: any) => img.image_link) || [])
+          .filter((image): image is string => Boolean(image))
+          .slice(0, 6);
+
+        const coverImage = buildVendorAssetUrl(hardcodedVendor.coverPhotoUrl);
+        const imageSet = Array.from(
+          new Set([coverImage, ...blaneImages].filter(Boolean)),
+        );
+
+        if (!isActive) return;
+
+        setVendorInfo({
+          id: hardcodedVendor.id,
+          name: hardcodedVendor.company_name,
+          description: hardcodedVendor.description,
+          city: hardcodedVendor.city,
+          coverImages: imageSet.length > 0 ? imageSet : [''],
+          social: {
+            facebook: sanitizeUrl(hardcodedVendor.facebook),
+            instagram: sanitizeUrl(hardcodedVendor.instagram),
+            tiktok: sanitizeUrl(hardcodedVendor.tiktok),
+            phone: hardcodedVendor.phone ? `tel:${hardcodedVendor.phone}` : undefined,
+            landline: hardcodedVendor.landline ? `tel:${hardcodedVendor.landline}` : undefined,
+          },
         });
+        if (isActive) setCurrentImageIndex(0);
 
-        if (response.data && response.data.length > 0) {
-          setBlanes(response.data);
-
-          // Create vendor info from first blane
-          // In a real app, you'd fetch this from a vendors API endpoint
-          const firstBlane = response.data[0];
-          
-          // Collect all images from blanes for the carousel
-          const allImages = response.data
-            .flatMap(blane => blane.blane_images?.map(img => img.image_link) || [])
-            .filter(Boolean)
-            .slice(0, 5); // Limit to 5 images for carousel
-          
-          setVendorInfo({
-            name: slug.split('-').map(word => 
-              word.charAt(0).toUpperCase() + word.slice(1)
-            ).join(' '),
-            description: 'Relaxation and well-being in a luxurious setting',
-            rating: parseFloat(firstBlane.rating) || 4.5,
-            location: firstBlane.city || 'Oven Clay Restaurant',
-            cover_images: allImages.length > 0 ? allImages : [''],
-            social_media: {
-              facebook: '#',
-              instagram: '#',
-              tiktok: '#',
-              phone: 'tel:+212600000000',
-            },
-          });
-        } else {
-          setError('Aucune offre trouvée pour ce vendeur');
-        }
+        if (isActive) setLoading(false);
       } catch (err) {
-        console.error('Error fetching vendor data:', err);
-        setError('Erreur lors du chargement des données');
-      } finally {
-        setLoading(false);
+        console.error('Error loading vendor data:', err);
+        setError('Erreur lors du chargement des données du vendeur');
+        if (isActive) setLoading(false);
       }
     };
 
     fetchVendorData();
+    return () => {
+      isActive = false;
+    };
   }, [slug]);
 
   const handlePrevImage = () => {
-    if (vendorInfo && vendorInfo.cover_images.length > 0) {
+    if (vendorInfo && vendorInfo.coverImages.length > 0) {
       setCurrentImageIndex((prev) => 
-        prev === 0 ? vendorInfo.cover_images.length - 1 : prev - 1
+        prev === 0 ? vendorInfo.coverImages.length - 1 : prev - 1
       );
     }
   };
 
   const handleNextImage = () => {
-    if (vendorInfo && vendorInfo.cover_images.length > 0) {
+    if (vendorInfo && vendorInfo.coverImages.length > 0) {
       setCurrentImageIndex((prev) => 
-        prev === vendorInfo.cover_images.length - 1 ? 0 : prev + 1
+        prev === vendorInfo.coverImages.length - 1 ? 0 : prev + 1
       );
     }
   };
@@ -127,7 +206,7 @@ const VendorDetail = () => {
         {/* Background Image */}
         <img
           src={getPlaceholderImage(
-            vendorInfo.cover_images[currentImageIndex] || '', 
+            vendorInfo.coverImages[currentImageIndex] || '', 
             1920, 
             400
           )}
@@ -137,7 +216,7 @@ const VendorDetail = () => {
         <div className="absolute inset-0 bg-black bg-opacity-60" />
         
         {/* Navigation Arrows */}
-        {vendorInfo.cover_images.length > 1 && (
+        {vendorInfo.coverImages.length > 1 && (
           <>
             <button
               onClick={handlePrevImage}
@@ -171,9 +250,9 @@ const VendorDetail = () => {
             
             {/* Social Media Icons */}
             <div className="flex items-center justify-center gap-3 mb-8">
-              {vendorInfo.social_media?.facebook && (
+              {vendorInfo.social.facebook && (
                 <a
-                  href={vendorInfo.social_media.facebook}
+                  href={vendorInfo.social.facebook}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="bg-white/20 hover:bg-white/30 backdrop-blur-sm p-3 rounded-full transition-all duration-300"
@@ -182,9 +261,9 @@ const VendorDetail = () => {
                   <Facebook className="w-5 h-5" />
                 </a>
               )}
-              {vendorInfo.social_media?.instagram && (
+              {vendorInfo.social.instagram && (
                 <a
-                  href={vendorInfo.social_media.instagram}
+                  href={vendorInfo.social.instagram}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="bg-white/20 hover:bg-white/30 backdrop-blur-sm p-3 rounded-full transition-all duration-300"
@@ -193,9 +272,9 @@ const VendorDetail = () => {
                   <Instagram className="w-5 h-5" />
                 </a>
               )}
-              {vendorInfo.social_media?.tiktok && (
+              {vendorInfo.social.tiktok && (
                 <a
-                  href={vendorInfo.social_media.tiktok}
+                  href={vendorInfo.social.tiktok}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="bg-white/20 hover:bg-white/30 backdrop-blur-sm p-3 rounded-full transition-all duration-300"
@@ -206,11 +285,20 @@ const VendorDetail = () => {
                   </svg>
                 </a>
               )}
-              {vendorInfo.social_media?.phone && (
+              {vendorInfo.social.phone && (
                 <a
-                  href={vendorInfo.social_media.phone}
+                  href={vendorInfo.social.phone}
                   className="bg-white/20 hover:bg-white/30 backdrop-blur-sm p-3 rounded-full transition-all duration-300"
                   aria-label="Phone"
+                >
+                  <Phone className="w-5 h-5" />
+                </a>
+              )}
+              {!vendorInfo.social.phone && vendorInfo.social.landline && (
+                <a
+                  href={vendorInfo.social.landline}
+                  className="bg-white/20 hover:bg-white/30 backdrop-blur-sm p-3 rounded-full transition-all duration-300"
+                  aria-label="Landline"
                 >
                   <Phone className="w-5 h-5" />
                 </a>
@@ -220,7 +308,7 @@ const VendorDetail = () => {
             {/* Location */}
             <div className="flex items-center justify-center gap-2 text-sm md:text-base">
               <MapPin className="w-5 h-5" />
-              <span>{vendorInfo.location}</span>
+              <span>{vendorInfo.city}</span>
             </div>
           </div>
         </div>
