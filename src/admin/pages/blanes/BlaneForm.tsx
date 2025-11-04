@@ -120,6 +120,7 @@ interface BlaneFormState extends BlaneFormData {
   commerce_name: string;
   commerce_phone: string;
   is_digital: boolean;
+  allow_out_of_city_delivery: boolean;
   type_time: "date" | "time";
   categories_id?: number | null;  // Make this optional
   visibility?: 'private' | 'public' | 'link';
@@ -316,6 +317,7 @@ const blaneSchema = z.object({
   max_reservation_par_creneau: z.number().nullable().optional(),
   images: z.array(z.instanceof(File)).nullable().optional(),
   is_digital: z.boolean().optional(),
+  allow_out_of_city_delivery: z.boolean().optional(),
   commerce_phone: z.string().optional(),
 });
 
@@ -352,7 +354,7 @@ const normalizeRangeObject = (range: Record<string, any>): { start: string; end:
       end: typeof range.end?.end === 'string' ? range.end.end : range.end
     };
   }
-  
+
   // Handle single-level nested objects
   if (range.start?.start && range.end?.end) {
     return {
@@ -360,7 +362,7 @@ const normalizeRangeObject = (range: Record<string, any>): { start: string; end:
       end: range.end.end
     };
   }
-  
+
   // Already has the right structure
   if (typeof range.start === 'string' && typeof range.end === 'string') {
     return {
@@ -368,7 +370,7 @@ const normalizeRangeObject = (range: Record<string, any>): { start: string; end:
       end: range.end
     };
   }
-  
+
   console.warn("Could not normalize invalid date range:", JSON.stringify(range));
   return null;
 };
@@ -418,6 +420,7 @@ const BlaneForm = ({
     cash: initialData?.cash || false,
     on_top: initialData?.on_top || false,
     is_digital: initialData?.is_digital ?? false,
+    allow_out_of_city_delivery: initialData?.allow_out_of_city_delivery ?? false,
     stock: initialData?.stock || 0,
     start_date: initialData?.start_date || "",
     expiration_date: initialData?.expiration_date || "",
@@ -428,8 +431,8 @@ const BlaneForm = ({
     jours_creneaux: Array.isArray(initialData?.jours_creneaux)
       ? initialData.jours_creneaux
       : initialData?.jours_creneaux
-      ? JSON.parse(initialData.jours_creneaux)
-      : [],
+        ? JSON.parse(initialData.jours_creneaux)
+        : [],
     dates: initialData?.dates || [],
     dateRanges: initialData?.dateRanges || [],
     heure_debut: initialData?.heure_debut || "",
@@ -476,10 +479,10 @@ const BlaneForm = ({
 
   // Date range state
   const [dateRanges, setDateRanges] = useState<Array<{ start: string; end: string }>>(
-    Array.isArray(initialData?.dateRanges) 
+    Array.isArray(initialData?.dateRanges)
       ? initialData.dateRanges
-          .map(range => normalizeRangeObject(range as Record<string, unknown>))
-          .filter((r): r is { start: string; end: string } => r !== null) 
+        .map(range => normalizeRangeObject(range as Record<string, unknown>))
+        .filter((r): r is { start: string; end: string } => r !== null)
       : []
   );
   const [currentRange, setCurrentRange] = useState<{ start: string; end: string }>({
@@ -497,7 +500,7 @@ const BlaneForm = ({
       const normalizedRanges = initialData.dateRanges
         .map(range => normalizeRangeObject(range as Record<string, unknown>))
         .filter((range): range is { start: string; end: string } => range !== null);
-      
+
       setDateRanges(normalizedRanges);
     }
   }, [initialData]);
@@ -513,7 +516,7 @@ const BlaneForm = ({
   useEffect(() => {
     setCities(citiesList);
     setLoadingCities(false);
-  }, [citiesList]);  
+  }, [citiesList]);
 
   useEffect(() => {
     if (!isOrder) {
@@ -578,16 +581,16 @@ const BlaneForm = ({
       toast.error("End date must be after start date");
       return;
     }
-    
+
     // Check if the date range is within the Blane's overall date range
     const blaneStartDate = formData.start_date ? new Date(formData.start_date) : null;
     const blaneEndDate = formData.expiration_date ? new Date(formData.expiration_date) : null;
-    
+
     if (blaneStartDate && startDate < blaneStartDate) {
       toast.error("Date range cannot start before the Blane's start date");
       return;
     }
-    
+
     if (blaneEndDate && endDate > blaneEndDate) {
       toast.error("Date range cannot end after the Blane's expiration date");
       return;
@@ -595,12 +598,12 @@ const BlaneForm = ({
 
     // Get the normalized existing ranges
     const normalizedExistingRanges = dateRanges.map(range => range).filter(r => r !== null);
-    
+
     // Check for exact duplicates
     const isDuplicate = normalizedExistingRanges.some(
       range => range.start === startDateString && range.end === endDateString
     );
-    
+
     if (isDuplicate) {
       toast.error("This exact date range already exists");
       return;
@@ -638,7 +641,7 @@ const BlaneForm = ({
         console.error(`Cannot find date range at index ${index}`);
         toast.error("Erreur: période non trouvée");
         return;
-      }      
+      }
       // First normalize the range to ensure we have a valid object
       const normalizedRange = normalizeRangeObject(rangeToRemove);
       if (!normalizedRange) {
@@ -646,67 +649,67 @@ const BlaneForm = ({
         // Just remove the range from the array without trying to process dates
         const newRanges = [...dateRanges];
         newRanges.splice(index, 1);
-        
+
         // Clear and set to force a re-render
         setDateRanges([]);
         setTimeout(() => {
           setDateRanges(newRanges);
           setForceUpdate(prev => prev + 1);
         }, 0);
-        
+
         setFormData(prev => ({
           ...prev,
           dateRanges: newRanges
         }));
         return;
       }
-      
+
       // Generate all dates in the range to remove
       const datesToRemove: string[] = [];
       const start = new Date(normalizedRange.start);
       const end = new Date(normalizedRange.end);
-      
+
       if (isNaN(start.getTime()) || isNaN(end.getTime())) {
         console.warn("Invalid date range encountered, removing from array only");
         // Just remove the range from the array without trying to process dates
         const newRanges = [...dateRanges];
         newRanges.splice(index, 1);
-        
+
         // Clear and set to force a re-render
         setDateRanges([]);
         setTimeout(() => {
           setDateRanges(newRanges);
           setForceUpdate(prev => prev + 1);
         }, 0);
-        
+
         setFormData(prev => ({
           ...prev,
           dateRanges: newRanges
         }));
         return;
       }
-      
+
       // Generate individual dates in the range
       const currentDate = new Date(start);
       while (currentDate <= end) {
         datesToRemove.push(currentDate.toISOString().split('T')[0]);
         currentDate.setDate(currentDate.getDate() + 1);
-      }      
+      }
       // Create a new array without the removed range
       const remainingRanges = [...dateRanges];
-      remainingRanges.splice(index, 1);      
+      remainingRanges.splice(index, 1);
       // Calculate the remaining dates from the other ranges
       const remainingDates = new Set<string>();
-      
+
       // Re-add all dates from remaining ranges
       remainingRanges.forEach(range => {
         // First normalize the range
         const normalizedRange = normalizeRangeObject(range);
         if (!normalizedRange) return;
-        
+
         const rangeStart = new Date(normalizedRange.start);
         const rangeEnd = new Date(normalizedRange.end);
-        
+
         if (!isNaN(rangeStart.getTime()) && !isNaN(rangeEnd.getTime())) {
           const rangeDateCurrent = new Date(rangeStart);
           while (rangeDateCurrent <= rangeEnd) {
@@ -714,21 +717,21 @@ const BlaneForm = ({
             rangeDateCurrent.setDate(rangeDateCurrent.getDate() + 1);
           }
         }
-      });      
+      });
       // Update dateRanges state in a way that forces a re-render
       setDateRanges([]);
       setTimeout(() => {
         setDateRanges(remainingRanges);
         setForceUpdate(prev => prev + 1);
       }, 0);
-      
+
       // Also update the form data
       setFormData(prev => ({
         ...prev,
         dateRanges: remainingRanges.slice(), // Create a new array reference
         dates: Array.from(remainingDates)
       }));
-      
+
       toast.success("Période supprimée avec succès");
     } catch (error) {
       console.error("Error removing date range:", error);
@@ -740,7 +743,7 @@ const BlaneForm = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
       // Validate form data
       const errors = validateForm(formData, activeTab);
@@ -753,7 +756,7 @@ const BlaneForm = ({
 
       // Create FormData object for submission
       const submitFormData = new FormData();
-      
+
       // Base fields
       submitFormData.set("name", formData.name);
       submitFormData.set("description", formData.description);
@@ -768,21 +771,22 @@ const BlaneForm = ({
       submitFormData.set("conditions", formData.conditions || "");
       submitFormData.set("commerce_name", formData.commerce_name || "");
       submitFormData.set("commerce_phone", formData.commerce_phone || "");
-       submitFormData.set("city", formData.city);
-       submitFormData.set("type", formData.type);
-       submitFormData.set("status", formData.status);
+      submitFormData.set("city", formData.city);
+      submitFormData.set("type", formData.type);
+      submitFormData.set("status", formData.status);
       submitFormData.set("online", formData.online ? "1" : "0");
       submitFormData.set("partiel", formData.partiel ? "1" : "0");
       submitFormData.set("cash", formData.cash ? "1" : "0");
       submitFormData.set("on_top", formData.on_top ? "1" : "0");
       submitFormData.set("is_digital", formData.is_digital ? "1" : "0");
+      submitFormData.set("allow_out_of_city_delivery", formData.allow_out_of_city_delivery ? "1" : "0");
       submitFormData.set("visibility", formData.visibility || "private");
       submitFormData.set("share_token", formData.share_token || "");
-      
+
       // Critical dates that were missing
       submitFormData.set("start_date", formData.start_date);
       submitFormData.set("expiration_date", formData.expiration_date || "");
-      
+
       // Reservation-specific fields
       if (formData.type === "reservation") {
         submitFormData.set("nombre_max_reservation", formData.nombre_max_reservation.toString());
@@ -790,16 +794,16 @@ const BlaneForm = ({
         submitFormData.set("intervale_reservation", formData.intervale_reservation.toString());
         submitFormData.set("personnes_prestation", formData.personnes_prestation.toString());
         submitFormData.set("reservation_type", formData.reservation_type || "instante");
-        
+
         if (formData.heure_debut) {
           submitFormData.set("heure_debut", formData.heure_debut);
         }
-        
+
         if (formData.heure_fin) {
           submitFormData.set("heure_fin", formData.heure_fin);
         }
       }
-      
+
       // Order-specific fields
       if (formData.type === "order") {
         submitFormData.set("stock", formData.stock.toString());
@@ -807,7 +811,7 @@ const BlaneForm = ({
         submitFormData.set("livraison_in_city", formData.livraison_in_city.toString());
         submitFormData.set("livraison_out_city", formData.livraison_out_city.toString());
       }
-      
+
       // Payment-related fields
       submitFormData.set("partiel_field", formData.partiel_field.toString());
       submitFormData.set("tva", formData.tva.toString());
@@ -816,14 +820,14 @@ const BlaneForm = ({
       submitFormData.set("type_time", formData.type_time);
 
       // Handle date ranges
-      if (formData.type_time === "date" && dateRanges.length > 0) {        
+      if (formData.type_time === "date" && dateRanges.length > 0) {
         // This matches the format expected by the backend: [{"start":"2025-04-15","end":"2025-04-16"},...]
         const dateRangesJson = JSON.stringify(dateRanges);
         submitFormData.set("dates", dateRangesJson);
-        
+
         // Store the dateRanges separately as well for internal use
         submitFormData.set("dateRanges", dateRangesJson);
-        
+
       } else if (formData.type_time === "time") {
         // Handle individual dates only for time mode
         if (formData.dates.length > 0) {
@@ -832,14 +836,14 @@ const BlaneForm = ({
           });
         }
       }
-      
+
       // Handle time slots
       if (formData.type_time === "time" && formData.jours_creneaux.length > 0) {
         formData.jours_creneaux.forEach((jour, index) => {
           submitFormData.append(`jours_creneaux[${index}]`, jour);
         });
       }
-      
+
       imageFiles.forEach((file) => submitFormData.append("images[]", file));
 
       // Submit form and handle API response
@@ -848,7 +852,7 @@ const BlaneForm = ({
       if (response?.errors) {
         // Log validation errors from server
         console.error("Server validation errors:", response.errors);
-        
+
         // Convert API errors to FormErrors format
         const apiErrors: FormErrors = {};
         Object.entries(response.errors).forEach(([field, messages]) => {
@@ -1012,14 +1016,14 @@ const BlaneForm = ({
 
   const handleCategoryChange = (value: string) => {
     setSelectedCategory(value);
-    
+
     // Reset subcategory in formData
     setFormData((prev) => ({
       ...prev,
       categories_id: value === "null" ? null : Number(value),
       subcategories_id: null,
     }));
-    
+
     // Call parent's onCategoryChange callback
     if (onCategoryChange && value !== "null") {
       onCategoryChange(Number(value));
@@ -1082,18 +1086,18 @@ const BlaneForm = ({
     try {
       // Handle various date formats
       const date = new Date(dateString);
-      
+
       // Check if date is valid
       if (isNaN(date.getTime())) {
         console.warn("Invalid date format:", dateString);
         return "Invalid date";
       }
-      
+
       // Format the date in French format (DD/MM/YYYY)
       const day = date.getDate().toString().padStart(2, '0');
       const month = (date.getMonth() + 1).toString().padStart(2, '0');
       const year = date.getFullYear();
-      
+
       return `${day}/${month}/${year}`;
     } catch (error) {
       console.error("Error formatting date:", error);
@@ -1117,16 +1121,16 @@ const BlaneForm = ({
       }));
     }
   };
-  
+
   // Add handlers for date period inputs
   const handleDatePeriodStartChange = (value: string) => {
     setDatePeriodStartInput(value);
   };
-  
+
   const handleDatePeriodEndChange = (value: string) => {
     setDatePeriodEndInput(value);
   };
-  
+
   // Add handler for force update
   const incrementForceUpdate = () => {
     setForceUpdate(prev => prev + 1);
@@ -1144,7 +1148,7 @@ const BlaneForm = ({
 
   // Add state for phone input
   const [phoneError, setPhoneError] = useState<string>('');
-  
+
   // Parse phone number from API if available
   const parsedPhone = initialData?.commerce_phone ? parsePhoneNumberFromAPI(initialData.commerce_phone) : { countryCode: '212', phoneNumber: '' };
   const [countryCode, setCountryCode] = useState(parsedPhone.countryCode);
@@ -1186,7 +1190,7 @@ const BlaneForm = ({
             }));
           }}
           className="w-[300px]"
-        >         
+        >
           <TabsList className="grid w-full grid-cols-2 mb-4 bg-white">
             <TabsTrigger
               value="reservation"
@@ -1202,7 +1206,7 @@ const BlaneForm = ({
             >
               Order
             </TabsTrigger>
-          </TabsList>          
+          </TabsList>
         </Tabs>
       </div>
 
@@ -1354,7 +1358,7 @@ const BlaneForm = ({
                     onPhoneNumberChange={(value) => {
                       setPhoneNumber(value);
                       // Always combine country code with phone number when saving
-                      const fullNumber = value.startsWith('+') 
+                      const fullNumber = value.startsWith('+')
                         ? value.replace(/[\s+]/g, '')
                         : countryCode + value.replace(/\D/g, '');
                       handleInputChange("commerce_phone", fullNumber);
@@ -1377,7 +1381,7 @@ const BlaneForm = ({
                   />
                 </div>
               </div>
-              
+
 
               <div className="space-y-6">
                 <div className="grid sm:grid-cols-2 gap-4">
@@ -1388,7 +1392,7 @@ const BlaneForm = ({
                       value={formData.price_old === 0 ? "" : formData.price_old.toString()}
                       onChange={(e) => handleNumericInputChange("price_old", e.target.value)}
                       className="w-full"
-                      placeholder="Prix original"                      
+                      placeholder="Prix original"
                     />
                   </div>
                   <div className="space-y-2">
@@ -1411,29 +1415,38 @@ const BlaneForm = ({
                   value={formData.advantages}
                   onChange={(e) => handleInputChange("advantages", e.target.value)}
                   className="w-full"
-                  placeholder="Avantages du BLANE"                  
+                  placeholder="Avantages du BLANE"
                 />
               </div>
-                  <div className="space-y-2">
+              <div className="space-y-2">
                 <Label>Conditions</Label>
                 <Input
                   type="text"
                   value={formData.conditions}
                   onChange={(e) => handleInputChange("conditions", e.target.value)}
                   className="w-full"
-                  placeholder="Conditions du BLANE"                  
+                  placeholder="Conditions du BLANE"
                 />
               </div>
 
-                {activeTab === "order" && (
-                  <div className="flex items-center space-x-2 mt-4">
+              {activeTab === "order" && (
+                <div className="space-y-4 mt-4">
+                  <div className="flex items-center space-x-2">
                     <Switch
                       checked={formData.is_digital}
                       onCheckedChange={(checked) => handleInputChange("is_digital", checked)}
                     />
                     <Label>Digital (produit numérique)</Label>
                   </div>
-                )}
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      checked={formData.allow_out_of_city_delivery}
+                      onCheckedChange={(checked) => handleInputChange("allow_out_of_city_delivery", checked)}
+                    />
+                    <Label>Allow out of city delivery</Label>
+                  </div>
+                </div>
+              )}
 
               {activeTab === "reservation" ? (
                 <div className="space-y-6">
@@ -1463,52 +1476,52 @@ const BlaneForm = ({
 
                   {formData.type_time === "time" ? (
                     <>
-                  <div className="space-y-4">
-                    <Label>Créneaux horaires</Label>
-                    <div className="flex flex-wrap gap-4">
-                      {[
-                        "Lundi",
-                        "Mardi",
-                        "Mercredi",
-                        "Jeudi",
-                        "Vendredi",
-                        "Samedi",
-                        "Dimanche",
-                      ].map((day) => (
-                        <div key={day} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={day}
-                            checked={formData.jours_creneaux.includes(day)}
-                            onCheckedChange={() => handleCheckboxChange(day)}
-                          />
-                          <Label htmlFor={day}>{day}</Label>
+                      <div className="space-y-4">
+                        <Label>Créneaux horaires</Label>
+                        <div className="flex flex-wrap gap-4">
+                          {[
+                            "Lundi",
+                            "Mardi",
+                            "Mercredi",
+                            "Jeudi",
+                            "Vendredi",
+                            "Samedi",
+                            "Dimanche",
+                          ].map((day) => (
+                            <div key={day} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={day}
+                                checked={formData.jours_creneaux.includes(day)}
+                                onCheckedChange={() => handleCheckboxChange(day)}
+                              />
+                              <Label htmlFor={day}>{day}</Label>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                      </div>
 
-                  <div className="space-y-6">
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Heure début</Label>
-                        <Input
-                          type="time"
-                          value={formData.heure_debut}
-                          onChange={(e) => handleInputChange("heure_debut", e.target.value)}
-                          className="w-full"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Heure fin</Label>
-                        <Input
-                          type="time"
-                          value={formData.heure_fin}
-                          onChange={(e) => handleInputChange("heure_fin", e.target.value)}
-                          className="w-full"
-                          min={formData.heure_debut}
-                        />
-                      </div>
-                    </div>
+                      <div className="space-y-6">
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Heure début</Label>
+                            <Input
+                              type="time"
+                              value={formData.heure_debut}
+                              onChange={(e) => handleInputChange("heure_debut", e.target.value)}
+                              className="w-full"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Heure fin</Label>
+                            <Input
+                              type="time"
+                              value={formData.heure_fin}
+                              onChange={(e) => handleInputChange("heure_fin", e.target.value)}
+                              className="w-full"
+                              min={formData.heure_debut}
+                            />
+                          </div>
+                        </div>
                       </div>
                     </>
                   ) : (
@@ -1545,45 +1558,45 @@ const BlaneForm = ({
                           </div>
                         </div>
 
-                        <Button 
-                          type="button" 
+                        <Button
+                          type="button"
                           onClick={handleAddDateRange}
                           disabled={!datePeriodStartInput || !datePeriodEndInput}
                           className="mt-2 w-full"
                         >
                           Ajouter cette période
                         </Button>
-                        
+
                         {/* Display date ranges with a dedicated render function for clarity */}
                         {dateRanges.length > 0 ? (
                           <div className="flex flex-col gap-2 mt-4" key={`date-ranges-container-${dateRanges.length}-${forceUpdate}`}>
                             {/* Render each individual date range */}
-                            {dateRanges.map((range, index) => {                              
+                            {dateRanges.map((range, index) => {
                               // Normalize the range to ensure proper structure
                               const normalizedRange = normalizeRangeObject(range);
-                              
+
                               // Skip invalid ranges
                               if (!normalizedRange) {
                                 console.warn(`Cannot normalize range at index ${index}:`, JSON.stringify(range));
                                 return null;
                               }
-                              
+
                               // Ensure we have valid start and end dates
                               const startDate = new Date(normalizedRange.start);
                               const endDate = new Date(normalizedRange.end);
                               const isValidRange = !isNaN(startDate.getTime()) && !isNaN(endDate.getTime());
-                              
+
                               if (!isValidRange) {
                                 console.warn(`Invalid date range at index ${index} after normalization:`, JSON.stringify(normalizedRange));
                                 return null;
                               }
-                              
+
                               // Generate a unique key for this item based on all available information
                               const itemKey = `date-range-${index}-${normalizedRange.start}-${normalizedRange.end}-${forceUpdate}`;
-                              
+
                               // Return the range item
                               return (
-                                <div 
+                                <div
                                   key={itemKey}
                                   className="flex items-center justify-between bg-gray-100 p-3 rounded-md w-full"
                                 >
@@ -1624,7 +1637,7 @@ const BlaneForm = ({
                           />
                         </div>
                       )}
-                      
+
                       <div className="space-y-2">
                         <Label>Personnes par prestation</Label>
                         <Input
@@ -1694,7 +1707,7 @@ const BlaneForm = ({
                           type="text"
                           value={formData.livraison_in_city === 0 ? "" : formData.livraison_in_city.toString()}
                           onChange={(e) => handleNumericInputChange("livraison_in_city", e.target.value)}
-                          className="w-full"                        
+                          className="w-full"
                           placeholder="Livraison en ville"
                         />
                       </div>
@@ -1704,7 +1717,7 @@ const BlaneForm = ({
                           type="text"
                           value={formData.livraison_out_city === 0 ? "" : formData.livraison_out_city.toString()}
                           onChange={(e) => handleNumericInputChange("livraison_out_city", e.target.value)}
-                          className="w-full"                        
+                          className="w-full"
                           placeholder="Livraison hors ville"
                         />
                       </div>
@@ -1756,21 +1769,21 @@ const BlaneForm = ({
                     <Label>Cash</Label>
                   </div>
                 </div>
-                
-                    <div className="mt-4 w-full">
-                      <Label>TVA (%)</Label>
-                      <Input
-                        id="tva-input"
-                        type="text"
-                        value={formData.tva === 0 ? "" : formData.tva.toString()}
-                        onChange={(e) => handleNumericInputChange("tva", e.target.value)}
-                        className="w-full"
-                        placeholder="TVA %"
-                      />
-                      {!isNumeric(formData.tva) && (
-                        <p className="text-sm text-red-500 mt-1">Veuillez entrer un nombre valide.</p>
+
+                <div className="mt-4 w-full">
+                  <Label>TVA (%)</Label>
+                  <Input
+                    id="tva-input"
+                    type="text"
+                    value={formData.tva === 0 ? "" : formData.tva.toString()}
+                    onChange={(e) => handleNumericInputChange("tva", e.target.value)}
+                    className="w-full"
+                    placeholder="TVA %"
+                  />
+                  {!isNumeric(formData.tva) && (
+                    <p className="text-sm text-red-500 mt-1">Veuillez entrer un nombre valide.</p>
                   )}
-                </div>                
+                </div>
               </div>
 
               <div className="flex justify-between items-center">
@@ -1788,7 +1801,7 @@ const BlaneForm = ({
                         <SelectItem value="active">{getStatusLabel('active')}</SelectItem>
                         <SelectItem value="waiting">{getStatusLabel('waiting')}</SelectItem>
                         <SelectItem value="inactive">{getStatusLabel('inactive')}</SelectItem>
-                        <SelectItem value="expired">{getStatusLabel('expired')}</SelectItem>                      
+                        <SelectItem value="expired">{getStatusLabel('expired')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1804,7 +1817,7 @@ const BlaneForm = ({
 
               <div className="space-y-4">
                 <Label>Visibility</Label>
-                <BlaneVisibilitySelector 
+                <BlaneVisibilitySelector
                   blaneId={isEditing ? initialData?.id?.toString() : undefined}
                   initialVisibility={formData.visibility || 'private'}
                   initialShareToken={formData.share_token || ''}

@@ -47,6 +47,7 @@ export interface Blane {
   partiel: boolean;
   cash: boolean;
   is_digital?: boolean;
+  allow_out_of_city_delivery?: boolean;
   max_orders: number;
   reservation_type?: ReservationType;
   intervale_reservation: number;
@@ -124,6 +125,7 @@ export interface BlaneFormData {
   cash: boolean;
   on_top: boolean;
   is_digital?: boolean;
+  allow_out_of_city_delivery?: boolean;
   stock: number;
   max_orders: number;
   livraison_in_city: number;
