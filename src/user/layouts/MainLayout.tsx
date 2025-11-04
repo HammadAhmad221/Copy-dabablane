@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Footer from '../components/Footer';
 import { useHome } from "@/user/lib/hooks/useHome";
 import Navbar from '../components/Navbar';
@@ -17,6 +17,29 @@ const MainLayout = ({ children }: MainLayoutProps) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const prevScrollPos = useRef(0);
   const location = useLocation();
+  const menuItems = useMemo(() => {
+    const items = response?.data?.menu_items || [];
+    const hasVendorLink = items.some((item) => item.url === '/vendors');
+
+    if (hasVendorLink) {
+      return items;
+    }
+
+    const maxPosition = items.reduce(
+      (acc, item) => Math.max(acc, item.position ?? 0),
+      0,
+    );
+
+    return [
+      ...items,
+      {
+        id: -101,
+        label: 'Vendors',
+        url: '/vendors',
+        position: maxPosition + 1,
+      },
+    ];
+  }, [response?.data?.menu_items]);
   
   // Use the shared search hook
   const {
@@ -80,7 +103,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
       <Navbar 
         categories={response?.data?.categories || []}
         cities={response?.data?.cities || []}
-        menuItems={response?.data?.menu_items || []}
+        menuItems={menuItems}
         isMenuOpen={isMenuOpen}
         onToggleMenu={handleToggleMenu}
         searchQuery={searchQuery}
@@ -109,7 +132,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
       
       {/* Centralized mobile navigation */}
       <MobileNav
-        menuItems={response?.data?.menu_items || []}
+        menuItems={menuItems}
         isOpen={isMenuOpen}
         onClose={handleCloseMenu}
         isScrolled={isScrolled}
