@@ -155,8 +155,31 @@ const VendorsPage = () => {
         </div>
 
         {loading ? (
-          <div className="flex justify-center items-center py-20">
-            <Loader />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {Array.from({ length: VENDORS_PER_PAGE }).map((_, index) => (
+              <div
+                key={index}
+                className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100"
+              >
+                {/* Skeleton Image with shimmer */}
+                <div className="relative h-56 bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%] animate-shimmer" />
+
+                {/* Skeleton Content */}
+                <div className="p-5 space-y-4">
+                  {/* Skeleton Description Lines */}
+                  <div className="space-y-2">
+                    <div className="h-4 bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%] animate-shimmer rounded w-3/4" />
+                    <div className="h-4 bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%] animate-shimmer rounded w-1/2" />
+                  </div>
+
+                  {/* Skeleton Tags */}
+                  <div className="flex gap-2">
+                    <div className="h-6 bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%] animate-shimmer rounded-full w-20" />
+                    <div className="h-6 bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%] animate-shimmer rounded-full w-24" />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         ) : vendors.length === 0 ? (
           <div className="bg-white shadow-sm rounded-xl p-10 text-center text-gray-600">
