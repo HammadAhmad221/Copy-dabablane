@@ -4,6 +4,8 @@ import { Star, ChevronLeft, ChevronRight, MapPin, Facebook, Instagram, Phone } f
 import { Blane } from '@/user/lib/types/home';
 import Loader from '@/user/components/ui/Loader';
 import { getPlaceholderImage } from '@/user/lib/utils/home';
+import { VendorService, VendorDetailData } from '@/user/lib/api/services/vendorService';
+import { BlaneService } from '@/user/lib/api/services/blaneService';
 
 const VENDOR_MEDIA_BASE_URL = 'https://dev.dabablane.com/storage/uploads/vendor_images/';
 
@@ -55,79 +57,39 @@ const VendorDetail = () => {
         setLoading(true);
         setError(null);
 
-        // HARDCODED DATA FROM CURL
-        const hardcodedVendor = {
-          id: 17,
-          name: 'John Doe',
-          company_name: 'Vendor Co.',
-          phone: '+1234567890',
-          city: 'New York',
-          landline: '+12025550123',
-          description: 'A premium dining experience with a focus on local cuisine.',
-          address: '123 Main Street, New York, NY 10001',
-          logoUrl: '17563555662kA8n4FZE2.png',
-          coverPhotoUrl: '17563555662kA8n4FZE2.png',
-          facebook: 'http://www.facebook.com',
-          tiktok: 'http://www.tiktok.com',
-          instagram: 'http://www.instagram.com',
-        };
+        // Fetch vendor details by ID or company name
+        const vendorResponse = await VendorService.getVendorByIdOrCompanyName(slug);
 
-        const hardcodedBlanes = [
-          {
-            id: 541,
-            name: 'Drawing Paper',
-            description: 'test',
-            price_current: '300.00',
-            price_old: null,
-            slug: 'drawing-paper',
-            rating: '0',
-            blane_images: [
-              {
-                id: 641,
-                image_link: 'https://dev.dabablane.com/storage/uploads/blanes_images/1761731045rMOokcI1Y4.jpg',
-              },
-            ],
-          },
-          {
-            id: 540,
-            name: 'Digital order',
-            description: 'formation IA',
-            price_current: '1000.00',
-            price_old: '800.00',
-            slug: 'digital-order',
-            rating: '0',
-            blane_images: [
-              {
-                id: 639,
-                image_link: 'https://dev.dabablane.com/storage/uploads/blanes_images/1761730273sYL1Deja22.jpg',
-              },
-            ],
-          },
-          {
-            id: 538,
-            name: 'test 1',
-            description: 'test 1',
-            price_current: '500.00',
-            price_old: null,
-            slug: 'test-1',
-            rating: '0',
-            blane_images: [
-              {
-                id: 637,
-                image_link: 'https://dev.dabablane.com/storage/uploads/blanes_images/1761650368rC5YIHkOkh.jpg',
-              },
-            ],
-          },
-        ] as any[];
+        if (!vendorResponse.status || !vendorResponse.data) {
+          setError('Vendeur non trouvé');
+          if (isActive) {
+            setVendorInfo(null);
+            setBlanes([]);
+            setLoading(false);
+          }
+          return;
+        }
 
-        if (isActive) setBlanes(hardcodedBlanes);
+        const vendor: VendorDetailData = vendorResponse.data;
 
-        const blaneImages = hardcodedBlanes
-          .flatMap((blane) => blane.blane_images?.map((img: any) => img.image_link) || [])
+        // Fetch blanes for this vendor using company_name
+        const blanesResponse = await BlaneService.getBlanesByVendor({
+          commerce_name: vendor.company_name,
+          paginationSize: 100,
+          page: 1,
+          include: 'blaneImages',
+        });
+
+        const blanesData = blanesResponse.data ?? [];
+        if (isActive) setBlanes(blanesData);
+
+        // Extract blane images for carousel
+        const blaneImages = blanesData
+          .flatMap((blane: Blane) => blane.blane_images?.map((img) => img.image_link) || [])
           .filter((image): image is string => Boolean(image))
           .slice(0, 6);
 
-        const coverImage = buildVendorAssetUrl(hardcodedVendor.coverPhotoUrl);
+        const coverImage = buildVendorAssetUrl(vendor.coverPhotoUrl);
         const imageSet = Array.from(
           new Set([coverImage, ...blaneImages].filter(Boolean)),
         );
@@ -135,22 +97,24 @@ const VendorDetail = () => {
         if (!isActive) return;
 
         setVendorInfo({
-          id: hardcodedVendor.id,
-          name: hardcodedVendor.company_name,
-          description: hardcodedVendor.description,
-          city: hardcodedVendor.city,
+          id: vendor.id,
+          name: vendor.company_name || vendor.name,
+          description: vendor.description || 'Découvrez nos offres exclusives',
+          city: vendor.city || 'Ville non renseignée',
           coverImages: imageSet.length > 0 ? imageSet : [''],
           social: {
-            facebook: sanitizeUrl(hardcodedVendor.facebook),
-            instagram: sanitizeUrl(hardcodedVendor.instagram),
-            tiktok: sanitizeUrl(hardcodedVendor.tiktok),
-            phone: hardcodedVendor.phone ? `tel:${hardcodedVendor.phone}` : undefined,
-            landline: hardcodedVendor.landline ? `tel:${hardcodedVendor.landline}` : undefined,
+            facebook: sanitizeUrl(vendor.facebook),
+            instagram: sanitizeUrl(vendor.instagram),
+            tiktok: sanitizeUrl(vendor.tiktok),
+            phone: vendor.phone ? `tel:${vendor.phone}` : undefined,
+            landline: vendor.landline ? `tel:${vendor.landline}` : undefined,
           },
         });
-        if (isActive) setCurrentImageIndex(0);
-
-        if (isActive) setLoading(false);
+        
+        if (isActive) {
+          setCurrentImageIndex(0);
+          setLoading(false);
+        }
       } catch (err) {
         console.error('Error loading vendor data:', err);
         setError('Erreur lors du chargement des données du vendeur');
@@ -199,20 +163,31 @@ const VendorDetail = () => {
     );
   }
 
+  const currentMedia = vendorInfo.coverImages[currentImageIndex] || '';
+  const isCurrentMediaVideo = currentMedia.toLowerCase().match(/\.(mp4|mov|webm|ogg)$/);
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Hero Banner with Image Carousel */}
+      {/* Hero Banner with Image/Video Carousel */}
       <div className="relative h-[400px] overflow-hidden">
-        {/* Background Image */}
-        <img
-          src={getPlaceholderImage(
-            vendorInfo.coverImages[currentImageIndex] || '', 
-            1920, 
-            400
-          )}
-          alt={vendorInfo.name}
-          className="w-full h-full object-cover transition-opacity duration-500"
-        />
+        {/* Background Image or Video */}
+        {isCurrentMediaVideo ? (
+          <video
+            key={currentImageIndex}
+            src={currentMedia}
+            className="w-full h-full object-cover"
+            autoPlay
+            muted
+            loop
+            playsInline
+          />
+        ) : (
+          <img
+            src={getPlaceholderImage(currentMedia, 1920, 400)}
+            alt={vendorInfo.name}
+            className="w-full h-full object-cover transition-opacity duration-500"
+          />
+        )}
         <div className="absolute inset-0 bg-black bg-opacity-60" />
         
         {/* Navigation Arrows */}
@@ -329,21 +304,39 @@ const VendorDetail = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {blanes.map((blane) => {
-              const imageUrl = blane.blane_images?.[0]?.image_link || '';
+              const mediaUrl = blane.blane_images?.[0]?.image_link || '';
               const rating = parseFloat(blane.rating) || 0;
+              
+              // Check if media is video
+              const isVideo = mediaUrl.toLowerCase().match(/\.(mp4|mov|webm|ogg)$/);
 
               return (
                 <div
                   key={blane.id}
                   className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300"
                 >
-                  {/* Image */}
-                  <div className="relative h-48 overflow-hidden">
-                    <img
-                      src={getPlaceholderImage(imageUrl, 400, 300)}
-                      alt={blane.name}
-                      className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
-                    />
+                  {/* Image or Video */}
+                  <div className="relative h-48 overflow-hidden bg-gray-100">
+                    {isVideo ? (
+                      <video
+                        src={mediaUrl}
+                        className="w-full h-full object-cover"
+                        muted
+                        loop
+                        playsInline
+                        onMouseEnter={(e) => e.currentTarget.play()}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.pause();
+                          e.currentTarget.currentTime = 0;
+                        }}
+                      />
+                    ) : (
+                      <img
+                        src={getPlaceholderImage(mediaUrl, 400, 300)}
+                        alt={blane.name}
+                        className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
+                      />
+                    )}
                   </div>
 
                   {/* Content */}

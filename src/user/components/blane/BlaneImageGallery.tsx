@@ -28,6 +28,10 @@ export const BlaneImageGallery = ({
   const isTimeBasedReservation = type === 'reservation' && typeTime === 'time';
   const isDateBasedReservation = type === 'reservation' && (!typeTime || typeTime === 'date');
   
+  // Check if current media is a video
+  const currentMedia = images[activeImageIndex] || '';
+  const isCurrentVideo = currentMedia.toLowerCase().match(/\.(mp4|mov|webm|ogg)$/);
+  
   return (
     <div className="space-y-4">
       {/* Main Image */}
@@ -82,33 +86,67 @@ export const BlaneImageGallery = ({
           </div>
         )}
         
-        <img 
-          src={getPlaceholderImage(images[activeImageIndex], 800, 600)} 
-          alt={name} 
-          className="w-full h-full object-cover transition-all duration-300"
-        />
+        {/* Display video or image */}
+        {isCurrentVideo ? (
+          <video
+            key={activeImageIndex}
+            src={currentMedia}
+            className="w-full h-full object-cover"
+            autoPlay
+            muted
+            loop
+            playsInline
+            controls
+          />
+        ) : (
+          <img 
+            src={getPlaceholderImage(currentMedia, 800, 600)} 
+            alt={name} 
+            className="w-full h-full object-cover transition-all duration-300"
+          />
+        )}
       </div>
 
       {/* Thumbnails */}
       {images.length > 1 && (
         <div className="flex overflow-x-auto gap-3 pb-2">
-          {images.map((img, index) => (
-            <button 
-              key={index}
-              onClick={() => setActiveImageIndex(index)}
-              className={`flex-shrink-0 w-20 h-20 rounded-md overflow-hidden border-2 transition-all duration-200 ${
-                index === activeImageIndex 
-                  ? 'border-[#E66C61] shadow-md' 
-                  : 'border-transparent hover:border-gray-300'
-              }`}
-            >
-              <img 
-                src={getPlaceholderImage(img, 100, 100)} 
-                alt={`${name} - image ${index + 1}`}
-                className="w-full h-full object-cover"
-              />
-            </button>
-          ))}
+          {images.map((img, index) => {
+            const isThumbVideo = img.toLowerCase().match(/\.(mp4|mov|webm|ogg)$/);
+            
+            return (
+              <button 
+                key={index}
+                onClick={() => setActiveImageIndex(index)}
+                className={`relative flex-shrink-0 w-20 h-20 rounded-md overflow-hidden border-2 transition-all duration-200 ${
+                  index === activeImageIndex 
+                    ? 'border-[#E66C61] shadow-md' 
+                    : 'border-transparent hover:border-gray-300'
+                }`}
+              >
+                {isThumbVideo ? (
+                  <>
+                    <video 
+                      src={img}
+                      className="w-full h-full object-cover"
+                      muted
+                    />
+                    {/* Video play icon overlay */}
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                      <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z"/>
+                      </svg>
+                    </div>
+                  </>
+                ) : (
+                  <img 
+                    src={getPlaceholderImage(img, 100, 100)} 
+                    alt={`${name} - image ${index + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

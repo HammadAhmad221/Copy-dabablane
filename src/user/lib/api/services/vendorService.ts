@@ -80,17 +80,25 @@ export class VendorService {
   static async getAllVendors({
     page = 1,
     paginationSize = 20,
+    search = '',
   }: {
     page?: number;
     paginationSize?: number;
+    search?: string;
   } = {}): Promise<VendorListResponse> {
+    const params: Record<string, any> = {
+      status: 'active',
+      include: 'coverMedia',
+      paginationSize,
+      page,
+    };
+
+    if (search && search.trim()) {
+      params.search = search.trim();
+    }
+
     const response = await axios.get(`${API_BASE_URL}/getAllVendors`, {
-      params: {
-        status: 'active',
-        include: 'coverMedia',
-        paginationSize,
-        page,
-      },
+      params,
       headers: {
         Authorization: `Bearer ${VENDOR_LIST_TOKEN}`,
         Accept: 'application/json',
@@ -113,7 +121,7 @@ export class VendorService {
       ? { id: Number(idOrName) }
       : { company_name: idOrName };
 
-    const response = await axios.get(`${API_BASE_URL}/getVendorByIdOrCompanyName`, {
+    const response = await axios.get(`${API_BASE_URL}/vendors/getVendorByIdOrCompanyName`, {
       params,
       headers: {
         Authorization: `Bearer ${VENDOR_DETAIL_TOKEN}`,

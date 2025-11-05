@@ -118,7 +118,7 @@ export interface Vendor {
   coverPhotoUrl?: string | null;
   rcCertificateUrl?: string | null;
   ribUrl?: string | null;
-  distict?: string | null;
+  district?: string | null;
   subdistrict?: string | null;
   facebook?: string | null;
   tiktok?: string | null;
@@ -161,7 +161,7 @@ export interface UpdateVendorRequest {
   ice?: string;
   rc?: string;
   vat?: string;
-  distict?: string;
+  district?: string;
   subdistrict?: string;
   logoUrl?: string;
   facebook?: string;
