@@ -11,7 +11,7 @@ const SimpleLayout = ({ children }: SimpleLayoutProps) => {
   return (
     <div className="flex flex-col min-h-screen">
       {/* Simple header with logo only on the left */}
-      <header className="w-full bg-white shadow-sm">
+      <header className="w-full bg-white shadow-lg">
         <div className="container mx-auto px-4">
           <div className="flex items-center py-4">
             <Link 

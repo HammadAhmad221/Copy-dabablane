@@ -280,7 +280,7 @@ export class BlaneService {
         include: params.include ?? 'blaneImages',
       };
 
-      const response = await axios.get(`${API_BASE_URL}/back/v1/getBlanesByVendor`, {
+      const response = await axios.get(`${API_BASE_URL}/back/v1/vendors/getBlanesByVendor`, {
         params: queryParams,
         headers: {
           Authorization: `Bearer ${BLANES_BY_VENDOR_TOKEN}`,

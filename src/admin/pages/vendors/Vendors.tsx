@@ -202,7 +202,7 @@ const EditVendorDialog = React.memo(({
     ice: vendor.ice || '',
     rc: vendor.rc || '',
     vat: vendor.vat || '',
-    distict: vendor.distict || '',
+    district: vendor.district || '',
     subdistrict: vendor.subdistrict || '',
     logoUrl: vendor.logoUrl || '',
     facebook: vendor.facebook || '',
@@ -252,7 +252,7 @@ const EditVendorDialog = React.memo(({
       ice: vendor.ice || '',
       rc: vendor.rc || '',
       vat: vendor.vat || '',
-      distict: vendor.distict || '',
+      district: vendor.district || '',
       subdistrict: vendor.subdistrict || '',
       logoUrl: vendor.logoUrl || '',
       facebook: vendor.facebook || '',
@@ -420,11 +420,11 @@ const EditVendorDialog = React.memo(({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="distict">District</Label>
+                <Label htmlFor="district">District</Label>
                 <Input
-                  id="distict"
-                  value={formData.distict}
-                  onChange={(e) => handleInputChange('distict', e.target.value)}
+                  id="district"
+                  value={formData.district}
+                  onChange={(e) => handleInputChange('district', e.target.value)}
                 />
               </div>
               <div className="space-y-2">

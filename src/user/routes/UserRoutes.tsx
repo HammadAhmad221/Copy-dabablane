@@ -34,6 +34,15 @@ const UserRoutes: React.FC = () => {
           </SimpleLayout>
         } />
         
+        {/* Vendors listing route with SimpleLayout */}
+        <Route path="/vendors" element={
+          <SimpleLayout>
+            <Suspense fallback={<Loader />}>
+              <Vendors />
+            </Suspense>
+          </SimpleLayout>
+        } />
+        
         {/* All other routes with MainLayout */}
         <Route path="/" element={<MainLayout><Outlet /></MainLayout>}>
           <Route index element={
@@ -49,11 +58,6 @@ const UserRoutes: React.FC = () => {
           <Route path="ecommerce" element={
             <Suspense fallback={<Loader />}>
               <Ecommerce />
-            </Suspense>
-          } />
-          <Route path="vendors" element={
-            <Suspense fallback={<Loader />}>
-              <Vendors />
             </Suspense>
           } />
           <Route path="reservation" element={
