@@ -96,6 +96,13 @@ export const vendorApi = {
     return response.data as Vendor;
   },
 
+  // Update vendor (using /api/updateVendor endpoint)
+  updateVendorInfo: async (vendorData: UpdateVendorRequest): Promise<Vendor> => {
+    // Don't validate with schema since API accepts all fields
+    const response = await adminApiClient.put('/updateVendor', vendorData);
+    return response.data as Vendor;
+  },
+
   // Update vendor status
   updateVendorStatus: async (id: string, statusData: UpdateVendorStatusRequest): Promise<Vendor> => {
     const validatedData = UpdateVendorStatusRequestSchema.parse(statusData);

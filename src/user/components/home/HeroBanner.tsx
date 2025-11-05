@@ -11,7 +11,7 @@ const HeroBanner = ({ banner }: HeroBannerProps) => {
   if (!banner) return null;
 
   const bannerImage = getPlaceholderImage(banner?.image_link, 1920, 550);
-  const isVideo = typeof banner.image_link === "string" && banner.image_link.endsWith(".mp4");
+  const isVideo = banner.is_video1 || (typeof banner.image_link === "string" && banner.image_link.endsWith(".mp4"));
 
   return (
     <section className="relative h-[550px]">

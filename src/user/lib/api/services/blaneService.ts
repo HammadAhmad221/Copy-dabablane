@@ -1,6 +1,10 @@
+import axios from 'axios';
 import FRONT_BLANE_ENDPOINTS from '../endpoints/blane';
 import { Blane, BlaneImage } from '../../types/home';
 import { GuestApiClient, withRetry, DEFAULT_RETRY_CONFIG } from '../client';
+
+const API_BASE_URL = 'https://dev.dabablane.com/api';
+const BLANES_BY_VENDOR_TOKEN = '341|VpVP0S40nL6kbe6IjyTJqSuaZ7fbMAGjw1DWG2ePa10f40ff';
 
 export interface BlaneResponse {
   success?: boolean;
@@ -28,6 +32,13 @@ export interface BlaneQueryParams {
   pagination_size?:number;
   page?: string;
   token?: string; // for shared link access
+}
+
+export interface BlanesByVendorParams {
+  commerce_name: string;
+  paginationSize?: number;
+  page?: number;
+  include?: string;
 }
 
 export interface BlaneImagesResponse {
@@ -252,6 +263,52 @@ export class BlaneService {
       throw error instanceof Error 
         ? error 
         : new Error(`Failed to fetch images for blane with id: ${blaneId}`);
+    }
+  }
+
+  /**
+   * Fetches blanes by vendor commerce name using a dedicated back-office endpoint
+   */
+  static async getBlanesByVendor(
+    params: BlanesByVendorParams,
+  ): Promise<BlanesResponse> {
+    try {
+      const queryParams = {
+        commerce_name: params.commerce_name,
+        paginationSize: params.paginationSize ?? 100,
+        page: params.page ?? 1,
+        include: params.include ?? 'blaneImages',
+      };
+
+      const response = await axios.get(`${API_BASE_URL}/back/v1/vendors/getBlanesByVendor`, {
+        params: queryParams,
+        headers: {
+          Authorization: `Bearer ${BLANES_BY_VENDOR_TOKEN}`,
+          Accept: 'application/json',
+        },
+      });
+
+      const payload = response.data ?? {};
+      const rawData = Array.isArray(payload?.data?.data)
+        ? payload.data.data
+        : Array.isArray(payload?.data)
+          ? payload.data
+          : Array.isArray(payload)
+            ? payload
+            : [];
+      const normalizedData = this.normalizeBlanesData(rawData);
+
+      return {
+        data: normalizedData,
+        success: true,
+        message: payload?.message,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        data: [],
+        message: error instanceof Error ? error.message : 'Failed to fetch blanes by vendor',
+      };
     }
   }
 }

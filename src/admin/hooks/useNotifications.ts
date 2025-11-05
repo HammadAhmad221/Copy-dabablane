@@ -20,21 +20,52 @@ export const useNotifications = () => {
   const [page, setPage] = useState(1);
 
   const transformApiNotification = (apiNotification: ApiNotification): Notification => {
-    return {
-      id: apiNotification.id,
-      message: apiNotification.data.message || 'Notification',
-      read: !!apiNotification.read_at,
-      date: apiNotification.created_at,
-      type: 'info' // You can map this based on notification type if needed
-    };
+    console.log('[Notifications] Transforming notification:', apiNotification);
+    try {
+      const message = apiNotification?.data?.message || 
+                     (typeof apiNotification?.data === 'string' ? apiNotification.data : 'Notification') ||
+                     'Notification';
+      
+      return {
+        id: apiNotification.id || String(apiNotification.id),
+        message: message,
+        read: !!apiNotification.read_at,
+        date: apiNotification.created_at || new Date().toISOString(),
+        type: 'info' // You can map this based on notification type if needed
+      };
+    } catch (error) {
+      console.error('[Notifications] Error transforming notification:', error, apiNotification);
+      return {
+        id: String(apiNotification?.id || Math.random()),
+        message: 'Invalid notification',
+        read: true,
+        date: new Date().toISOString(),
+        type: 'error'
+      };
+    }
   };
 
   const fetchNotifications = useCallback(async (pageNum: number = 1) => {
     try {
       setIsLoading(true);
+      console.log('[Notifications] Fetching notifications, page:', pageNum);
       const response = await notificationService.getNotifications(pageNum);
+      console.log('[Notifications] API Response:', response);
+      console.log('[Notifications] Response.data:', response.data);
+      
+      // Based on the API response structure: {status: 'success', data: {current_page: 1, data: [], ...}}
+      // response.data is the pagination object
       const paginatedData = response.data;
-      const transformedNotifications = paginatedData.data.map(transformApiNotification);
+      
+      // The notifications array is at paginatedData.data
+      const notificationsArray = Array.isArray(paginatedData?.data) ? paginatedData.data : [];
+      
+      console.log('[Notifications] Notifications array:', notificationsArray);
+      console.log('[Notifications] Notifications array length:', notificationsArray.length);
+      console.log('[Notifications] Total in pagination:', paginatedData?.total || 0);
+      
+      const transformedNotifications = notificationsArray.map(transformApiNotification);
+      console.log('[Notifications] Transformed notifications:', transformedNotifications);
       
       if (pageNum === 1) {
         setNotifications(transformedNotifications);
@@ -42,14 +73,26 @@ export const useNotifications = () => {
         setNotifications(prev => [...prev, ...transformedNotifications]);
       }
       
-      setUnreadCount(transformedNotifications.filter(n => !n.read).length);
-      setHasMore(paginatedData.next_page_url !== null);
-    } catch (error) {
-      toast.error('Failed to fetch notifications');
+      // Check for pagination - next_page_url is in the pagination object
+      const nextPageUrl = paginatedData?.next_page_url;
+      setHasMore(nextPageUrl !== null && nextPageUrl !== undefined);
+      console.log('[Notifications] Has more pages?', nextPageUrl !== null && nextPageUrl !== undefined, 'Next page URL:', nextPageUrl);
+    } catch (error: any) {
+      console.error('[Notifications] Error fetching notifications:', error);
+      console.error('[Notifications] Error response:', error?.response?.data);
+      console.error('[Notifications] Error status:', error?.response?.status);
+      toast.error(`Failed to fetch notifications: ${error?.response?.data?.message || error?.message || 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+  // Update unread count whenever notifications change
+  useEffect(() => {
+    const count = notifications.filter(n => !n.read).length;
+    setUnreadCount(count);
+    console.log('[Notifications] Unread count updated:', count, 'Total notifications:', notifications.length);
+  }, [notifications]);
 
   useEffect(() => {
     fetchNotifications(1);
@@ -62,6 +105,7 @@ export const useNotifications = () => {
 
   const markAsRead = useCallback(async (id: string) => {
     try {
+      console.log('[Notifications] Marking notification as read:', id);
       await notificationService.markAsRead(id);
       setNotifications(prev => 
         prev.map(notification => 
@@ -70,48 +114,48 @@ export const useNotifications = () => {
             : notification
         )
       );
-      setUnreadCount(prev => Math.max(0, prev - 1));
       toast.success('Notification marked as read');
-    } catch (error) {
-      toast.error('Failed to mark notification as read');
+    } catch (error: any) {
+      console.error('[Notifications] Error marking as read:', error);
+      toast.error(`Failed to mark notification as read: ${error?.response?.data?.message || error?.message || 'Unknown error'}`);
     }
   }, []);
 
   const markAllAsRead = useCallback(async () => {
     try {
+      console.log('[Notifications] Marking all notifications as read');
       await notificationService.markAllAsRead();
       setNotifications(prev => 
         prev.map(notification => ({ ...notification, read: true }))
       );
-      setUnreadCount(0);
       toast.success('All notifications marked as read');
-    } catch (error) {
-      toast.error('Failed to mark all notifications as read');
+    } catch (error: any) {
+      console.error('[Notifications] Error marking all as read:', error);
+      toast.error(`Failed to mark all notifications as read: ${error?.response?.data?.message || error?.message || 'Unknown error'}`);
     }
   }, []);
 
   const deleteNotification = useCallback(async (id: string) => {
     try {
+      console.log('[Notifications] Deleting notification:', id);
       await notificationService.deleteNotification(id);
       setNotifications(prev => prev.filter(notification => notification.id !== id));
-      const wasUnread = notifications.find(n => n.id === id && !n.read);
-      if (wasUnread) {
-        setUnreadCount(prev => Math.max(0, prev - 1));
-      }
       toast.success('Notification deleted');
-    } catch (error) {
-      toast.error('Failed to delete notification');
+    } catch (error: any) {
+      console.error('[Notifications] Error deleting notification:', error);
+      toast.error(`Failed to delete notification: ${error?.response?.data?.message || error?.message || 'Unknown error'}`);
     }
-  }, [notifications]);
+  }, []);
 
   const deleteAll = useCallback(async () => {
     try {
+      console.log('[Notifications] Deleting all notifications');
       await notificationService.deleteAllNotifications();
       setNotifications([]);
-      setUnreadCount(0);
       toast.success('All notifications deleted');
-    } catch (error) {
-      toast.error('Failed to delete all notifications');
+    } catch (error: any) {
+      console.error('[Notifications] Error deleting all notifications:', error);
+      toast.error(`Failed to delete all notifications: ${error?.response?.data?.message || error?.message || 'Unknown error'}`);
     }
   }, []);
 

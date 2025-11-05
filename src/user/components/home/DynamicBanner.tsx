@@ -12,16 +12,32 @@ const DynamicBanner = ({ banner }: DynamicBannerProps) => {
   if (!banner) return null;
 
   const bannerImage = getPlaceholderImage(banner?.image_link2);
+  const isVideo = banner.is_video2 || (typeof banner.image_link2 === "string" && banner.image_link2.endsWith(".mp4"));
 
   return (
     <section className="relative h-[300px] overflow-hidden">
       <div className="absolute inset-0">
-        <img
-          src={bannerImage}
-          alt="Offre spéciale"
-          className="w-full h-full object-cover"
-          loading="lazy"
-        />
+        {isVideo ? (
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="auto"
+            className="w-full h-full object-cover"
+            poster={bannerImage}
+          >
+            <source src={banner.image_link2} type="video/mp4" />
+            Votre navigateur ne supporte pas la balise vidéo.
+          </video>
+        ) : (
+          <img
+            src={bannerImage}
+            alt="Offre spéciale"
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        )}
         <div className="absolute inset-0 bg-gradient-to-r from-black/70 to-transparent" />
       </div>
       <div className="relative max-w-7xl mx-auto px-4 h-full flex items-center">

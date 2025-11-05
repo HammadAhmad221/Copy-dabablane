@@ -93,6 +93,10 @@ export default {
             '0%': { transform: 'scale(1)', opacity: 1 },
             '100%': { transform: 'scale(0.9)', opacity: 0 },
           },
+          shimmer: {
+            '0%': { backgroundPosition: '200% 0' },
+            '100%': { backgroundPosition: '-200% 0' },
+          },
         },
         animation: {
           'accordion-down': 'accordion-down 0.2s ease-out',
@@ -100,6 +104,7 @@ export default {
           "tab-content": "tab-content 0.3s ease-out",
           enter: 'enter 200ms ease-out',
           leave: 'leave 150ms ease-in forwards',
+          shimmer: 'shimmer 2s ease-in-out infinite',
         },
       },
     },

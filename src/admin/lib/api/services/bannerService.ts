@@ -42,10 +42,10 @@ export const bannerApi = {
     }
   },
 
-  async updateBanner(formData: FormData) {
+  async updateBanner(id: string, formData: FormData) {
     try {
       const response = await apiClient.post<ApiResponse<BannerType>>(
-        BACK_BANNER_ENDPOINTS.updateBanner(), // Ensure this endpoint is correct
+        BACK_BANNER_ENDPOINTS.updateBanner(id),
         formData,
         {
           headers: {

@@ -1,6 +1,7 @@
 import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Outlet } from 'react-router-dom';
 import MainLayout from '../layouts/MainLayout.tsx';
+import SimpleLayout from '../layouts/SimpleLayout.tsx';
 import ScrollToTopOnNavigate from '../components/ScrollToTopOnNavigate.tsx';
 import Loader from '../components/Loader.tsx';
 
@@ -12,6 +13,8 @@ const Reservation = lazy(() => import('../pages/Reservation.tsx'));
 const Ecommerce = lazy(() => import('../pages/Ecommerce.tsx'));
 const BtoB = lazy(() => import('../pages/BtoB.tsx'));
 const BlaneDetail = lazy(() => import('../pages/BlaneDetail.tsx'));
+const VendorDetail = lazy(() => import('../pages/VendorDetail.tsx'));
+const Vendors = lazy(() => import('../pages/Vendors.tsx'));
 const PaymentResult = lazy(() => import('../pages/PaymentResult.tsx'));
 const About = lazy(() => import('../pages/About.tsx'));
 const Contact = lazy(() => import('../pages/Contact.tsx'));
@@ -22,6 +25,25 @@ const UserRoutes: React.FC = () => {
     <>
       <ScrollToTopOnNavigate />
       <Routes>
+        {/* Vendor Detail route with SimpleLayout */}
+        <Route path="/vendor/:slug" element={
+          <SimpleLayout>
+            <Suspense fallback={<Loader />}>
+              <VendorDetail />
+            </Suspense>
+          </SimpleLayout>
+        } />
+        
+        {/* Vendors listing route with SimpleLayout */}
+        <Route path="/vendors" element={
+          <SimpleLayout>
+            <Suspense fallback={<Loader />}>
+              <Vendors />
+            </Suspense>
+          </SimpleLayout>
+        } />
+        
+        {/* All other routes with MainLayout */}
         <Route path="/" element={<MainLayout><Outlet /></MainLayout>}>
           <Route index element={
             <Suspense fallback={<Loader />}>

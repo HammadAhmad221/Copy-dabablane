@@ -10,6 +10,8 @@ export interface BannerType {
   image_url2: string | null;
   btname2: string | null;
   link2: string | null;
+  is_video1?: boolean;
+  is_video2?: boolean;
   created_at: string;
   updated_at: string;
   image_link?: string | { error: string };

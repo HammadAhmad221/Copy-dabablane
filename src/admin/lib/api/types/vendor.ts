@@ -1,9 +1,9 @@
 import { z } from "zod";
 
-export type VendorStatus = "pending" | "active" | "suspended" | "blocked";
+export type VendorStatus = "pending" | "active" | "inActive" | "suspended" | "waiting";
 
 // Zod schemas for validation
-export const VendorStatusSchema = z.enum(["pending", "active", "suspended", "blocked"]);
+export const VendorStatusSchema = z.enum(["pending", "active", "inActive", "suspended", "waiting"]);
 
 export const VendorSchema = z.object({
   id: z.number(),
@@ -69,6 +69,7 @@ export const UpdateVendorRequestSchema = z.object({
 
 export const UpdateVendorStatusRequestSchema = z.object({
   status: VendorStatusSchema,
+  comment: z.string().optional(),
 });
 
 export const VendorFiltersSchema = z.object({
@@ -116,6 +117,12 @@ export interface Vendor {
   logoUrl?: string | null;
   coverPhotoUrl?: string | null;
   rcCertificateUrl?: string | null;
+  ribUrl?: string | null;
+  district?: string | null;
+  subdistrict?: string | null;
+  facebook?: string | null;
+  tiktok?: string | null;
+  instagram?: string | null;
   status: VendorStatus;
   cover_media?: (string | {
     id?: number;
@@ -148,10 +155,26 @@ export interface UpdateVendorRequest {
   status?: VendorStatus;
   description?: string;
   website?: string;
+  landline?: string;
+  businessCategory?: string;
+  subCategory?: string;
+  ice?: string;
+  rc?: string;
+  vat?: string;
+  district?: string;
+  subdistrict?: string;
+  logoUrl?: string;
+  facebook?: string;
+  tiktok?: string;
+  instagram?: string;
+  cover_media_urls?: string[];
+  rcCertificateUrl?: string;
+  ribUrl?: string;
 }
 
 export interface UpdateVendorStatusRequest {
   status: VendorStatus;
+  comment?: string;
 }
 
 export interface VendorFilters {
@@ -173,3 +196,5 @@ export interface VendorListResponse {
     to: number;
   };
 }
+
+

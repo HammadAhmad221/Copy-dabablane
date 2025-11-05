@@ -1,8 +1,9 @@
 export const VENDOR_STATUS = {
   PENDING: 'pending',
   ACTIVE: 'active',
+  INACTIVE: 'inActive',
   SUSPENDED: 'suspended',
-  BLOCKED: 'blocked'
+  WAITING: 'waiting'
 } as const
 
 export type VendorStatus = typeof VENDOR_STATUS[keyof typeof VENDOR_STATUS]
@@ -19,14 +20,19 @@ export const getVendorStatusColor = (status: VendorStatus) => {
         bg: 'bg-blue-500',
         text: 'text-white'
       }
+    case VENDOR_STATUS.INACTIVE:
+      return {
+        bg: 'bg-gray-500',
+        text: 'text-white'
+      }
     case VENDOR_STATUS.SUSPENDED:
       return {
         bg: 'bg-orange-500',
         text: 'text-white'
       }
-    case VENDOR_STATUS.BLOCKED:
+    case VENDOR_STATUS.WAITING:
       return {
-        bg: 'bg-red-500',
+        bg: 'bg-yellow-500',
         text: 'text-white'
       }
     default:
@@ -40,13 +46,15 @@ export const getVendorStatusColor = (status: VendorStatus) => {
 export const getVendorStatusLabel = (status: VendorStatus): string => {
   switch (status) {
     case VENDOR_STATUS.ACTIVE:
-      return 'Actif'
+      return 'Active'
     case VENDOR_STATUS.PENDING:
-      return 'En attente'
+      return 'Pending'
+    case VENDOR_STATUS.INACTIVE:
+      return 'inActive'
     case VENDOR_STATUS.SUSPENDED:
-      return 'Suspendu'
-    case VENDOR_STATUS.BLOCKED:
-      return 'Bloqué'
+      return 'Suspended'
+    case VENDOR_STATUS.WAITING:
+      return 'Waiting'
     default:
       return status
   }

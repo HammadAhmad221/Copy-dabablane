@@ -17,6 +17,7 @@ export const blaneApi = {
     search = null,
     categories_id = null,
     subcategories_id = null,
+    commerce_name = null, // Add commerce_name parameter here
   }: {
     page?: number;
     paginationSize?: number;
@@ -25,6 +26,7 @@ export const blaneApi = {
     search?: string | null;
     categories_id?: string | null;
     subcategories_id?: string | null;
+    commerce_name?: string | null; // Add this
   } = {}): Promise<BlaneResponse> {
     try {
       const params: Record<string, string | number> = {
@@ -38,7 +40,7 @@ export const blaneApi = {
       if (search) params.search = search;
       if (categories_id) params.categories_id = categories_id;
       if (subcategories_id) params.subcategories_id = subcategories_id;
-      
+      if (commerce_name) params.commerce_name = commerce_name; // Add this
 
       const response = await apiClient.get<BlaneResponse>(
         BACK_BLANE_ENDPOINTS.getAllBlanes(),
@@ -197,5 +199,8 @@ export const blaneApi = {
   getSharedBlane: async (slug: string, token: string) => {
     const response = await apiClient.get(BLANE_VISIBILITY_ENDPOINTS.SHARED(slug, token));
     return response;
-  }
+  },
+
+  // REMOVED: getBlanesByVendor method since the endpoint doesn't exist
+  // Use the main getBlanes method with commerce_name filter instead
 };
