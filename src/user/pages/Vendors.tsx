@@ -42,6 +42,18 @@ const resolveCoverImage = (vendor: VendorListItem): string => {
   return '';
 };
 
+// Helper function to create URL-friendly slugs (replace spaces with hyphens)
+const slugify = (text: string): string => {
+  return text
+    .toString()
+    .trim()
+    .replace(/\s+/g, '-')           // Replace spaces with hyphens
+    .replace(/[^\w\-]+/g, '')       // Remove all non-word chars except hyphens
+    .replace(/\-\-+/g, '-')         // Replace multiple hyphens with single hyphen
+    .replace(/^-+/, '')             // Trim hyphens from start
+    .replace(/-+$/, '');            // Trim hyphens from end
+};
+
 const VendorsPage = () => {
   const [vendors, setVendors] = useState<VendorListItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -200,7 +212,7 @@ const VendorsPage = () => {
               return (
                 <Link
                   key={vendor.id}
-                  to={`/vendor/${vendor.id}`}
+                  to={`/vendors/${slugify(vendor.company_name || vendor.name || '')}`}
                   className="group bg-white rounded-2xl shadow-sm hover:shadow-lg transition-shadow duration-300 overflow-hidden border border-gray-100"
                 >
                   <div className="relative h-56 overflow-hidden bg-gray-100">
