@@ -41,7 +41,7 @@ interface VendorInfo {
 }
 
 const VendorDetail = () => {
-  const { slug } = useParams<{ slug: string }>();
+  const { name } = useParams<{ name: string }>();
   const [blanes, setBlanes] = useState<Blane[]>([]);
   const [vendorInfo, setVendorInfo] = useState<VendorInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,14 +51,17 @@ const VendorDetail = () => {
   useEffect(() => {
     let isActive = true;
     const fetchVendorData = async () => {
-      if (!slug) return;
+      if (!name) return;
 
       try {
         setLoading(true);
         setError(null);
 
+        // Convert slugified name back to original format (replace hyphens with spaces)
+        const decodedName = name.replace(/-/g, ' ');
+
         // Fetch vendor details by ID or company name
-        const vendorResponse = await VendorService.getVendorByIdOrCompanyName(slug);
+        const vendorResponse = await VendorService.getVendorByIdOrCompanyName(decodedName);
 
         if (!vendorResponse.status || !vendorResponse.data) {
           setError('Vendeur non trouvé');
@@ -126,7 +129,7 @@ const VendorDetail = () => {
     return () => {
       isActive = false;
     };
-  }, [slug]);
+  }, [name]);
 
   const handlePrevImage = () => {
     if (vendorInfo && vendorInfo.coverImages.length > 0) {
