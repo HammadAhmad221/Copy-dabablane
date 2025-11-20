@@ -10,6 +10,9 @@ export interface Notification {
   read: boolean;
   date: string;
   type: 'info' | 'warning' | 'error' | 'success';
+  vendorId?: number;
+  vendorName?: string;
+  originalData?: any;
 }
 
 export const useNotifications = () => {
@@ -26,12 +29,43 @@ export const useNotifications = () => {
                      (typeof apiNotification?.data === 'string' ? apiNotification.data : 'Notification') ||
                      'Notification';
       
+      // Extract vendor information from notification data
+      let vendorId: number | undefined;
+      let vendorName: string | undefined;
+      
+      // Check if data is an object with vendor information
+      if (apiNotification?.data && typeof apiNotification.data === 'object' && !Array.isArray(apiNotification.data)) {
+        const data = apiNotification.data as any;
+        vendorId = data.vendor_id || data.vendorId;
+        vendorName = data.vendor_name || data.vendorName;
+      }
+      
+      // If vendor info not in data, try to parse from message
+      // Pattern 1: "Un nouveau vendeur "vendorName" vient de s'inscrire."
+      // Pattern 2: Any quoted text after "vendeur"
+      if (!vendorName && message) {
+        // First try: look for quoted text after "vendeur"
+        const vendeurMatch = message.match(/vendeur\s+"([^"]+)"/i);
+        if (vendeurMatch) {
+          vendorName = vendeurMatch[1];
+        } else {
+          // Fallback: look for any quoted text in the message
+          const vendorMatch = message.match(/"([^"]+)"/);
+          if (vendorMatch) {
+            vendorName = vendorMatch[1];
+          }
+        }
+      }
+      
       return {
         id: apiNotification.id || String(apiNotification.id),
         message: message,
         read: !!apiNotification.read_at,
         date: apiNotification.created_at || new Date().toISOString(),
-        type: 'info' // You can map this based on notification type if needed
+        type: 'info', // You can map this based on notification type if needed
+        vendorId,
+        vendorName,
+        originalData: apiNotification.data
       };
     } catch (error) {
       console.error('[Notifications] Error transforming notification:', error, apiNotification);

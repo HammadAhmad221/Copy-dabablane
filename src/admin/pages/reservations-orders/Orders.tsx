@@ -172,12 +172,13 @@ const Orders: React.FC = () => {
     paginationSize: 10,
     search: '',
     sortBy: undefined as string | undefined,
-    sortOrder: undefined as 'asc' | 'desc' | undefined
+    sortOrder: undefined as 'asc' | 'desc' | undefined,
+    customerId: undefined as number | undefined
   });
 
   const fetchCustomers = async () => {
     try {
-      const response = await CustomerService.getAll({ paginationSize: 99 });
+      const response = await CustomerService.getAll({ paginationSize: 9999 });
       setCustomers(response.data);
     } catch (error) {
       toast.error("Failed to fetch customers");
@@ -197,7 +198,7 @@ const Orders: React.FC = () => {
         setBlanes(blanesResponse || []);
 
         // Fetch customers after other data is loaded
-        const customersResponse = await CustomerService.getAll({ paginationSize: 99 });
+        const customersResponse = await CustomerService.getAll({ paginationSize: 9999 });
         setCustomers(customersResponse.data);
       } catch (error) {
         toast.error("Failed to fetch necessary data");
@@ -215,21 +216,52 @@ const Orders: React.FC = () => {
   const fetchOrders = useCallback(async (currentFilters = filters) => {
     try {
       setIsLoading(true);
+      
+      // Fetch all orders if filtering by customer (we'll filter client-side)
       const response = await orderApi.getOrders({
-        page: currentFilters.page,
-        paginationSize: currentFilters.paginationSize,
+        page: currentFilters.customerId ? 1 : currentFilters.page,
+        paginationSize: currentFilters.customerId ? 9999 : currentFilters.paginationSize,
         search: currentFilters.search,
         sortBy: currentFilters.sortBy,
         sortOrder: currentFilters.sortOrder,
       });
-      setOrders(response.data);
-      setPagination(prev => ({
-        ...prev,
-        currentPage: response.meta.current_page,
-        perPage: response.meta.per_page,
-        total: response.meta.total,
-        lastPage: response.meta.last_page,
-      }));
+      
+      // Filter by customer if customer filter is set
+      let filteredOrders = response.data;
+      if (currentFilters.customerId) {
+        filteredOrders = response.data.filter(order => 
+          order.customers_id === currentFilters.customerId
+        );
+        
+        // Apply client-side pagination after filtering
+        const startIndex = (currentFilters.page - 1) * currentFilters.paginationSize;
+        const endIndex = startIndex + currentFilters.paginationSize;
+        filteredOrders = filteredOrders.slice(startIndex, endIndex);
+      }
+      
+      setOrders(filteredOrders);
+      
+      // Update pagination metadata
+      if (currentFilters.customerId) {
+        const totalFiltered = response.data.filter(order => 
+          order.customers_id === currentFilters.customerId
+        ).length;
+        setPagination(prev => ({
+          ...prev,
+          currentPage: currentFilters.page,
+          perPage: currentFilters.paginationSize,
+          total: totalFiltered,
+          lastPage: Math.max(1, Math.ceil(totalFiltered / currentFilters.paginationSize)),
+        }));
+      } else {
+        setPagination(prev => ({
+          ...prev,
+          currentPage: response.meta.current_page,
+          perPage: response.meta.per_page,
+          total: response.meta.total,
+          lastPage: response.meta.last_page,
+        }));
+      }
     } catch (error) {
       toast.error('Failed to fetch orders');
     } finally {
@@ -597,21 +629,48 @@ const Orders: React.FC = () => {
             />
           </div>
 
-          <Select
-            value={pagination.perPage.toString()}
-            onValueChange={handlePaginationChange}
-          >
-            <SelectTrigger className="h-[42px] w-full bg-white">
-              <SelectValue placeholder="Éléments par page" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="10">10 par page</SelectItem>
-              <SelectItem value="20">20 par page</SelectItem>
-              <SelectItem value="50">50 par page</SelectItem>
-              <SelectItem value="100">100 par page</SelectItem>
-              <SelectItem value="99999">999+ par page</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              value={filters.customerId ? filters.customerId.toString() : "all"}
+              onValueChange={(value) => {
+                const newFilters = {
+                  ...filters,
+                  customerId: value === "all" ? undefined : parseInt(value),
+                  page: 1
+                };
+                setFilters(newFilters);
+                fetchOrders(newFilters);
+              }}
+            >
+              <SelectTrigger className="h-[42px] w-full bg-white">
+                <SelectValue placeholder="All Customers" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Customers</SelectItem>
+                {customers.map((customer) => (
+                  <SelectItem key={customer.id} value={customer.id.toString()}>
+                    {customer.name} ({customer.email})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={pagination.perPage.toString()}
+              onValueChange={handlePaginationChange}
+            >
+              <SelectTrigger className="h-[42px] w-full bg-white">
+                <SelectValue placeholder="Éléments par page" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10 par page</SelectItem>
+                <SelectItem value="20">20 par page</SelectItem>
+                <SelectItem value="50">50 par page</SelectItem>
+                <SelectItem value="100">100 par page</SelectItem>
+                <SelectItem value="99999">999+ par page</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </motion.div>
 

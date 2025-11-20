@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Notification } from '../../hooks/useNotifications';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -12,6 +13,7 @@ interface NotificationsPanelProps {
   onRefresh: () => void;
   hasMore: boolean;
   isLoading: boolean;
+  onClose?: () => void;
 }
 
 const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
@@ -23,8 +25,140 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
   onLoadMore,
   onRefresh,
   hasMore,
-  isLoading
+  isLoading,
+  onClose
 }) => {
+  const navigate = useNavigate();
+
+  // Handle vendor click - navigate and close popover
+  const handleVendorClick = (vendorId?: number, vendorName?: string) => {
+    console.log('🔗 Vendor click:', { vendorId, vendorName });
+    
+    // Close the popover first
+    if (onClose) {
+      onClose();
+    }
+    
+    // Small delay to ensure popover closes smoothly
+    setTimeout(() => {
+      if (vendorId) {
+        // Always prefer vendorId when available - more reliable
+        // Also pass vendorName as fallback in case vendorId lookup fails
+        const params = new URLSearchParams();
+        params.set('vendorId', String(vendorId));
+        if (vendorName) {
+          params.set('vendorName', vendorName);
+        }
+        console.log(`🔗 Navigating to vendor by ID: ${vendorId}${vendorName ? ` (name: "${vendorName}")` : ''}`);
+        navigate(`/admin/vendors?${params.toString()}`);
+      } else if (vendorName) {
+        // Fallback to name search if no ID available
+        console.log(`🔗 Navigating to vendor by name: "${vendorName}"`);
+        navigate(`/admin/vendors?search=${encodeURIComponent(vendorName)}`);
+      } else {
+        console.log('🔗 No vendor info, navigating to vendors page');
+        navigate('/admin/vendors');
+      }
+    }, 100);
+  };
+
+  // Function to parse and render message with clickable vendor names
+  const renderMessage = (notification: Notification) => {
+    const { message, vendorId, vendorName } = notification;
+    
+    // Improved vendor name detection - try multiple patterns
+    let extractedVendorName: string | undefined = vendorName;
+    let vendorMatch: RegExpMatchArray | null = null;
+    
+    // First, check if we have vendor info from the hook
+    if (!extractedVendorName) {
+      // Try to parse vendor name from message pattern
+      // Pattern 1: "Un nouveau vendeur "vendorName" vient de s'inscrire."
+      vendorMatch = message.match(/"([^"]+)"/);
+      if (vendorMatch) {
+        extractedVendorName = vendorMatch[1];
+      } else {
+        // Pattern 2: Try to find quoted text that might be a vendor name
+        // Look for text in quotes that appears after "vendeur"
+        const vendeurMatch = message.match(/vendeur\s+"([^"]+)"/i);
+        if (vendeurMatch) {
+          extractedVendorName = vendeurMatch[1];
+          vendorMatch = vendeurMatch;
+        }
+      }
+    }
+    
+    // If we have vendor information, make the vendor name clickable
+    if (extractedVendorName) {
+      // Try to find the vendor name in the message (could be in quotes or as part of the text)
+      const vendorNameEscaped = extractedVendorName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Match with or without quotes, case insensitive
+      const regex = new RegExp(`("?${vendorNameEscaped}"?)`, 'gi');
+      const parts = message.split(regex);
+      
+      // If split didn't work well, try the original vendorMatch
+      if (parts.length === 1 && vendorMatch) {
+        const matchText = vendorMatch[0];
+        const parts2 = message.split(matchText);
+        
+        return (
+          <span className={`text-sm ${!notification.read ? 'font-medium' : ''}`}>
+            {parts2[0]}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleVendorClick(vendorId, extractedVendorName);
+              }}
+              className="text-blue-600 hover:text-blue-800 hover:underline font-medium cursor-pointer inline"
+              title={`View vendor: ${extractedVendorName}`}
+            >
+              {matchText}
+            </button>
+            {parts2[1]}
+          </span>
+        );
+      }
+      
+      return (
+        <span className={`text-sm ${!notification.read ? 'font-medium' : ''}`}>
+          {parts.map((part, index) => {
+            // Check if this part matches the vendor name (case-insensitive, with or without quotes)
+            const partClean = part.toLowerCase().replace(/"/g, '').trim();
+            const vendorNameClean = extractedVendorName.toLowerCase().trim();
+            
+            if (partClean === vendorNameClean || part.toLowerCase().includes(vendorNameClean)) {
+              return (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleVendorClick(vendorId, extractedVendorName);
+                  }}
+                  className="text-blue-600 hover:text-blue-800 hover:underline font-medium cursor-pointer inline"
+                  title={`View vendor: ${extractedVendorName}`}
+                >
+                  {part}
+                </button>
+              );
+            }
+            return <span key={index}>{part}</span>;
+          })}
+        </span>
+      );
+    }
+    
+    // Default: just render the message as-is
+    return (
+      <p className={`text-sm ${!notification.read ? 'font-medium' : ''}`}>
+        {message}
+      </p>
+    );
+  };
+
   return (
     <div className="notifications-panel">
       <div className="flex justify-between items-center p-3 border-b">
@@ -62,27 +196,40 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
               <li 
                 key={notification.id} 
                 className={`p-3 border-b hover:bg-gray-50 ${!notification.read ? 'bg-blue-50' : ''}`}
+                onClick={(e) => {
+                  // Prevent click on the list item from interfering with button clicks
+                  const target = e.target as HTMLElement;
+                  if (target.tagName !== 'BUTTON' && !target.closest('button')) {
+                    // Allow other interactions
+                  }
+                }}
               >
                 <div className="flex justify-between">
-                  <div>
-                    <p className={`text-sm ${!notification.read ? 'font-medium' : ''}`}>
-                      {notification.message}
-                    </p>
-                    <p className="text-xs text-gray-500">
+                  <div className="flex-1">
+                    {renderMessage(notification)}
+                    <p className="text-xs text-gray-500 mt-1">
                       {formatDistanceToNow(new Date(notification.date), { addSuffix: true })}
                     </p>
                   </div>
-                  <div className="flex space-x-2">
+                  <div className="flex space-x-2 ml-2">
                     {!notification.read && (
                       <button 
-                        onClick={() => onMarkAsRead(notification.id)}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onMarkAsRead(notification.id);
+                        }}
                         className="text-xs text-blue-600 hover:text-blue-800"
                       >
                         Mark read
                       </button>
                     )}
                     <button 
-                      onClick={() => onDeleteNotification(notification.id)}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteNotification(notification.id);
+                      }}
                       className="text-xs text-red-600 hover:text-red-800"
                     >
                       Delete

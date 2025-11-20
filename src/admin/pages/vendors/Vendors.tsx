@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card } from "@/admin/components/ui/card";
 import { Button } from "@/admin/components/ui/button";
 import { Input } from "@/admin/components/ui/input";
@@ -23,6 +24,7 @@ import { EyeIcon, MoreVerticalIcon, PencilIcon } from "lucide-react";
 import { Vendor, VendorStatus } from "@/admin/lib/api/types/vendor";
 import { getVendorStatusLabel } from "@/admin/lib/constants/vendor";
 import { useVendors } from "@/admin/hooks/useVendors";
+import { vendorApi } from "@/admin/lib/api/services/vendorService";
 import { Icon } from "@iconify/react";
 import { cn } from "@/lib/utils";
 import { debounce } from "lodash";
@@ -55,6 +57,7 @@ import { Badge } from "@/admin/components/ui/badge";
 import ImageLightbox from "@/admin/components/ui/ImageLightbox";
 import { Label } from "@/admin/components/ui/label";
 import { Textarea } from "@/admin/components/ui/textarea";
+import { Switch } from "@/admin/components/ui/switch";
 
 // Status Change Dialog Component
 const StatusChangeDialog = React.memo(({
@@ -178,6 +181,83 @@ const StatusChangeDialog = React.memo(({
 });
 StatusChangeDialog.displayName = 'StatusChangeDialog';
 
+// City-District mapping
+const cityDistricts: Record<string, string[]> = {
+  'Casablanca': [
+    'Ain Chock',
+    'Ain Sebaa-Hay Mohammadi',
+    'Al Fida-Mers Sultan',
+    'Anfa',
+    'Hay Hassani',
+    'Moulay Rachid',
+    'Sidi Bernoussi',
+    'Bouskoura',
+    'La Ville Verte',
+    'Dar Bouazza',
+    'Mohammedia',
+    'Bouznika',
+  ],
+  'Rabat': [],
+  'Marrakech': [],
+  'Fes': [],
+  'Tangier': [],
+};
+
+// District-Subdistrict mapping
+const districtSubdistricts: Record<string, string[]> = {
+  'Anfa': [
+    'Bourgogne',
+    'Sidi Belyout (Centre Ville, Médina)',
+    'Maârif',
+    'Ain Diab (Corniche)',
+    'Gauthier',
+    'Racine',
+    'Palmier',
+    'Triangle d\'Or',
+    'Oasis',
+    'CIL',
+  ],
+  'Hay Hassani': [
+    'Hay Hassani',
+    'Oulfa',
+    'Errahma',
+    'Lissasfa',
+  ],
+  'Ain Chock': [
+    'Ain Chock',
+    'Sidi Maârouf',
+    'Californie',
+    'Polo',
+  ],
+  'Ain Sebaa-Hay Mohammadi': [
+    'Ain Sebaa',
+    'Hay Mohammadi',
+    'Roches Noires (Belvédère)',
+  ],
+  'Al Fida-Mers Sultan': [
+    'Al Fida',
+    'Mers Sultan',
+    'Derb Sultan',
+    'Habous',
+  ],
+  'Sidi Bernoussi': [
+    'Sidi Bernoussi',
+    'Sidi Moumen',
+    'Zenata',
+  ],
+  'Moulay Rachid': [
+    'Moulay Rachid',
+    'Sidi Othmane',
+    'Ben M\'Sick',
+    'Sbata',
+  ],
+  'Bouskoura': [],
+  'La Ville Verte': [],
+  'Dar Bouazza': [],
+  'Mohammedia': [],
+  'Bouznika': [],
+};
+
 // Edit Vendor Dialog Component
 const EditVendorDialog = React.memo(({
   vendor,
@@ -213,6 +293,7 @@ const EditVendorDialog = React.memo(({
       : [],
     rcCertificateUrl: vendor.rcCertificateUrl || '',
     ribUrl: vendor.ribUrl || '',
+    isDiamond: (vendor as any).isDiamond === true || (vendor as any).isDiamond === "1" || (vendor as any).isDiamond === 1,
   });
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -228,6 +309,10 @@ const EditVendorDialog = React.memo(({
           payload[key] = '';
         }
       });
+      // Convert isDiamond boolean to string "1" or "0" as API expects
+      if (payload.hasOwnProperty('isDiamond')) {
+        payload.isDiamond = payload.isDiamond ? "1" : "0";
+      }
       await onSave(payload);
       setOpen(false);
     } catch (error) {
@@ -263,11 +348,39 @@ const EditVendorDialog = React.memo(({
         : [],
       rcCertificateUrl: vendor.rcCertificateUrl || '',
       ribUrl: vendor.ribUrl || '',
+      isDiamond: (vendor as any).isDiamond === true || (vendor as any).isDiamond === "1" || (vendor as any).isDiamond === 1,
     });
   }, [vendor]);
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    if (field === 'city') {
+      // Clear district and subdistrict when city changes (if new city has no districts or current district is not valid)
+      const districts = cityDistricts[value] || [];
+      setFormData(prev => {
+        const currentDistrict = prev.district;
+        const isValidDistrict = districts.length > 0 && districts.includes(currentDistrict);
+        return {
+          ...prev,
+          [field]: value,
+          district: isValidDistrict ? prev.district : '',
+          subdistrict: isValidDistrict ? prev.subdistrict : ''
+        };
+      });
+    } else if (field === 'district') {
+      // Clear subdistrict when district changes (if new district has no subdistricts or current subdistrict is not valid)
+      const subdistricts = districtSubdistricts[value] || [];
+      setFormData(prev => {
+        const currentSubdistrict = prev.subdistrict;
+        const isValidSubdistrict = subdistricts.length > 0 && subdistricts.includes(currentSubdistrict);
+        return {
+          ...prev,
+          [field]: value,
+          subdistrict: isValidSubdistrict ? prev.subdistrict : ''
+        };
+      });
+    } else {
+      setFormData(prev => ({ ...prev, [field]: value }));
+    }
   };
 
   const handleArrayChange = (field: string, value: string) => {
@@ -341,12 +454,35 @@ const EditVendorDialog = React.memo(({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="city">Ville *</Label>
-                <Input
-                  id="city"
-                  value={formData.city}
-                  onChange={(e) => handleInputChange('city', e.target.value)}
-                  required
-                />
+                <div className="flex items-center gap-3">
+                  <Select
+                    value={formData.city}
+                    onValueChange={(value) => handleInputChange('city', value)}
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Sélectionner une ville" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Casablanca">Casablanca</SelectItem>
+                      <SelectItem value="Rabat">Rabat</SelectItem>
+                      <SelectItem value="Marrakech">Marrakech</SelectItem>
+                      <SelectItem value="Fes">Fes</SelectItem>
+                      <SelectItem value="Tangier">Tangier</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Label htmlFor="diamond" className="text-sm font-normal cursor-pointer">
+                      Diamond
+                    </Label>
+                    <Switch
+                      id="diamond"
+                      checked={formData.isDiamond}
+                      onCheckedChange={(checked) => {
+                        setFormData({ ...formData, isDiamond: checked });
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="address">Adresse</Label>
@@ -421,19 +557,53 @@ const EditVendorDialog = React.memo(({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="district">District</Label>
-                <Input
-                  id="district"
+                <Select
                   value={formData.district}
-                  onChange={(e) => handleInputChange('district', e.target.value)}
-                />
+                  onValueChange={(value) => handleInputChange('district', value)}
+                  disabled={!formData.city || (cityDistricts[formData.city] || []).length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={
+                      !formData.city 
+                        ? "Sélectionner d'abord une ville" 
+                        : (cityDistricts[formData.city] || []).length === 0
+                        ? "Aucun district disponible"
+                        : "Sélectionner un district"
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(cityDistricts[formData.city] || []).map((district) => (
+                      <SelectItem key={district} value={district}>
+                        {district}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="subdistrict">Sous-District</Label>
-                <Input
-                  id="subdistrict"
+                <Select
                   value={formData.subdistrict}
-                  onChange={(e) => handleInputChange('subdistrict', e.target.value)}
-                />
+                  onValueChange={(value) => handleInputChange('subdistrict', value)}
+                  disabled={!formData.district || (districtSubdistricts[formData.district] || []).length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={
+                      !formData.district 
+                        ? "Sélectionner d'abord un district" 
+                        : (districtSubdistricts[formData.district] || []).length === 0
+                        ? "Aucun sous-district disponible"
+                        : "Sélectionner un sous-district"
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(districtSubdistricts[formData.district] || []).map((subdistrict) => (
+                      <SelectItem key={subdistrict} value={subdistrict}>
+                        {subdistrict}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
@@ -1060,6 +1230,7 @@ const animationVariants = {
   }
 };
 const Vendors: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     vendors,
     loading,
@@ -1073,6 +1244,7 @@ const Vendors: React.FC = () => {
   } = useVendors();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [targetVendorId, setTargetVendorId] = useState<number | null>(null); // Track vendor ID we're looking for
   const [sortBy, setSortBy] = useState<string>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isSearching, setIsSearching] = useState(false);
@@ -1081,24 +1253,78 @@ const Vendors: React.FC = () => {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [lightboxCurrentIndex, setLightboxCurrentIndex] = useState(0);
-  // Client-side filtered vendors
+  // Client-side filtered vendors with exact match prioritization
   const filteredVendors = useMemo(() => {
     if (!vendors) return [];
     let filtered = vendors;
-    // Apply search filter (both name and email)
+    // Apply search filter (name, company_name, and email)
     if (searchTerm) {
-      const lowerSearchTerm = searchTerm.toLowerCase();
-      filtered = filtered.filter(vendor =>
-        vendor.name.toLowerCase().includes(lowerSearchTerm) ||
-        vendor.email.toLowerCase().includes(lowerSearchTerm)
-      );
+      const lowerSearchTerm = searchTerm.toLowerCase().trim();
+      filtered = vendors.filter(vendor => {
+        // If we're looking for a specific vendor ID, always include it
+        if (targetVendorId && vendor.id === targetVendorId) {
+          return true;
+        }
+        
+        const vendorName = vendor.name?.toLowerCase().trim() || '';
+        const vendorCompanyName = vendor.company_name?.toLowerCase().trim() || '';
+        const vendorEmail = vendor.email?.toLowerCase().trim() || '';
+        
+        // Check for exact matches first (case-insensitive)
+        const exactNameMatch = vendorName === lowerSearchTerm;
+        const exactCompanyMatch = vendorCompanyName === lowerSearchTerm;
+        const exactEmailMatch = vendorEmail === lowerSearchTerm;
+        
+        // Check for partial matches
+        const nameMatch = vendorName.includes(lowerSearchTerm);
+        const companyNameMatch = vendorCompanyName.includes(lowerSearchTerm);
+        const emailMatch = vendorEmail.includes(lowerSearchTerm);
+        
+        return exactNameMatch || exactCompanyMatch || exactEmailMatch || nameMatch || companyNameMatch || emailMatch;
+      });
+      
+      // Log filtered results for debugging
+      if (filtered.length > 0) {
+        console.log(`🔍 Filtered ${filtered.length} vendors for search term: "${searchTerm}"`, filtered.map(v => ({ id: v.id, name: v.name, company: v.company_name })));
+      } else {
+        console.log(`⚠️ No vendors found for search term: "${searchTerm}" (total vendors: ${vendors.length})`);
+        // If we have a target vendor ID, check if it exists in the vendors list
+        if (targetVendorId) {
+          const targetVendor = vendors.find(v => v.id === targetVendorId);
+          if (targetVendor) {
+            console.log(`✅ Found target vendor ID ${targetVendorId} in vendors list, adding to results`);
+            filtered = [targetVendor];
+          }
+        }
+      }
+      
+      // Sort: exact matches first, then target vendor ID, then partial matches
+      filtered.sort((a, b) => {
+        // Prioritize target vendor ID
+        if (targetVendorId) {
+          if (a.id === targetVendorId && b.id !== targetVendorId) return -1;
+          if (a.id !== targetVendorId && b.id === targetVendorId) return 1;
+        }
+        
+        const aName = a.name?.toLowerCase().trim() || '';
+        const aCompany = a.company_name?.toLowerCase().trim() || '';
+        const bName = b.name?.toLowerCase().trim() || '';
+        const bCompany = b.company_name?.toLowerCase().trim() || '';
+        
+        const aExact = aName === lowerSearchTerm || aCompany === lowerSearchTerm;
+        const bExact = bName === lowerSearchTerm || bCompany === lowerSearchTerm;
+        
+        if (aExact && !bExact) return -1;
+        if (!aExact && bExact) return 1;
+        return 0;
+      });
     }
     // Apply status filter
     if (statusFilter !== 'all') {
       filtered = filtered.filter(vendor => vendor.status === statusFilter);
     }
     return filtered;
-  }, [vendors, searchTerm, statusFilter]);
+  }, [vendors, searchTerm, statusFilter, targetVendorId]);
   // Client-side sorted vendors
   const sortedVendors = useMemo(() => {
     if (!filteredVendors.length) return [];
@@ -1179,10 +1405,115 @@ const Vendors: React.FC = () => {
       // You might want to handle page reset here if needed
     }
   };
-  // Initial load
+  // Initial load - fetch more vendors to ensure we have enough for searching
   useEffect(() => {
-    fetchVendors({}, 1);
+    fetchVendors({}, 1, 1000); // Fetch first 1000 vendors to ensure we have enough for searching
   }, [fetchVendors]);
+
+  // Handle URL parameters for navigation from notifications
+  useEffect(() => {
+    // Wait for vendors to load before processing URL parameters
+    if (loading) {
+      return;
+    }
+    
+    const searchParam = searchParams.get('search');
+    const vendorIdParam = searchParams.get('vendorId');
+    const vendorNameParam = searchParams.get('vendorName');
+    
+    if (searchParam) {
+      // Decode the search parameter
+      const decodedSearch = decodeURIComponent(searchParam);
+      // Set search term from URL parameter
+      setSearchTerm(decodedSearch);
+      console.log(`🔍 Setting search term from URL: "${decodedSearch}"`);
+      // Clear the URL parameter after reading it
+      searchParams.delete('search');
+      setSearchParams(searchParams, { replace: true });
+    } else if (vendorIdParam) {
+      // Find vendor by ID and set search term to vendor name or company_name
+      const vendorId = parseInt(vendorIdParam, 10);
+      const fallbackVendorName = vendorNameParam ? decodeURIComponent(vendorNameParam) : null;
+      
+      // Set target vendor ID so we can include it in filtered results even if name doesn't match
+      if (!isNaN(vendorId)) {
+        setTargetVendorId(vendorId);
+        // Clear target vendor ID after 5 seconds (enough time for vendor to be found and displayed)
+        setTimeout(() => setTargetVendorId(null), 5000);
+      }
+      
+      if (!isNaN(vendorId) && vendors && vendors.length > 0) {
+        const vendor = vendors.find(v => v.id === vendorId);
+        if (vendor) {
+          // Prefer company_name, then name
+          const searchName = vendor.company_name?.trim() || vendor.name?.trim() || '';
+          if (searchName) {
+            setSearchTerm(searchName);
+            console.log(`✅ Found vendor ${vendorId}, setting search to: "${searchName}"`);
+          } else {
+            console.warn(`⚠️ Vendor ${vendorId} found but has no name or company_name`);
+          }
+        } else {
+          // Vendor not in loaded list - try to load all vendors first (more reliable than name search)
+          if (pagination.total > vendors.length && pagination.total < 5000) {
+            // Try to fetch all vendors if total is reasonable - this is more reliable than name search
+            console.log(`📥 Vendor ID ${vendorId} not in loaded list (${vendors.length}/${pagination.total} loaded), loading all vendors...`);
+            fetchVendors({}, 1, pagination.total)
+              .then(() => {
+                // The useEffect will run again when vendors update and find the vendor by ID
+                console.log(`✅ Loaded all vendors, will retry finding vendor ${vendorId}`);
+              })
+              .catch((error) => {
+                console.error(`❌ Failed to load all vendors:`, error);
+                // Fallback: use name search if loading all vendors fails
+                if (fallbackVendorName) {
+                  console.log(`🔍 Fallback: searching server-side for: "${fallbackVendorName}"`);
+                  setSearchTerm(fallbackVendorName);
+                  fetchVendors({ search: fallbackVendorName }, 1, 1000)
+                    .catch((searchError) => {
+                      console.error(`❌ Failed to search vendors:`, searchError);
+                    });
+                }
+              });
+          } else if (fallbackVendorName) {
+            // Too many vendors or all loaded - use server-side search with fallback name
+            console.log(`🔍 Vendor ID ${vendorId} not found, searching server-side for: "${fallbackVendorName}"`);
+            setSearchTerm(fallbackVendorName);
+            // Trigger server-side search
+            fetchVendors({ search: fallbackVendorName }, 1, 1000)
+              .then(() => {
+                console.log(`✅ Searched vendors for "${fallbackVendorName}"`);
+              })
+              .catch((error) => {
+                console.error(`❌ Failed to search vendors:`, error);
+              });
+          } else {
+            console.warn(`⚠️ Vendor ID ${vendorId} not found and no fallback name available`);
+          }
+        }
+      } else if (fallbackVendorName) {
+        // No vendors loaded yet, but we have a name - search server-side
+        console.log(`🔍 No vendors loaded, searching server-side for: "${fallbackVendorName}"`);
+        setSearchTerm(fallbackVendorName);
+        // Trigger server-side search
+        fetchVendors({ search: fallbackVendorName }, 1, 1000)
+          .then(() => {
+            console.log(`✅ Searched vendors for "${fallbackVendorName}"`);
+          })
+          .catch((error) => {
+            console.error(`❌ Failed to search vendors:`, error);
+          });
+      }
+      
+      // Clear the URL parameters after reading them (but only if we've processed them)
+      // Don't clear if we're still waiting for a search to complete
+      if (vendorIdParam || vendorNameParam) {
+        searchParams.delete('vendorId');
+        searchParams.delete('vendorName');
+        setSearchParams(searchParams, { replace: true });
+      }
+    }
+  }, [searchParams, setSearchParams, vendors, loading, pagination, fetchVendors]);
   // Handle sorting (client-side)
   const handleSort = useCallback(
     (column: string) => {

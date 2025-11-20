@@ -66,6 +66,7 @@ export interface ReservationFilters {
   sortBy?: string | null;
   sortOrder?: string | null;
   search?: string | null;
+  user_id?: string | null;
 }
 
 export interface OrderFormData {
