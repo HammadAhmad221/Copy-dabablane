@@ -239,13 +239,21 @@ const VendorForm: React.FC = () => {
             {/* City */}
             <div className="space-y-2">
               <Label htmlFor="city">Ville *</Label>
-              <Input
-                id="city"
+              <Select
                 value={formData.city}
-                onChange={(e) => handleInputChange('city', e.target.value)}
-                placeholder="Paris"
-                required
-              />
+                onValueChange={(value) => handleInputChange('city', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner une ville" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Casablanca">Casablanca</SelectItem>
+                  <SelectItem value="Rabat">Rabat</SelectItem>
+                  <SelectItem value="Marrakech">Marrakech</SelectItem>
+                  <SelectItem value="Fes">Fes</SelectItem>
+                  <SelectItem value="Tangier">Tangier</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Address */}

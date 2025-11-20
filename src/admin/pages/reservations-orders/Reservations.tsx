@@ -50,6 +50,8 @@ import {
 import { reservationApi } from "@/admin/lib/api/services/reservationService";
 import { blaneApi } from "@/admin/lib/api/services/blaneService";
 import { cityApi } from "@/admin/lib/api/services/cityService";
+import { userApi } from "@/admin/lib/api/services/userService";
+import { User } from "@/admin/lib/api/types/user";
 import { ReservationFormData, ReservationType } from "@/lib/types/reservations";
 import { Blane } from "@/lib/types/blane";
 import { City } from "@/lib/types/city";
@@ -74,6 +76,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/admin/components/ui/
 import { useDropzone } from 'react-dropzone';
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/admin/components/ui/tooltip";
 import {CustomerService} from "@/admin/lib/api/services/customerService";
+import { Customer } from "@/admin/lib/api/types/customer";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -208,6 +211,8 @@ const Reservations: React.FC = () => {
   // State for blanes and cities
   const [blanes, setBlanes] = useState<Blane[]>([]);
   const [cities, setCities] = useState<City[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
 
   // State for search and sorting
   const [searchTerm, setSearchTerm] = useState("");
@@ -241,20 +246,25 @@ const Reservations: React.FC = () => {
 
   // Update the status filter state
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [userFilter, setUserFilter] = useState<string>("all");
 
   // Add this state for managing dialog state
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  // Fetch blanes and cities
+  // Fetch blanes, cities, users, and customers
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [blanesResponse, citiesResponse] = await Promise.all([
+        const [blanesResponse, citiesResponse, usersResponse, customersResponse] = await Promise.all([
           blaneApi.getBlanesByType('reservation'),
           cityApi.getCities(),
+          userApi.getUsers({ paginationSize: 9999 }),
+          CustomerService.getAll(),
         ]);
         setBlanes(blanesResponse.data);
         setCities(citiesResponse.data);
+        setUsers(usersResponse.data);
+        setCustomers(customersResponse.data);
       } catch (error) {
         toast.error("Failed to fetch necessary data");
       }
@@ -266,29 +276,108 @@ const Reservations: React.FC = () => {
   const fetchReservations = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Get selected user and find matching customers
+      const selectedUser = userFilter !== "all" ? users.find(u => u.id === userFilter) : null;
+      let customerIds: number[] = [];
+      const userEmail = selectedUser?.email;
+      const userName = selectedUser?.name;
+      
+      if (selectedUser && userEmail) {
+        // Find customers that match the user's email AND name (more precise matching)
+        const matchingCustomers = customers.filter(c => {
+          const emailMatch = c.email?.toLowerCase() === userEmail.toLowerCase();
+          // If user has a name, also match by name for precision
+          if (userName) {
+            const nameMatch = c.name?.toLowerCase() === userName.toLowerCase();
+            return emailMatch && nameMatch;
+          }
+          // Fallback to email-only if no name
+          return emailMatch;
+        });
+        customerIds = matchingCustomers.map(c => c.id);
+      }
+
+      // When filtering by user, fetch all matching reservations first, then paginate client-side
+      // Otherwise, use normal server-side pagination
       const response = await reservationApi.getReservations({
-        page: pagination.currentPage,
-        paginationSize: pagination.perPage,
+        page: userEmail ? 1 : pagination.currentPage, // Always fetch page 1 when filtering by user
+        paginationSize: userEmail ? 9999 : pagination.perPage, // Fetch all when filtering by user
         sortBy,
         sortOrder,
         search: searchTerm || undefined,
         ...(statusFilter !== "all" && { status: statusFilter }),
       });
 
+      // Filter by user if a user is selected
+      let filteredData = response.data;
+      if (userEmail) {
+        // Use precise matching: match by customer IDs first, then fallback to email+name matching
+        filteredData = response.data.filter(reservation => {
+          // First priority: match by customer ID (most precise)
+          if (customerIds.length > 0 && customerIds.includes(reservation.customers_id)) {
+            return true;
+          }
+          
+          // Second priority: match by email AND name (if both are available)
+          const emailMatch = reservation.email?.toLowerCase() === userEmail.toLowerCase();
+          if (userName && reservation.name) {
+            const nameMatch = reservation.name?.toLowerCase() === userName.toLowerCase();
+            return emailMatch && nameMatch;
+          }
+          
+          // Fallback: match by email only (if no name available)
+          return emailMatch;
+        });
+        
+        // Apply client-side pagination after filtering
+        const startIndex = (pagination.currentPage - 1) * pagination.perPage;
+        const endIndex = startIndex + pagination.perPage;
+        filteredData = filteredData.slice(startIndex, endIndex);
+      }
 
-      setReservations(response.data);
-      setPagination({
-        currentPage: response.meta.current_page,
-        perPage: response.meta.per_page,
-        total: response.meta.total,
-        lastPage: response.meta.last_page,
-      });
+      setReservations(filteredData);
+      
+      // Update pagination metadata
+      if (userEmail) {
+        // Calculate total filtered count using the same logic as filtering
+        const totalFiltered = response.data.filter(reservation => {
+          // First priority: match by customer ID
+          if (customerIds.length > 0 && customerIds.includes(reservation.customers_id)) {
+            return true;
+          }
+          
+          // Second priority: match by email AND name
+          const emailMatch = reservation.email?.toLowerCase() === userEmail.toLowerCase();
+          if (userName && reservation.name) {
+            const nameMatch = reservation.name?.toLowerCase() === userName.toLowerCase();
+            return emailMatch && nameMatch;
+          }
+          
+          // Fallback: match by email only
+          return emailMatch;
+        }).length;
+        
+        setPagination({
+          currentPage: pagination.currentPage,
+          perPage: pagination.perPage,
+          total: totalFiltered,
+          lastPage: Math.max(1, Math.ceil(totalFiltered / pagination.perPage)),
+        });
+      } else {
+        // Use server-side pagination metadata
+        setPagination({
+          currentPage: response.meta.current_page,
+          perPage: response.meta.per_page,
+          total: response.meta.total,
+          lastPage: response.meta.last_page,
+        });
+      }
     } catch (error) {
       toast.error("Failed to fetch reservations");
     } finally {
       setIsLoading(false);
     }
-  }, [pagination.currentPage, pagination.perPage, sortBy, sortOrder, searchTerm, statusFilter]);
+  }, [pagination.currentPage, pagination.perPage, sortBy, sortOrder, searchTerm, statusFilter, userFilter, users, customers]);
 
   // Initial fetch
   useEffect(() => {
@@ -379,6 +468,12 @@ const Reservations: React.FC = () => {
     setPagination(prev => ({ ...prev, currentPage: 1 }));
   };
 
+  // Handle user filter change
+  const handleUserFilterChange = (value: string) => {
+    setUserFilter(value);
+    setPagination(prev => ({ ...prev, currentPage: 1 }));
+  };
+
   const resetForm = () => {
     setFormData({
       blane_id: 0,
@@ -418,6 +513,27 @@ const Reservations: React.FC = () => {
   // Add this function to fetch all reservations for export
   const fetchAllReservations = async () => {
     try {
+      // Get selected user and find matching customers
+      const selectedUser = userFilter !== "all" ? users.find(u => u.id === userFilter) : null;
+      let customerIds: number[] = [];
+      const userEmail = selectedUser?.email;
+      const userName = selectedUser?.name;
+      
+      if (selectedUser && userEmail) {
+        // Find customers that match the user's email AND name (more precise matching)
+        const matchingCustomers = customers.filter(c => {
+          const emailMatch = c.email?.toLowerCase() === userEmail.toLowerCase();
+          // If user has a name, also match by name for precision
+          if (userName) {
+            const nameMatch = c.name?.toLowerCase() === userName.toLowerCase();
+            return emailMatch && nameMatch;
+          }
+          // Fallback to email-only if no name
+          return emailMatch;
+        });
+        customerIds = matchingCustomers.map(c => c.id);
+      }
+
       const response = await reservationApi.getReservations({
         page: 1,
         paginationSize: 999999, // Large number to get all reservations
@@ -426,6 +542,28 @@ const Reservations: React.FC = () => {
         search: searchTerm || undefined,
         ...(statusFilter !== "all" && { status: statusFilter }),
       });
+
+      // Filter by user if a user is selected
+      if (userEmail) {
+        // Use precise matching: match by customer IDs first, then fallback to email+name matching
+        return response.data.filter(reservation => {
+          // First priority: match by customer ID
+          if (customerIds.length > 0 && customerIds.includes(reservation.customers_id)) {
+            return true;
+          }
+          
+          // Second priority: match by email AND name
+          const emailMatch = reservation.email?.toLowerCase() === userEmail.toLowerCase();
+          if (userName && reservation.name) {
+            const nameMatch = reservation.name?.toLowerCase() === userName.toLowerCase();
+            return emailMatch && nameMatch;
+          }
+          
+          // Fallback: match by email only
+          return emailMatch;
+        });
+      }
+      
       return response.data;
     } catch (error) {
       throw new Error('Failed to fetch all reservations');
@@ -619,7 +757,7 @@ const Reservations: React.FC = () => {
           </div>
           
           {/* Grille des filtres */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="col-span-1 sm:col-span-2 lg:col-span-1">
               <Select value={statusFilter} onValueChange={handleStatusChange}>
                 <SelectTrigger className="w-full">
@@ -655,6 +793,27 @@ const Reservations: React.FC = () => {
                       Payé
                     </Badge>
                   </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-1 sm:col-span-2 lg:col-span-1">
+              <Select value={userFilter} onValueChange={handleUserFilterChange}>
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    {userFilter === "all" ? (
+                      "User Filter"
+                    ) : (
+                      users.find(u => u.id === userFilter)?.name || "User Filter"
+                    )}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Users</SelectItem>
+                  {users.map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.name} ({user.email})
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

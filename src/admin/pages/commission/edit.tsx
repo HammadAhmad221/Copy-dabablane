@@ -117,8 +117,8 @@ const CommissionEdit = () => {
     if (!formData.category_id || formData.category_id === 0) {
       newErrors.category_id = 'Category ID is required and must be greater than 0';
     }
-    if (!formData.commission_rate || formData.commission_rate <= 0 || formData.commission_rate > 100) {
-      newErrors.commission_rate = 'Commission rate is required and must be between 0.01 and 100';
+    if (formData.commission_rate === undefined || formData.commission_rate < 0 || formData.commission_rate > 100) {
+      newErrors.commission_rate = 'Commission rate is required and must be between 0 and 100';
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -299,16 +299,17 @@ const CommissionEdit = () => {
               <Input
                 id="commission_rate"
                 type="number"
-                min="0.01"
+                min="0"
                 max="100"
                 step="0.01"
-                value={formData.commission_rate || ""}
-                onChange={(e) =>
+                value={formData.commission_rate === undefined ? "" : formData.commission_rate}
+                onChange={(e) => {
+                  const value = e.target.value;
                   setFormData({ 
                     ...formData, 
-                    commission_rate: e.target.value ? Number(e.target.value) : undefined 
-                  })
-                }
+                    commission_rate: value === "" ? undefined : Number(value) 
+                  });
+                }}
                 className={errors.commission_rate ? "border-red-500" : ""}
                 placeholder="e.g., 8.00"
                 required

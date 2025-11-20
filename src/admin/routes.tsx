@@ -51,6 +51,7 @@ const CommissionCreate = lazy(() => import('./pages/commission/create'));
 const CommissionEdit = lazy(() => import('./pages/commission/edit'));
 const CommissionSettings = lazy(() => import('./pages/commission/settings'));
 const CommissionVendor = lazy(() => import('./pages/commission/vendor'));
+const VendorCommission = lazy(() => import('./pages/commission/vendor-commission'));
 
 // Vendor Payments
 const VendorPaymentsIndex = lazy(() => import('./pages/vendorPayments/index'));
@@ -58,6 +59,7 @@ const VendorPaymentDetails = lazy(() => import('./pages/vendorPayments/details')
 const VendorPaymentReport = lazy(() => import('./pages/vendorPayments/report'));
 const VendorPaymentHistory = lazy(() => import('./pages/vendorPayments/history'));
 const ManualTransfer = lazy(() => import('./pages/vendorPayments/manual-transfer'));
+const TermsAndCondition = lazy(() => import('./pages/terms-and-condition'));
 
 const adminRoutes: RouteObject[] = [
   {
@@ -258,6 +260,10 @@ const adminRoutes: RouteObject[] = [
     element: <CommissionVendor />
   },
   {
+    path: "commission/vendor-commission",
+    element: <VendorCommission />
+  },
+  {
     path: "vendor-payments",
     element: <VendorPaymentsIndex />
   },
@@ -276,6 +282,10 @@ const adminRoutes: RouteObject[] = [
   {
     path: "vendor-payments/manual-transfer",
     element: <ManualTransfer />
+  },
+  {
+    path: "terms-and-condition",
+    element: <TermsAndCondition />
   }
 ];
 
