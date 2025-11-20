@@ -160,3 +160,30 @@ export const CommissionFiltersSchema = z.object({
   paginationSize: z.number().optional(),
 });
 
+// Category Default Commission types
+export interface CategoryDefaultCommission {
+  id: number;
+  category_id: number;
+  commission_rate: number;
+  partial_commission_rate: number;
+  is_active: boolean;
+  category_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCategoryDefaultRequest {
+  category_id: number;
+  commission_rate: number;
+  partial_commission_rate: number;
+  is_active: boolean;
+}
+
+export interface UpdateCategoryDefaultRequest {
+  id?: number;
+  category_id: number;
+  commission_rate: number;
+  partial_commission_rate: number;
+  is_active: boolean;
+}
+

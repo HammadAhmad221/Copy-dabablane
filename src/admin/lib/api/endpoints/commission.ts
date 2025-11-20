@@ -15,6 +15,11 @@ const BACK_COMMISSION_ENDPOINTS = {
   // Global settings
   getSettings: () => `${BACK_COMMISSION_ENDPOINTS.BASE}/settings`,
   updateSettings: () => `${BACK_COMMISSION_ENDPOINTS.BASE}/settings`,
+  
+  // Category default commissions
+  getCategoryDefaults: () => `${BACK_COMMISSION_ENDPOINTS.BASE}/category-defaults/all`,
+  createCategoryDefault: () => `${BACK_COMMISSION_ENDPOINTS.BASE}/category-defaults`,
+  updateCategoryDefault: () => `${BACK_COMMISSION_ENDPOINTS.BASE}/category-defaults`,
 };
 
 export default BACK_COMMISSION_ENDPOINTS;

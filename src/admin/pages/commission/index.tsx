@@ -42,6 +42,7 @@ const CommissionManagement = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [vendorFilter, setVendorFilter] = useState<string>("");
+  const [vendorMap, setVendorMap] = useState<Record<number, string>>({});
 
   const fetchCommissions = async () => {
     setIsLoading(true);
@@ -55,6 +56,26 @@ const CommissionManagement = () => {
       console.log('✅ Commissions count:', response.data.length);
       console.log('✅ Meta total:', response.meta.total);
       setCommissions(response.data);
+      
+      // Extract vendor data from commission responses and build vendor map
+      const map: Record<number, string> = {};
+      response.data.forEach((commission: any) => {
+        // Check if commission has vendor data nested in it
+        if (commission.vendor && commission.vendor.id) {
+          const vendor = commission.vendor;
+          const vendorName = vendor.company_name?.trim() || vendor.name?.trim() || '';
+          if (vendorName) {
+            map[vendor.id] = vendorName;
+            console.log(`✅ Mapped vendor ${vendor.id} -> "${vendorName}" from commission data`);
+          }
+        }
+      });
+      
+      if (Object.keys(map).length > 0) {
+        console.log('📊 Vendor map created with', Object.keys(map).length, 'entries from commission data');
+        setVendorMap(map);
+      }
+      
       if (response.data.length > 0) {
         toast.success(`Loaded ${response.data.length} commission(s)`);
       } else if (response.meta.total === 0) {
@@ -76,6 +97,24 @@ const CommissionManagement = () => {
   useEffect(() => {
     fetchCommissions();
   }, [categoryFilter, vendorFilter]);
+
+  // Helper function to get vendor name
+  const getVendorName = (vendorId?: number): string => {
+    if (!vendorId) return '-';
+    
+    const vendorName = vendorMap[vendorId];
+    if (vendorName) {
+      return vendorName;
+    }
+    
+    // If not found in map, log for debugging
+    const mapSize = Object.keys(vendorMap).length;
+    if (mapSize > 0) {
+      console.warn(`⚠️ Vendor ID ${vendorId} not found in vendor map (map has ${mapSize} entries)`);
+    }
+    
+    return `Vendor #${vendorId}`;
+  };
 
   const handleDelete = async (id: number) => {
     if (confirm('Are you sure?')) {
@@ -188,7 +227,7 @@ const CommissionManagement = () => {
                     <div className="min-w-0">
                       <Label className="text-xs text-gray-500">Vendor</Label>
                       <p className="text-sm font-medium mt-0.5 truncate">
-                        {commission.vendor_name || commission.vendor_id || '-'}
+                        {getVendorName(commission.vendor_id)}
                       </p>
                     </div>
                   </div>
@@ -233,7 +272,7 @@ const CommissionManagement = () => {
                     <TableRow key={commission.id}>
                       <TableCell className="font-mono whitespace-nowrap">#{commission.id}</TableCell>
                       <TableCell className="whitespace-nowrap">{commission.category_name || commission.category_id || '-'}</TableCell>
-                      <TableCell className="whitespace-nowrap">{commission.vendor_name || commission.vendor_id || '-'}</TableCell>
+                      <TableCell className="whitespace-nowrap">{getVendorName(commission.vendor_id)}</TableCell>
                       <TableCell className="text-right font-semibold whitespace-nowrap">
                         {commission.commission_rate}%
                       </TableCell>

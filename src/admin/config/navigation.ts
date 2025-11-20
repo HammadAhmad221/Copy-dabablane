@@ -13,6 +13,7 @@ import {
   Store,
   Percent,
   DollarSign,
+  FileText,
 } from "lucide-react";
 
 export const adminNavItems = [
@@ -175,6 +176,11 @@ export const adminNavItems = [
         path: "/admin/commission",
       },
       {
+        id: "vendor-commission",
+        title: "Vendor Commission",
+        path: "/admin/commission/vendor-commission",
+      },
+      {
         id: "commission-settings",
         title: "Paramètres",
         path: "/admin/commission/settings",
@@ -244,6 +250,12 @@ export const adminNavItems = [
     title: "Paramètres des villes",
     path: "/admin/cities",
     icon: MapPin,
+  },
+  {
+    id: "terms-and-condition",
+    title: "Termes et conditions",
+    path: "/admin/terms-and-condition",
+    icon: FileText,
   },
   {
     id: "general-settings",

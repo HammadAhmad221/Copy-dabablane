@@ -36,6 +36,8 @@ interface AdminHeaderProps {
 }
 
 const AdminHeader = ({ onMenuClick }: AdminHeaderProps) => {
+  const [notificationPopoverOpen, setNotificationPopoverOpen] = useState(false);
+  
   const {
     notifications,
     markAllAsRead,
@@ -77,7 +79,7 @@ const AdminHeader = ({ onMenuClick }: AdminHeaderProps) => {
 
         <div className="flex items-center gap-4">
 
-          <Popover>
+          <Popover open={notificationPopoverOpen} onOpenChange={setNotificationPopoverOpen}>
             <PopoverTrigger asChild>
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="h-5 w-5" />
@@ -97,6 +99,7 @@ const AdminHeader = ({ onMenuClick }: AdminHeaderProps) => {
                 hasMore={hasMore}
                 isLoading={isLoading}
                 onRefresh={refresh}
+                onClose={() => setNotificationPopoverOpen(false)}
               />
             </PopoverContent>
           </Popover>

@@ -5,12 +5,20 @@ export interface BlaneExpirationData {
   message: string;
 }
 
+export interface VendorNotificationData {
+  vendor_id?: number;
+  vendor_name?: string;
+  message: string;
+}
+
+export type NotificationData = BlaneExpirationData | VendorNotificationData | string | Record<string, any>;
+
 export interface Notification {
   id: string;
-  type: "App\\Notifications\\BlaneExpirationNotification"; // Add other types if needed
+  type: "App\\Notifications\\BlaneExpirationNotification" | "App\\Notifications\\VendorRegisteredNotification" | string; // Add other types if needed
   notifiable_type: "App\\Models\\User";
   notifiable_id: number;
-  data: BlaneExpirationData;
+  data: NotificationData;
   read_at: string | null;
   created_at: string;
   updated_at: string;
