@@ -21,6 +21,10 @@ import type { CreateCommissionRequest } from "@/admin/lib/api/types/commission";
 import type { Vendor } from "@/admin/lib/api/types/vendor";
 import type { Category } from "@/admin/lib/api/types/category";
 
+type CommissionFormData = Omit<CreateCommissionRequest, 'commission_rate'> & {
+  commission_rate?: number;
+};
+
 const CommissionCreate = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
@@ -29,10 +33,10 @@ const CommissionCreate = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
 
-  const [formData, setFormData] = useState<CreateCommissionRequest>({
+  const [formData, setFormData] = useState<CommissionFormData>({
     category_id: undefined,
     vendor_id: undefined,
-    commission_rate: 0,
+    commission_rate: undefined,
     partial_commission_rate: undefined,
     is_active: true,
   });
@@ -96,7 +100,7 @@ const CommissionCreate = () => {
     // Prepare clean payload - backend ALWAYS requires category_id
     const payload: CreateCommissionRequest = {
       category_id: formData.category_id!,
-      commission_rate: formData.commission_rate,
+      commission_rate: formData.commission_rate!,
       is_active: formData.is_active !== false,
     };
 
@@ -163,7 +167,7 @@ const CommissionCreate = () => {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-center gap-4">
+      <div className="space-y-4">
         <Button
           variant="ghost"
           size="sm"
@@ -282,7 +286,7 @@ const CommissionCreate = () => {
                   const value = e.target.value;
                   setFormData({ 
                     ...formData, 
-                    commission_rate: value === "" ? undefined : Number(value) 
+                    commission_rate: value === "" ? undefined : Number(value)
                   });
                 }}
                 className={errors.commission_rate ? "border-red-500" : ""}
