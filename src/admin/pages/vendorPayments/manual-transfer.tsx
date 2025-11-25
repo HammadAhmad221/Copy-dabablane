@@ -91,16 +91,14 @@ const ManualTransfer = () => {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/admin/vendor-payments")}
-            className="text-gray-600 hover:text-gray-900"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-          <h1 className="text-3xl font-bold text-[#00897B]">Manual Transfer</h1>
-        </div>
+      <div className="space-y-4">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/admin/vendor-payments")}
+          className="text-gray-600 hover:text-gray-900"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
+        <h1 className="text-3xl font-bold text-[#00897B]">Manual Transfer</h1>
       </div>
 
       {selected.size > 0 && (
