@@ -255,16 +255,82 @@ const Reservations: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [blanesResponse, citiesResponse, usersResponse, customersResponse] = await Promise.all([
+        const [blanesResponse, citiesResponse, customersResponse] = await Promise.all([
           blaneApi.getBlanesByType('reservation'),
           cityApi.getCities(),
-          userApi.getUsers({ paginationSize: 9999 }),
           CustomerService.getAll(),
         ]);
         setBlanes(blanesResponse.data);
         setCities(citiesResponse.data);
-        setUsers(usersResponse.data);
         setCustomers(customersResponse.data);
+
+        // Fetch all users by making multiple requests if needed
+        const fetchAllUsers = async () => {
+          let allUsers: User[] = [];
+          let currentPage = 1;
+          let hasMorePages = true;
+          const pageSize = 100; // Fetch 100 users per page
+          let totalPages = 1;
+
+          console.log('🔄 Starting to fetch all users...');
+
+          while (hasMorePages) {
+            try {
+              console.log(`📥 Fetching users page ${currentPage}...`);
+              const usersResponse = await userApi.getUsers({ 
+                page: currentPage, 
+                paginationSize: pageSize 
+              });
+              
+              console.log(`📊 Page ${currentPage} response:`, {
+                usersCount: usersResponse.data?.length || 0,
+                total: usersResponse.meta?.total || 0,
+                currentPage: usersResponse.meta?.current_page || currentPage,
+                lastPage: usersResponse.meta?.last_page || 1,
+                perPage: usersResponse.meta?.per_page || pageSize
+              });
+              
+              if (usersResponse.data && usersResponse.data.length > 0) {
+                allUsers = [...allUsers, ...usersResponse.data];
+                totalPages = usersResponse.meta?.last_page || 1;
+                const totalUsers = usersResponse.meta?.total || 0;
+                
+                // Check if there are more pages based on meta data
+                hasMorePages = currentPage < totalPages;
+                
+                // Safety check: if we got a full page of users but haven't reached the total, continue
+                if (usersResponse.data.length === pageSize && allUsers.length < totalUsers) {
+                  // If we got a full page but haven't reached total, there might be more pages
+                  if (currentPage >= totalPages) {
+                    console.log(`⚠️ Got full page (${pageSize} users) but meta says no more pages. Total users: ${totalUsers}, fetched: ${allUsers.length}. Trying next page anyway...`);
+                    hasMorePages = true; // Try one more page to be safe
+                  }
+                }
+                
+                console.log(`✅ Page ${currentPage}: Fetched ${usersResponse.data.length} users. Total so far: ${allUsers.length}/${totalUsers}. Has more pages: ${hasMorePages} (last_page: ${totalPages})`);
+                
+                currentPage++;
+              } else {
+                console.log(`⚠️ Page ${currentPage}: No users returned, stopping fetch`);
+                hasMorePages = false;
+              }
+            } catch (error) {
+              console.error(`❌ Error fetching users page ${currentPage}:`, error);
+              // Don't stop on error, try to continue if we haven't reached the last page
+              if (currentPage < totalPages) {
+                currentPage++;
+                console.log(`🔄 Continuing to next page despite error...`);
+              } else {
+                hasMorePages = false;
+              }
+            }
+          }
+
+          setUsers(allUsers);
+          console.log(`✅ Finished fetching users. Total: ${allUsers.length} users loaded for filter dropdown`);
+        };
+
+        fetchAllUsers();
       } catch (error) {
         toast.error("Failed to fetch necessary data");
       }
@@ -276,25 +342,56 @@ const Reservations: React.FC = () => {
   const fetchReservations = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Get selected user and find matching customers
-      const selectedUser = userFilter !== "all" ? users.find(u => u.id === userFilter) : null;
+      // Get selected user - ensure proper type conversion for ID comparison
+      const selectedUser = userFilter !== "all" 
+        ? users.find(u => String(u.id) === String(userFilter) || Number(u.id) === Number(userFilter)) 
+        : null;
+      
       let customerIds: number[] = [];
-      const userEmail = selectedUser?.email;
-      const userName = selectedUser?.name;
+      const userEmail = selectedUser?.email?.toLowerCase().trim();
+      const userName = selectedUser?.name?.toLowerCase().trim();
+      const userPhone = selectedUser?.phone?.toLowerCase().trim();
+      
+      console.log('🔍 User filter selected:', {
+        userFilter,
+        selectedUser: selectedUser ? { id: selectedUser.id, name: selectedUser.name, email: selectedUser.email } : null,
+        userEmail,
+        userName
+      });
       
       if (selectedUser && userEmail) {
-        // Find customers that match the user's email AND name (more precise matching)
+        // Find customers that match the user's email OR name OR phone
         const matchingCustomers = customers.filter(c => {
-          const emailMatch = c.email?.toLowerCase() === userEmail.toLowerCase();
-          // If user has a name, also match by name for precision
-          if (userName) {
-            const nameMatch = c.name?.toLowerCase() === userName.toLowerCase();
-            return emailMatch && nameMatch;
+          const customerEmail = c.email?.toLowerCase().trim();
+          const customerName = c.name?.toLowerCase().trim();
+          const customerPhone = c.phone?.toLowerCase().trim();
+          
+          // Match by email
+          const emailMatch = customerEmail === userEmail;
+          
+          // Match by name (exact or partial)
+          let nameMatch = false;
+          if (userName && customerName) {
+            nameMatch = customerName === userName;
+            if (!nameMatch) {
+              nameMatch = customerName.includes(userName) || userName.includes(customerName);
+            }
           }
-          // Fallback to email-only if no name
-          return emailMatch;
+          
+          // Match by phone (normalized)
+          let phoneMatch = false;
+          if (userPhone && customerPhone) {
+            const normalizePhone = (phone: string) => phone.replace(/[\s\-\(\)\+]/g, '');
+            phoneMatch = normalizePhone(customerPhone) === normalizePhone(userPhone);
+          }
+          
+          // Return true if any field matches
+          return emailMatch || nameMatch || phoneMatch;
         });
         customerIds = matchingCustomers.map(c => c.id);
+        console.log(`📋 Found ${customerIds.length} matching customers for user ${selectedUser.name}`, {
+          matchingCustomers: matchingCustomers.map(c => ({ id: c.id, email: c.email, name: c.name }))
+        });
       }
 
       // When filtering by user, fetch all matching reservations first, then paginate client-side
@@ -306,28 +403,105 @@ const Reservations: React.FC = () => {
         sortOrder,
         search: searchTerm || undefined,
         ...(statusFilter !== "all" && { status: statusFilter }),
+        ...(selectedUser?.id && { user_id: String(selectedUser.id) }), // Try to filter by user_id if available
       });
 
       // Filter by user if a user is selected
       let filteredData = response.data;
       if (userEmail) {
-        // Use precise matching: match by customer IDs first, then fallback to email+name matching
+        console.log(`🔍 Filtering ${response.data.length} reservations for user: ${selectedUser?.name} (${userEmail})`);
+        
+        // Debug: Show sample reservation emails and names
+        if (response.data.length > 0) {
+          const sampleReservations = response.data.slice(0, 5).map(r => ({
+            email: r.email,
+            name: r.name,
+            customers_id: r.customers_id
+          }));
+          console.log('📋 Sample reservations:', sampleReservations);
+        }
+        
+        // Match reservations by email, name, or phone - any match is sufficient
+        // Also check if reservation's customer matches the user
         filteredData = response.data.filter(reservation => {
+          const reservationEmail = reservation.email?.toLowerCase().trim();
+          const reservationName = reservation.name?.toLowerCase().trim();
+          const reservationPhone = reservation.phone?.toLowerCase().trim();
+          
           // First priority: match by customer ID (most precise)
           if (customerIds.length > 0 && customerIds.includes(reservation.customers_id)) {
+            console.log(`✅ Matched by customer ID: ${reservation.customers_id}`, {
+              reservation: { email: reservation.email, name: reservation.name, phone: reservation.phone, customers_id: reservation.customers_id }
+            });
             return true;
           }
           
-          // Second priority: match by email AND name (if both are available)
-          const emailMatch = reservation.email?.toLowerCase() === userEmail.toLowerCase();
-          if (userName && reservation.name) {
-            const nameMatch = reservation.name?.toLowerCase() === userName.toLowerCase();
-            return emailMatch && nameMatch;
+          // Second priority: match by email (exact match - this is the primary criteria)
+          const emailMatch = reservationEmail === userEmail;
+          
+          // Third priority: match by name (exact or partial)
+          let nameMatch = false;
+          if (userName && reservationName) {
+            // Try exact name match first (case-insensitive)
+            nameMatch = reservationName === userName;
+            // Also try partial name match (in case of variations)
+            if (!nameMatch) {
+              // Remove special characters and compare
+              const normalizeName = (name: string) => name.replace(/[^\w\s]/g, '').trim();
+              const normalizedUserName = normalizeName(userName);
+              const normalizedReservationName = normalizeName(reservationName);
+              nameMatch = normalizedReservationName === normalizedUserName ||
+                         normalizedReservationName.includes(normalizedUserName) ||
+                         normalizedUserName.includes(normalizedReservationName);
+            }
           }
           
-          // Fallback: match by email only (if no name available)
-          return emailMatch;
+          // Fourth priority: match by phone number (normalized)
+          let phoneMatch = false;
+          if (userPhone && reservationPhone) {
+            const normalizePhone = (phone: string) => phone.replace(/[\s\-\(\)\+]/g, '');
+            phoneMatch = normalizePhone(reservationPhone) === normalizePhone(userPhone);
+          }
+          
+          // Also check if the reservation's customer (by ID) matches any customer that matches the user
+          // This handles cases where customer data might not be in the customers array
+          let customerMatch = false;
+          if (reservation.customers_id) {
+            const reservationCustomer = customers.find(c => c.id === reservation.customers_id);
+            if (reservationCustomer) {
+              const customerEmail = reservationCustomer.email?.toLowerCase().trim();
+              const customerName = reservationCustomer.name?.toLowerCase().trim();
+              const customerPhone = reservationCustomer.phone?.toLowerCase().trim();
+              
+              // Check if this customer matches the user
+              customerMatch = (customerEmail === userEmail) ||
+                            (userName && customerName && (
+                              customerName === userName ||
+                              customerName.includes(userName) ||
+                              userName.includes(customerName)
+                            )) ||
+                            (userPhone && customerPhone && (() => {
+                              const normalizePhone = (phone: string) => phone.replace(/[\s\-\(\)\+]/g, '');
+                              return normalizePhone(customerPhone) === normalizePhone(userPhone);
+                            })());
+            }
+          }
+          
+          // Return true if ANY field matches
+          if (emailMatch || nameMatch || phoneMatch || customerMatch) {
+            const matchType = emailMatch ? 'email' : (nameMatch ? 'name' : (phoneMatch ? 'phone' : 'customer'));
+            console.log(`✅ Matched by ${matchType}:`, {
+              user: { email: userEmail, name: userName, phone: userPhone },
+              reservation: { email: reservationEmail, name: reservationName, phone: reservationPhone, customers_id: reservation.customers_id },
+              matchType
+            });
+            return true;
+          }
+          
+          return false;
         });
+        
+        console.log(`✅ Filtered to ${filteredData.length} reservations`);
         
         // Apply client-side pagination after filtering
         const startIndex = (pagination.currentPage - 1) * pagination.perPage;
@@ -341,20 +515,62 @@ const Reservations: React.FC = () => {
       if (userEmail) {
         // Calculate total filtered count using the same logic as filtering
         const totalFiltered = response.data.filter(reservation => {
-          // First priority: match by customer ID
+          const reservationEmail = reservation.email?.toLowerCase().trim();
+          const reservationName = reservation.name?.toLowerCase().trim();
+          const reservationPhone = reservation.phone?.toLowerCase().trim();
+          
+          // First priority: match by customer ID (most precise)
           if (customerIds.length > 0 && customerIds.includes(reservation.customers_id)) {
             return true;
           }
           
-          // Second priority: match by email AND name
-          const emailMatch = reservation.email?.toLowerCase() === userEmail.toLowerCase();
-          if (userName && reservation.name) {
-            const nameMatch = reservation.name?.toLowerCase() === userName.toLowerCase();
-            return emailMatch && nameMatch;
+          // Second priority: match by email (exact match)
+          const emailMatch = reservationEmail === userEmail;
+          
+          // Third priority: match by name (exact or partial with normalization)
+          let nameMatch = false;
+          if (userName && reservationName) {
+            nameMatch = reservationName === userName;
+            if (!nameMatch) {
+              const normalizeName = (name: string) => name.replace(/[^\w\s]/g, '').trim();
+              const normalizedUserName = normalizeName(userName);
+              const normalizedReservationName = normalizeName(reservationName);
+              nameMatch = normalizedReservationName === normalizedUserName ||
+                         normalizedReservationName.includes(normalizedUserName) ||
+                         normalizedUserName.includes(normalizedReservationName);
+            }
           }
           
-          // Fallback: match by email only
-          return emailMatch;
+          // Fourth priority: match by phone number (normalized)
+          let phoneMatch = false;
+          if (userPhone && reservationPhone) {
+            const normalizePhone = (phone: string) => phone.replace(/[\s\-\(\)\+]/g, '');
+            phoneMatch = normalizePhone(reservationPhone) === normalizePhone(userPhone);
+          }
+          
+          // Fifth priority: check customer record directly
+          let customerMatch = false;
+          if (reservation.customers_id) {
+            const reservationCustomer = customers.find(c => c.id === reservation.customers_id);
+            if (reservationCustomer) {
+              const customerEmail = reservationCustomer.email?.toLowerCase().trim();
+              const customerName = reservationCustomer.name?.toLowerCase().trim();
+              const customerPhone = reservationCustomer.phone?.toLowerCase().trim();
+              
+              customerMatch = (customerEmail === userEmail) ||
+                            (userName && customerName && (
+                              customerName === userName ||
+                              customerName.includes(userName) ||
+                              userName.includes(customerName)
+                            )) ||
+                            (userPhone && customerPhone && (() => {
+                              const normalizePhone = (phone: string) => phone.replace(/[\s\-\(\)\+]/g, '');
+                              return normalizePhone(customerPhone) === normalizePhone(userPhone);
+                            })());
+            }
+          }
+          
+          return emailMatch || nameMatch || phoneMatch || customerMatch;
         }).length;
         
         setPagination({
@@ -513,21 +729,28 @@ const Reservations: React.FC = () => {
   // Add this function to fetch all reservations for export
   const fetchAllReservations = async () => {
     try {
-      // Get selected user and find matching customers
-      const selectedUser = userFilter !== "all" ? users.find(u => u.id === userFilter) : null;
+      // Get selected user - ensure proper type conversion for ID comparison
+      const selectedUser = userFilter !== "all" 
+        ? users.find(u => String(u.id) === String(userFilter) || Number(u.id) === Number(userFilter)) 
+        : null;
       let customerIds: number[] = [];
-      const userEmail = selectedUser?.email;
-      const userName = selectedUser?.name;
+      const userEmail = selectedUser?.email?.toLowerCase().trim();
+      const userName = selectedUser?.name?.toLowerCase().trim();
       
       if (selectedUser && userEmail) {
-        // Find customers that match the user's email AND name (more precise matching)
+        // Find customers that match the user's email (primary) and optionally name
         const matchingCustomers = customers.filter(c => {
-          const emailMatch = c.email?.toLowerCase() === userEmail.toLowerCase();
-          // If user has a name, also match by name for precision
-          if (userName) {
-            const nameMatch = c.name?.toLowerCase() === userName.toLowerCase();
-            return emailMatch && nameMatch;
+          const customerEmail = c.email?.toLowerCase().trim();
+          const emailMatch = customerEmail === userEmail;
+          
+          // If both have names, try to match by name too (but email is primary)
+          if (userName && c.name) {
+            const customerName = c.name?.toLowerCase().trim();
+            const nameMatch = customerName === userName;
+            // Match if email matches, and if names exist, they should also match
+            return emailMatch && (!userName || !c.name || nameMatch);
           }
+          
           // Fallback to email-only if no name
           return emailMatch;
         });
@@ -545,22 +768,35 @@ const Reservations: React.FC = () => {
 
       // Filter by user if a user is selected
       if (userEmail) {
-        // Use precise matching: match by customer IDs first, then fallback to email+name matching
+        // Match reservations by email (primary) and optionally by name
         return response.data.filter(reservation => {
-          // First priority: match by customer ID
+          const reservationEmail = reservation.email?.toLowerCase().trim();
+          const reservationName = reservation.name?.toLowerCase().trim();
+          
+          // First priority: match by customer ID (most precise)
           if (customerIds.length > 0 && customerIds.includes(reservation.customers_id)) {
             return true;
           }
           
-          // Second priority: match by email AND name
-          const emailMatch = reservation.email?.toLowerCase() === userEmail.toLowerCase();
-          if (userName && reservation.name) {
-            const nameMatch = reservation.name?.toLowerCase() === userName.toLowerCase();
-            return emailMatch && nameMatch;
+          // Second priority: match by email (primary matching criteria)
+          const emailMatch = reservationEmail === userEmail;
+          
+          // If both have names, also check name match (but email is still primary)
+          if (emailMatch) {
+            if (userName && reservationName) {
+              // Both have names - they should match
+              const nameMatch = reservationName === userName;
+              if (nameMatch) {
+                return true;
+              }
+              // If email matches but name doesn't, still return true (email is primary)
+              return true;
+            }
+            // Email matches, return true regardless of name
+            return true;
           }
           
-          // Fallback: match by email only
-          return emailMatch;
+          return false;
         });
       }
       

@@ -15,6 +15,7 @@ export const reservationApi = {
         ...(filters.sortBy && { sortBy: filters.sortBy }),
         ...(filters.sortOrder && { sortOrder: filters.sortOrder }),
         ...(filters.search && { search: filters.search }),
+        ...(filters.user_id && { user_id: filters.user_id }),
       });
 
       // Get reservations and customers in parallel
