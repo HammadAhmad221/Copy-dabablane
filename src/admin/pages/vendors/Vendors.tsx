@@ -1241,6 +1241,7 @@ const Vendors: React.FC = () => {
     updateVendorStatus,
     updateVendor,
     setPagination,
+    setError,
   } = useVendors();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -1249,6 +1250,11 @@ const Vendors: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isSearching, setIsSearching] = useState(false);
   const [isPaginationLoading, setIsPaginationLoading] = useState(false);
+  // Track initial load and retry attempts
+  const [initialLoadAttempted, setInitialLoadAttempted] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true); // Track if we're still in initial load phase
+  const retryCountRef = React.useRef(0);
+  const maxRetries = 3;
   // Lightbox state
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
@@ -1405,10 +1411,63 @@ const Vendors: React.FC = () => {
       // You might want to handle page reset here if needed
     }
   };
-  // Initial load - fetch more vendors to ensure we have enough for searching
+  // Initial load - fetch vendors automatically on page refresh
+  // Automatically retry on error to prevent showing error on page refresh
   useEffect(() => {
-    fetchVendors({}, 1, 1000); // Fetch first 1000 vendors to ensure we have enough for searching
-  }, [fetchVendors]);
+    if (!initialLoadAttempted) {
+      setInitialLoadAttempted(true);
+      setIsInitialLoading(true);
+      retryCountRef.current = 0;
+      setError(null); // Clear any previous errors
+      // Use default limit (10) instead of 1000 to avoid validation errors
+      // This matches what the "Try again" button does
+      fetchVendors({}, 1); // Fetch vendors with default limit
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
+
+  // Auto-retry on error during initial load - always retry regardless of error type
+  useEffect(() => {
+    // Auto-retry if we're on initial load, have an error, not currently loading, and haven't exceeded max retries
+    if (error && initialLoadAttempted && isInitialLoading && !loading && retryCountRef.current < maxRetries && vendors.length === 0) {
+      retryCountRef.current += 1;
+      const delay = Math.min(1000 * Math.pow(2, retryCountRef.current - 1), 5000);
+      
+      console.log(`🔄 Auto-retrying vendor fetch (attempt ${retryCountRef.current}/${maxRetries}) after ${delay}ms...`);
+      
+      const retryTimer = setTimeout(() => {
+        setError(null); // Clear error before retry
+        // Use same parameters as manual "Try again" button (default limit)
+        fetchVendors({}, 1);
+      }, delay);
+      
+      return () => clearTimeout(retryTimer);
+    } else if (error && initialLoadAttempted && isInitialLoading && !loading && retryCountRef.current >= maxRetries) {
+      // All retries exhausted, allow error to show
+      console.log('❌ All retry attempts exhausted, showing error');
+      setIsInitialLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [error, initialLoadAttempted, isInitialLoading, loading, vendors.length, fetchVendors]);
+
+  // Mark initial loading as complete when we successfully load vendors
+  useEffect(() => {
+    if (vendors.length > 0 && isInitialLoading) {
+      console.log('✅ Vendors loaded successfully, completing initial load');
+      setIsInitialLoading(false);
+      retryCountRef.current = 0; // Reset retry count on success
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendors.length, isInitialLoading]);
+
+  // Also mark as complete when loading finishes without error (even if no vendors)
+  useEffect(() => {
+    if (!loading && initialLoadAttempted && isInitialLoading && !error) {
+      console.log('✅ Loading completed without error, completing initial load');
+      setIsInitialLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, initialLoadAttempted, isInitialLoading, error]);
 
   // Handle URL parameters for navigation from notifications
   useEffect(() => {
@@ -1714,7 +1773,7 @@ const Vendors: React.FC = () => {
             variants={animationVariants.fadeIn}
             className="block lg:hidden"
           >
-            {loading ? (
+            {loading || (isInitialLoading && retryCountRef.current < maxRetries) ? (
               <div className="p-8 text-center">
                 <div className="flex items-center justify-center">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#00897B]"></div>
@@ -1729,6 +1788,10 @@ const Vendors: React.FC = () => {
                   <p className="text-gray-500 text-sm">{error}</p>
                   <Button
                     onClick={() => {
+                      console.log('🔄 Manual retry triggered');
+                      retryCountRef.current = 0; // Reset retry count on manual retry
+                      setIsInitialLoading(false); // Allow errors to show on manual retry
+                      setError(null); // Clear error before retry
                       const filters = {
                         ...(statusFilter !== 'all' && { status: statusFilter as VendorStatus }),
                         ...(searchTerm && { search: searchTerm }),
@@ -1916,7 +1979,7 @@ const Vendors: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {loading ? (
+                  {loading || (isInitialLoading && retryCountRef.current < maxRetries) ? (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center py-8">
                         <div className="flex items-center justify-center">
@@ -1934,6 +1997,7 @@ const Vendors: React.FC = () => {
                           <p className="text-gray-500 text-sm">{error}</p>
                           <Button
                             onClick={() => {
+                              retryCountRef.current = 0; // Reset retry count on manual retry
                               const filters = {
                                 ...(statusFilter !== 'all' && { status: statusFilter as VendorStatus }),
                                 ...(searchTerm && { search: searchTerm }),
@@ -2137,7 +2201,7 @@ const Vendors: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {loading ? (
+                  {loading || (isInitialLoading && retryCountRef.current < maxRetries) ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-8">
                         <div className="flex items-center justify-center">
@@ -2155,6 +2219,7 @@ const Vendors: React.FC = () => {
                           <p className="text-gray-500 text-sm">{error}</p>
                           <Button
                             onClick={() => {
+                              retryCountRef.current = 0; // Reset retry count on manual retry
                               const filters = {
                                 ...(statusFilter !== 'all' && { status: statusFilter as VendorStatus }),
                                 ...(searchTerm && { search: searchTerm }),
