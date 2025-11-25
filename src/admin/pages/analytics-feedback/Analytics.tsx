@@ -32,7 +32,6 @@ import {
   PieChartIcon,
   UsersIcon,
   ArrowUpRightIcon,
-  DollarSignIcon,
   ActivityIcon,
   BookCheck,
   BookmarkCheck,
@@ -285,7 +284,7 @@ const Analytics = () => {
         {analyticsData && analyticsData.slice(0, 8).map((kpi: AnalyticsItem, index: number) => {
           const iconMap: { [key: string]: React.ReactNode } = {
             "OrdersIcon": <EyeIcon className="h-5 w-5" />,
-            "DollarSignIcon": <DollarSignIcon className="h-5 w-5" />,
+            "DollarSignIcon": <span className="text-lg font-bold text-[#00897B]">DH</span>,
             "UsersIcon": <UsersIcon className="h-5 w-5" />,
             "ReservationsIcon": <BookCheck className="h-5 w-5" />,
             "BlanesIcon": <BookmarkCheck className="h-5 w-5" />,
@@ -315,7 +314,7 @@ const Analytics = () => {
               <div className="mt-2">
                 <div className="text-lg sm:text-2xl font-bold">
                   {kpi.name === "Total Revenue"
-                    ? `$${Number(kpi.value).toLocaleString(undefined, {minimumFractionDigits: 2})}`
+                    ? `${Number(kpi.value).toLocaleString(undefined, {minimumFractionDigits: 2})} DH`
                     : typeof kpi.value === 'number' 
                       ? kpi.value.toLocaleString()
                       : kpi.value}

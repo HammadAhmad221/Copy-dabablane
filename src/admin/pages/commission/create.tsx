@@ -21,6 +21,10 @@ import type { CreateCommissionRequest } from "@/admin/lib/api/types/commission";
 import type { Vendor } from "@/admin/lib/api/types/vendor";
 import type { Category } from "@/admin/lib/api/types/category";
 
+type CommissionFormData = Omit<CreateCommissionRequest, 'commission_rate'> & {
+  commission_rate?: number;
+};
+
 const CommissionCreate = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
@@ -29,10 +33,10 @@ const CommissionCreate = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
 
-  const [formData, setFormData] = useState<CreateCommissionRequest>({
+  const [formData, setFormData] = useState<CommissionFormData>({
     category_id: undefined,
     vendor_id: undefined,
-    commission_rate: 0,
+    commission_rate: undefined,
     partial_commission_rate: undefined,
     is_active: true,
   });
@@ -96,7 +100,7 @@ const CommissionCreate = () => {
     // Prepare clean payload - backend ALWAYS requires category_id
     const payload: CreateCommissionRequest = {
       category_id: formData.category_id!,
-      commission_rate: formData.commission_rate,
+      commission_rate: formData.commission_rate!,
       is_active: formData.is_active !== false,
     };
 
@@ -115,8 +119,14 @@ const CommissionCreate = () => {
     try {
       console.log('📤 Creating commission with payload:', payload);
       console.log('📤 Payload JSON:', JSON.stringify(payload, null, 2));
-      await commissionApi.create(payload);
+      const createdCommission = await commissionApi.create(payload);
+      console.log('✅ Commission created:', createdCommission);
       toast.success('Commission created successfully');
+      
+      // Small delay to ensure backend has committed the transaction
+      // before navigating and fetching the list
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       navigate('/admin/commission');
     } catch (error: any) {
       console.error('❌ Error creating commission:', error);
@@ -163,7 +173,7 @@ const CommissionCreate = () => {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-center gap-4">
+      <div className="space-y-4">
         <Button
           variant="ghost"
           size="sm"
@@ -202,7 +212,7 @@ const CommissionCreate = () => {
                   <SelectContent>
                     {categories.map((category) => (
                       <SelectItem key={category.id} value={String(category.id)}>
-                        {category.name} (ID: {category.id})
+                        {category.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -277,13 +287,34 @@ const CommissionCreate = () => {
                 min="0"
                 max="100"
                 step="0.01"
-                value={formData.commission_rate === undefined ? "" : formData.commission_rate}
+                value={formData.commission_rate === undefined || formData.commission_rate === null ? "" : formData.commission_rate}
                 onChange={(e) => {
                   const value = e.target.value;
-                  setFormData({ 
-                    ...formData, 
-                    commission_rate: value === "" ? undefined : Number(value) 
-                  });
+                  if (value === "" || value === null) {
+                    setFormData({ 
+                      ...formData, 
+                      commission_rate: undefined
+                    });
+                  } else {
+                    const numValue = Number(value);
+                    // Allow 0 as a valid value, only prevent negative values
+                    if (!isNaN(numValue)) {
+                      const clampedValue = Math.max(0, Math.min(100, numValue));
+                      setFormData({ 
+                        ...formData, 
+                        commission_rate: clampedValue
+                      });
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  // Ensure value is not negative on blur
+                  if (formData.commission_rate !== undefined && formData.commission_rate < 0) {
+                    setFormData({ 
+                      ...formData, 
+                      commission_rate: 0
+                    });
+                  }
                 }}
                 className={errors.commission_rate ? "border-red-500" : ""}
                 placeholder="e.g., 7.00"
@@ -306,13 +337,35 @@ const CommissionCreate = () => {
                 min="0"
                 max="100"
                 step="0.01"
-                value={formData.partial_commission_rate || ""}
-                onChange={(e) =>
-                  setFormData({ 
-                    ...formData, 
-                    partial_commission_rate: e.target.value ? Number(e.target.value) : undefined 
-                  })
-                }
+                value={formData.partial_commission_rate === undefined || formData.partial_commission_rate === null ? "" : formData.partial_commission_rate}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === "" || value === null) {
+                    setFormData({ 
+                      ...formData, 
+                      partial_commission_rate: undefined
+                    });
+                  } else {
+                    const numValue = Number(value);
+                    // Allow 0 as a valid value, only prevent negative values
+                    if (!isNaN(numValue)) {
+                      const clampedValue = Math.max(0, Math.min(100, numValue));
+                      setFormData({ 
+                        ...formData, 
+                        partial_commission_rate: clampedValue
+                      });
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  // Ensure value is not negative on blur
+                  if (formData.partial_commission_rate !== undefined && formData.partial_commission_rate < 0) {
+                    setFormData({ 
+                      ...formData, 
+                      partial_commission_rate: 0
+                    });
+                  }
+                }}
                 placeholder="e.g., 3.5"
               />
             </div>

@@ -12,7 +12,7 @@ import {
   MapPin,
   Store,
   Percent,
-  DollarSign,
+  Coins,
   FileText,
 } from "lucide-react";
 
@@ -191,7 +191,7 @@ export const adminNavItems = [
     id: "vendor-payments",
     title: "Paiements des vendeurs",
     path: "/admin/vendor-payments",
-    icon: DollarSign,
+    icon: Coins,
     children: [
       {
         id: "payments-list",

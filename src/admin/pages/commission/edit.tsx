@@ -189,7 +189,7 @@ const CommissionEdit = () => {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-center gap-4">
+      <div className="space-y-4">
         <Button
           variant="ghost"
           size="sm"
@@ -228,7 +228,7 @@ const CommissionEdit = () => {
                   <SelectContent>
                     {categories.map((category) => (
                       <SelectItem key={category.id} value={String(category.id)}>
-                        {category.name} (ID: {category.id})
+                        {category.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -302,13 +302,34 @@ const CommissionEdit = () => {
                 min="0"
                 max="100"
                 step="0.01"
-                value={formData.commission_rate === undefined ? "" : formData.commission_rate}
+                value={formData.commission_rate === undefined || formData.commission_rate === null ? "" : formData.commission_rate}
                 onChange={(e) => {
                   const value = e.target.value;
-                  setFormData({ 
-                    ...formData, 
-                    commission_rate: value === "" ? undefined : Number(value) 
-                  });
+                  if (value === "" || value === null) {
+                    setFormData({ 
+                      ...formData, 
+                      commission_rate: undefined
+                    });
+                  } else {
+                    const numValue = Number(value);
+                    // Allow 0 as a valid value, only prevent negative values
+                    if (!isNaN(numValue)) {
+                      const clampedValue = Math.max(0, Math.min(100, numValue));
+                      setFormData({ 
+                        ...formData, 
+                        commission_rate: clampedValue
+                      });
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  // Ensure value is not negative on blur
+                  if (formData.commission_rate !== undefined && formData.commission_rate < 0) {
+                    setFormData({ 
+                      ...formData, 
+                      commission_rate: 0
+                    });
+                  }
                 }}
                 className={errors.commission_rate ? "border-red-500" : ""}
                 placeholder="e.g., 8.00"
@@ -331,13 +352,35 @@ const CommissionEdit = () => {
                 min="0"
                 max="100"
                 step="0.01"
-                value={formData.partial_commission_rate || ""}
-                onChange={(e) =>
-                  setFormData({ 
-                    ...formData, 
-                    partial_commission_rate: e.target.value ? Number(e.target.value) : undefined 
-                  })
-                }
+                value={formData.partial_commission_rate === undefined || formData.partial_commission_rate === null ? "" : formData.partial_commission_rate}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === "" || value === null) {
+                    setFormData({ 
+                      ...formData, 
+                      partial_commission_rate: undefined
+                    });
+                  } else {
+                    const numValue = Number(value);
+                    // Allow 0 as a valid value, only prevent negative values
+                    if (!isNaN(numValue)) {
+                      const clampedValue = Math.max(0, Math.min(100, numValue));
+                      setFormData({ 
+                        ...formData, 
+                        partial_commission_rate: clampedValue
+                      });
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  // Ensure value is not negative on blur
+                  if (formData.partial_commission_rate !== undefined && formData.partial_commission_rate < 0) {
+                    setFormData({ 
+                      ...formData, 
+                      partial_commission_rate: 0
+                    });
+                  }
+                }}
                 placeholder="e.g., 4.0"
               />
               <p className="text-xs text-gray-500">

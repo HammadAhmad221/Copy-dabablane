@@ -226,16 +226,16 @@ const CommissionVendor = () => {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/admin/commission')}
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
+      <div className="space-y-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate('/admin/commission')}
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
+        <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
               Vendor Commission Rates
@@ -244,14 +244,14 @@ const CommissionVendor = () => {
               Manage commission rates for {vendor?.company_name || vendor?.name}
             </p>
           </div>
+          <Button 
+            onClick={() => setIsCreateDialogOpen(true)}
+            className="bg-[#00897B] hover:bg-[#00796B]"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create Override
+          </Button>
         </div>
-        <Button 
-          onClick={() => setIsCreateDialogOpen(true)}
-          className="bg-[#00897B] hover:bg-[#00796B]"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Create Override
-        </Button>
       </div>
 
       {/* Commissions Table */}

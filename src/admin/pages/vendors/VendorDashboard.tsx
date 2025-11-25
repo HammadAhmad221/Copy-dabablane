@@ -32,7 +32,6 @@ import {
   PieChartIcon,
   UsersIcon,
   ArrowUpRightIcon,
-  DollarSignIcon,
   ActivityIcon,
   BookCheck,
   BookmarkCheck,
@@ -68,7 +67,7 @@ const getIcon = (iconType: string) => {
     case "OrdersIcon":
       return <EyeIcon className="h-5 w-5" />;
     case "DollarSignIcon":
-      return <DollarSignIcon className="h-5 w-5" />;
+      return <span className="text-lg font-bold text-[#00897B]">DH</span>;
     case "UsersIcon":
       return <UsersIcon className="h-5 w-5" />;
     case "ReservationsIcon":
@@ -421,9 +420,13 @@ const VendorDashboard = () => {
               return (
                 <Card key={kpi.name} className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
-                    <div className="text-[#00897B]">
-                      {Icon}
-                    </div>
+                    {kpi.name !== "Total Revenue" ? (
+                      <div className="text-[#00897B]">
+                        {Icon}
+                      </div>
+                    ) : (
+                      <div className="w-5 h-5"></div>
+                    )}
                     {kpi.change !== undefined && (
                       <div className={`text-xs sm:text-sm font-medium ${
                         kpi.change > 0 ? 'text-green-600' : kpi.change < 0 ? 'text-red-600' : 'text-gray-600'
@@ -439,7 +442,7 @@ const VendorDashboard = () => {
                           const revenueValue = typeof kpi.value === 'string' 
                             ? parseFloat(kpi.value.replace(/[^0-9.-]/g, '')) || 0 
                             : kpi.value as number;
-                          return `$${revenueValue.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                          return `${revenueValue.toLocaleString(undefined, {minimumFractionDigits: 2})} DH`;
                         }
                         return typeof kpi.value === 'number' 
                           ? kpi.value.toLocaleString()

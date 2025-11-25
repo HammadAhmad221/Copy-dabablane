@@ -44,6 +44,20 @@ export const commissionApi = {
       );
       console.log("✅ Response data type:", typeof response.data);
       console.log("✅ Is array?", Array.isArray(response.data));
+      console.log("✅ Response keys:", response.data ? Object.keys(response.data) : 'null');
+      
+      // Log the full response for debugging
+      if (response.data && response.data.data !== undefined) {
+        console.log("✅ response.data.data exists:", response.data.data);
+        console.log("✅ response.data.data type:", typeof response.data.data);
+        console.log("✅ response.data.data is array?", Array.isArray(response.data.data));
+        if (Array.isArray(response.data.data)) {
+          console.log("✅ response.data.data length:", response.data.data.length);
+          if (response.data.data.length > 0) {
+            console.log("✅ First item in response.data.data:", response.data.data[0]);
+          }
+        }
+      }
 
       // Handle multiple response structures
       let commissionsData = [];
@@ -85,11 +99,98 @@ export const commissionApi = {
           commissionsData = response.data.results;
           metaData.total = response.data.count || commissionsData.length;
         }
-        // Structure 5: Wrapped object with status/code
-        else if (response.data.status && response.data.data) {
+        // Structure 5: Wrapped object with status/code/message/data
+        else if (response.data.status !== undefined && response.data.data !== undefined) {
+          console.log("✅ Structure 5 detected - status/code/message/data format");
+          console.log("✅ response.data.status:", response.data.status);
+          console.log("✅ response.data.code:", response.data.code);
+          console.log("✅ response.data.message:", response.data.message);
+          console.log("✅ response.data.data type:", typeof response.data.data);
+          console.log("✅ response.data.data is array?", Array.isArray(response.data.data));
+          console.log("✅ response.data.data value:", response.data.data);
+          if (response.data.data && typeof response.data.data === 'object' && !Array.isArray(response.data.data)) {
+            console.log("✅ response.data.data keys:", Object.keys(response.data.data));
+          }
+          
           if (Array.isArray(response.data.data)) {
             commissionsData = response.data.data;
             metaData.total = commissionsData.length;
+            console.log("✅ Extracted array from response.data.data with", commissionsData.length, "items");
+          } else if (response.data.data && typeof response.data.data === 'object' && !Array.isArray(response.data.data)) {
+            // If data is an object, check if it has nested arrays
+            const nestedArrayKeys = Object.keys(response.data.data).filter(key => 
+              Array.isArray(response.data.data[key])
+            );
+            if (nestedArrayKeys.length > 0) {
+              // Combine all arrays found in the response.data.data object
+              const allCommissions: any[] = [];
+              nestedArrayKeys.forEach(key => {
+                const arrayData = response.data.data[key];
+                if (Array.isArray(arrayData)) {
+                  console.log(`✅ Found nested array in response.data.data.${key} with`, arrayData.length, "items");
+                  // Flatten and add all items from this array
+                  allCommissions.push(...arrayData);
+                }
+              });
+              commissionsData = allCommissions;
+              metaData.total = commissionsData.length;
+              console.log(`✅ Combined ${nestedArrayKeys.length} arrays into`, commissionsData.length, "total commissions");
+            } else {
+              // Check if data itself should be treated as a single commission
+              console.log("⚠️ response.data.data is an object, checking if it's a single commission");
+              // If it has commission-like properties, treat as single item array
+              if (response.data.data.id !== undefined || response.data.data.commission_rate !== undefined) {
+                commissionsData = [response.data.data];
+                metaData.total = 1;
+                console.log("✅ Treated response.data.data as single commission object");
+              } else {
+                console.warn("⚠️ response.data.data is an object but doesn't look like a commission. Keys:", Object.keys(response.data.data));
+              }
+            }
+          } else if (response.data.data === null || response.data.data === undefined) {
+            console.warn("⚠️ response.data.data is null or undefined");
+            commissionsData = [];
+            metaData.total = 0;
+          }
+        }
+        // Structure 6: { commission: {...} } or { commission: [...] }
+        else if (response.data.commission) {
+          if (Array.isArray(response.data.commission)) {
+            commissionsData = response.data.commission;
+            metaData.total = commissionsData.length;
+          } else {
+            // Single commission object
+            commissionsData = [response.data.commission];
+            metaData.total = 1;
+          }
+        }
+        // Structure 7: Laravel pagination { data: [...], current_page, last_page, per_page, total }
+        else if (response.data.current_page !== undefined) {
+          // This is Laravel pagination format
+          if (Array.isArray(response.data.data)) {
+            commissionsData = response.data.data;
+            metaData = {
+              total: response.data.total || 0,
+              current_page: response.data.current_page || 1,
+              last_page: response.data.last_page || 1,
+              per_page: response.data.per_page || 10,
+            };
+          }
+        }
+        // Structure 8: Check if response.data itself is an object with array-like properties
+        else if (typeof response.data === 'object' && !Array.isArray(response.data)) {
+          // Try to find any array property
+          const arrayKeys = Object.keys(response.data).filter(key => 
+            Array.isArray(response.data[key])
+          );
+          if (arrayKeys.length > 0) {
+            // Use the first array found
+            const firstArrayKey = arrayKeys[0];
+            commissionsData = response.data[firstArrayKey];
+            metaData.total = commissionsData.length;
+            console.log(`✅ Found array in key "${firstArrayKey}" with ${commissionsData.length} items`);
+          } else {
+            console.warn("⚠️ Response is an object but no array found. Full structure:", response.data);
           }
         }
       }
@@ -246,7 +347,14 @@ export const commissionApi = {
       const response = await adminApiClient.get(
         BACK_COMMISSION_ENDPOINTS.getSettings()
       );
-      console.log("✅ Global settings:", response.data);
+      console.log("✅ Global settings response:", response.data);
+      
+      // Backend returns nested structure: {status, code, message, data: {...}}
+      // Extract the actual settings data
+      if (response.data && response.data.data) {
+        console.log("✅ Extracted settings from nested structure:", response.data.data);
+        return response.data.data;
+      }
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching global settings:", error);
@@ -260,14 +368,34 @@ export const commissionApi = {
   ): Promise<GlobalCommissionSettings> => {
     try {
       console.log("📤 Updating global settings:", data);
+      console.log("📤 Payload types:", {
+        partial_payment_commission_rate: typeof data.partial_payment_commission_rate,
+        vat_rate: typeof data.vat_rate,
+        daba_blane_account_iban: typeof data.daba_blane_account_iban,
+        transfer_processing_day: typeof data.transfer_processing_day,
+      });
+      console.log("📤 transfer_processing_day value:", data.transfer_processing_day);
+      console.log("📤 transfer_processing_day length:", data.transfer_processing_day?.length);
+      console.log("📤 transfer_processing_day JSON:", JSON.stringify(data.transfer_processing_day));
+      
       const response = await adminApiClient.put(
         BACK_COMMISSION_ENDPOINTS.updateSettings(),
         data
       );
       console.log("✅ Global settings updated:", response.data);
+      
+      // Extract nested data if present
+      if (response.data && response.data.data) {
+        return response.data.data;
+      }
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ Error updating global settings:", error);
+      console.error("❌ Error response data:", error.response?.data);
+      console.error("❌ Error response status:", error.response?.status);
+      if (error.response?.data?.errors) {
+        console.error("❌ Validation errors:", JSON.stringify(error.response.data.errors, null, 2));
+      }
       throw error;
     }
   },
