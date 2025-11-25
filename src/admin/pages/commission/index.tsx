@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Card } from "@/admin/components/ui/card";
 import { Button } from "@/admin/components/ui/button";
 import { Input } from "@/admin/components/ui/input";
@@ -16,6 +16,8 @@ import { Badge } from "@/admin/components/ui/badge";
 import { Loader2, Plus, Edit, Trash2 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import commissionApi from "@/admin/lib/api/services/commissionService";
+import { vendorApi } from "@/admin/lib/api/services/vendorService";
+import { categoryApi } from "@/admin/lib/api/services/categoryService";
 import type { Commission } from "@/admin/lib/api/types/commission";
 
 // Hook to detect mobile/tablet screen
@@ -37,12 +39,14 @@ const useIsMobile = () => {
 
 const CommissionManagement = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const isMobile = useIsMobile();
   const [commissions, setCommissions] = useState<Commission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [vendorFilter, setVendorFilter] = useState<string>("");
   const [vendorMap, setVendorMap] = useState<Record<number, string>>({});
+  const [categoryMap, setCategoryMap] = useState<Record<number, string>>({});
 
   const fetchCommissions = async () => {
     setIsLoading(true);
@@ -57,23 +61,180 @@ const CommissionManagement = () => {
       console.log('✅ Meta total:', response.meta.total);
       setCommissions(response.data);
       
-      // Extract vendor data from commission responses and build vendor map
-      const map: Record<number, string> = {};
+      // Extract vendor IDs and category IDs from commissions
+      const vendorIds = new Set<number>();
+      const categoryIds = new Set<number>();
       response.data.forEach((commission: any) => {
-        // Check if commission has vendor data nested in it
+        // Log commission structure for debugging
+        console.log(`📋 Commission ${commission.id}:`, {
+          vendor_id: commission.vendor_id,
+          has_vendor_object: !!commission.vendor,
+          category_id: commission.category_id,
+          has_category_object: !!commission.category
+        });
+        
+        // Check if commission has vendor_id
+        if (commission.vendor_id !== null && commission.vendor_id !== undefined && commission.vendor_id !== '') {
+          const vendorId = Number(commission.vendor_id);
+          if (!isNaN(vendorId) && vendorId > 0) {
+            vendorIds.add(vendorId);
+            console.log(`📋 Found vendor_id ${vendorId} in commission ${commission.id}`);
+          }
+        }
+        // Also check if commission has vendor data nested in it
         if (commission.vendor && commission.vendor.id) {
-          const vendor = commission.vendor;
-          const vendorName = vendor.company_name?.trim() || vendor.name?.trim() || '';
-          if (vendorName) {
-            map[vendor.id] = vendorName;
-            console.log(`✅ Mapped vendor ${vendor.id} -> "${vendorName}" from commission data`);
+          const vendorId = Number(commission.vendor.id);
+          if (!isNaN(vendorId) && vendorId > 0) {
+            vendorIds.add(vendorId);
+            console.log(`📋 Found nested vendor ${vendorId} in commission ${commission.id}`);
+          }
+        }
+        // Check if commission has category_id
+        if (commission.category_id !== null && commission.category_id !== undefined && commission.category_id !== '') {
+          const categoryId = Number(commission.category_id);
+          if (!isNaN(categoryId) && categoryId > 0) {
+            categoryIds.add(categoryId);
+          }
+        }
+        // Also check if commission has category data nested in it
+        if (commission.category && commission.category.id) {
+          const categoryId = Number(commission.category.id);
+          if (!isNaN(categoryId) && categoryId > 0) {
+            categoryIds.add(categoryId);
           }
         }
       });
       
-      if (Object.keys(map).length > 0) {
-        console.log('📊 Vendor map created with', Object.keys(map).length, 'entries from commission data');
-        setVendorMap(map);
+      console.log(`📊 Extracted ${vendorIds.size} unique vendor IDs:`, Array.from(vendorIds).sort((a, b) => a - b));
+      console.log(`📊 Extracted ${categoryIds.size} unique category IDs:`, Array.from(categoryIds).sort((a, b) => a - b));
+      
+      // Build vendor map from commission data first (if vendor objects are included)
+      const vendorMapData: Record<number, string> = {};
+      response.data.forEach((commission: any) => {
+        if (commission.vendor && commission.vendor.id) {
+          const vendor = commission.vendor;
+          const vendorId = Number(vendor.id);
+          const vendorName = vendor.company_name?.trim() || vendor.name?.trim() || '';
+          if (vendorName && !isNaN(vendorId) && vendorId > 0) {
+            vendorMapData[vendorId] = vendorName;
+            console.log(`✅ Mapped vendor ${vendorId} -> "${vendorName}" from commission data (commission ${commission.id})`);
+          }
+        }
+        // Also check if vendor_name is directly on the commission object
+        if (commission.vendor_name && commission.vendor_id) {
+          const vendorId = Number(commission.vendor_id);
+          if (!isNaN(vendorId) && vendorId > 0) {
+            vendorMapData[vendorId] = commission.vendor_name.trim();
+            console.log(`✅ Mapped vendor ${vendorId} -> "${commission.vendor_name}" from commission.vendor_name (commission ${commission.id})`);
+          }
+        }
+      });
+      
+      // Fetch vendors for any vendor IDs that don't have names yet
+      if (vendorIds.size > 0) {
+        const missingVendorIds = Array.from(vendorIds).filter(id => !vendorMapData[id]);
+        if (missingVendorIds.length > 0) {
+          console.log(`📤 Fetching vendor names for ${missingVendorIds.length} vendors (IDs: ${Array.from(missingVendorIds).join(', ')})`);
+          try {
+            // Fetch vendors with pagination to get all vendors
+            let allVendors: any[] = [];
+            let currentPage = 1;
+            let hasMorePages = true;
+            const pageSize = 1000;
+            
+            while (hasMorePages && currentPage <= 10) { // Limit to 10 pages to avoid infinite loops
+              const vendorResponse = await vendorApi.getVendors(undefined, pageSize, currentPage);
+              if (vendorResponse.data && vendorResponse.data.length > 0) {
+                allVendors = [...allVendors, ...vendorResponse.data];
+                // Check if there are more pages
+                const totalPages = vendorResponse.meta?.last_page || 1;
+                hasMorePages = currentPage < totalPages;
+                currentPage++;
+              } else {
+                hasMorePages = false;
+              }
+            }
+            
+            console.log(`✅ Fetched ${allVendors.length} total vendors from API`);
+            
+            // Map all fetched vendors - ensure ID is converted to number for consistent lookup
+            allVendors.forEach((vendor: any) => {
+              const vendorId = Number(vendor.id);
+              if (!isNaN(vendorId) && vendorId > 0 && vendorIds.has(vendorId)) {
+                const vendorName = vendor.company_name?.trim() || vendor.name?.trim() || '';
+                if (vendorName) {
+                  vendorMapData[vendorId] = vendorName;
+                  console.log(`✅ Mapped vendor ${vendorId} -> "${vendorName}" from vendor API`);
+                } else {
+                  console.warn(`⚠️ Vendor ${vendorId} has no name or company_name`);
+                }
+              }
+            });
+            
+            // Check if we still have missing vendors
+            const stillMissing = Array.from(vendorIds).filter(id => !vendorMapData[id]);
+            if (stillMissing.length > 0) {
+              console.warn(`⚠️ Could not find vendor names for IDs: ${stillMissing.join(', ')}`);
+            }
+          } catch (error) {
+            console.error('❌ Error fetching vendors:', error);
+          }
+        }
+      }
+      
+      if (Object.keys(vendorMapData).length > 0) {
+        console.log('📊 Vendor map created with', Object.keys(vendorMapData).length, 'entries');
+        setVendorMap(vendorMapData);
+      } else {
+        console.log('⚠️ No vendor names found in commission data or vendor API');
+      }
+
+      // Build category map from commission data first (if category objects are included)
+      const categoryMapData: Record<number, string> = {};
+      response.data.forEach((commission: any) => {
+        if (commission.category && commission.category.id) {
+          const category = commission.category;
+          const categoryName = category.name?.trim() || '';
+          if (categoryName) {
+            categoryMapData[category.id] = categoryName;
+            console.log(`✅ Mapped category ${category.id} -> "${categoryName}" from commission data`);
+          }
+        }
+        // Also check if category_name is directly on the commission
+        if (commission.category_name && commission.category_id) {
+          categoryMapData[commission.category_id] = commission.category_name.trim();
+          console.log(`✅ Mapped category ${commission.category_id} -> "${commission.category_name}" from commission data`);
+        }
+      });
+      
+      // Fetch categories for any category IDs that don't have names yet
+      if (categoryIds.size > 0) {
+        const missingCategoryIds = Array.from(categoryIds).filter(id => !categoryMapData[id]);
+        if (missingCategoryIds.length > 0) {
+          console.log(`📤 Fetching category names for ${missingCategoryIds.length} categories`);
+          try {
+            // Fetch all categories to build the map
+            const categoryResponse = await categoryApi.getCategories({ paginationSize: 1000 });
+            categoryResponse.data.forEach((category: any) => {
+              if (categoryIds.has(category.id)) {
+                const categoryName = category.name?.trim() || '';
+                if (categoryName) {
+                  categoryMapData[category.id] = categoryName;
+                  console.log(`✅ Mapped category ${category.id} -> "${categoryName}" from category API`);
+                }
+              }
+            });
+          } catch (error) {
+            console.error('❌ Error fetching categories:', error);
+          }
+        }
+      }
+      
+      if (Object.keys(categoryMapData).length > 0) {
+        console.log('📊 Category map created with', Object.keys(categoryMapData).length, 'entries');
+        setCategoryMap(categoryMapData);
+      } else {
+        console.log('⚠️ No category names found in commission data or category API');
       }
       
       if (response.data.length > 0) {
@@ -94,26 +255,83 @@ const CommissionManagement = () => {
     }
   };
 
+  const isMountedRef = useRef<boolean>(false);
+  const prevPathRef = useRef<string>(location.pathname);
+
+  // Initial fetch and fetch when filters change
   useEffect(() => {
     fetchCommissions();
   }, [categoryFilter, vendorFilter]);
 
-  // Helper function to get vendor name
-  const getVendorName = (vendorId?: number): string => {
-    if (!vendorId) return '-';
+  // Refresh commissions when navigating back to this page (e.g., after creating/editing)
+  useEffect(() => {
+    const currentPath = location.pathname;
+    const isOnCommissionPage = currentPath === '/admin/commission';
+    const wasOnDifferentPage = prevPathRef.current !== '/admin/commission';
     
-    const vendorName = vendorMap[vendorId];
+    // Refresh if we're navigating TO the commission page from a different route
+    // Skip on initial mount (handled by the filter useEffect above)
+    if (isMountedRef.current && isOnCommissionPage && wasOnDifferentPage) {
+      console.log('🔄 Refreshing commissions after navigation from:', prevPathRef.current);
+      
+      // Clear filters to ensure we see all commissions including the newly created one
+      setCategoryFilter('');
+      setVendorFilter('');
+      
+      // Small delay to ensure navigation and state updates are complete
+      const timer = setTimeout(() => {
+        fetchCommissions();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+    
+    // Mark as mounted after first render
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
+    }
+    
+    // Update previous path for next comparison
+    prevPathRef.current = currentPath;
+  }, [location.pathname]);
+
+  // Helper function to get vendor name
+  const getVendorName = (vendorId?: number | null | string): string => {
+    if (!vendorId || vendorId === null || vendorId === undefined || vendorId === '') return '-';
+    
+    // Convert to number for consistent lookup
+    const vendorIdNum = Number(vendorId);
+    if (isNaN(vendorIdNum) || vendorIdNum <= 0) return '-';
+    
+    // Try both number and string keys in case of type mismatch
+    const vendorName = vendorMap[vendorIdNum] || vendorMap[String(vendorIdNum)];
     if (vendorName) {
       return vendorName;
     }
     
     // If not found in map, log for debugging
     const mapSize = Object.keys(vendorMap).length;
-    if (mapSize > 0) {
-      console.warn(`⚠️ Vendor ID ${vendorId} not found in vendor map (map has ${mapSize} entries)`);
+    const mapKeys = Object.keys(vendorMap).map(k => Number(k)).sort((a, b) => a - b);
+    console.warn(`⚠️ Vendor ID ${vendorIdNum} (type: ${typeof vendorId}) not found in vendor map. Map has ${mapSize} entries: [${mapKeys.join(', ')}]`);
+    
+    return `Vendor #${vendorIdNum}`;
+  };
+
+  // Helper function to get category name
+  const getCategoryName = (categoryId?: number): string => {
+    if (!categoryId) return '-';
+    
+    const categoryName = categoryMap[categoryId];
+    if (categoryName) {
+      return categoryName;
     }
     
-    return `Vendor #${vendorId}`;
+    // If not found in map, log for debugging
+    const mapSize = Object.keys(categoryMap).length;
+    if (mapSize > 0) {
+      console.warn(`⚠️ Category ID ${categoryId} not found in category map (map has ${mapSize} entries)`);
+    }
+    
+    return `Category #${categoryId}`;
   };
 
   const handleDelete = async (id: number) => {
@@ -221,7 +439,7 @@ const CommissionManagement = () => {
                     <div className="min-w-0">
                       <Label className="text-xs text-gray-500">Category</Label>
                       <p className="text-sm font-medium mt-0.5 truncate">
-                        {commission.category_name || commission.category_id || '-'}
+                        {getCategoryName(commission.category_id)}
                       </p>
                     </div>
                     <div className="min-w-0">
@@ -271,7 +489,7 @@ const CommissionManagement = () => {
                   {commissions.map((commission) => (
                     <TableRow key={commission.id}>
                       <TableCell className="font-mono whitespace-nowrap">#{commission.id}</TableCell>
-                      <TableCell className="whitespace-nowrap">{commission.category_name || commission.category_id || '-'}</TableCell>
+                      <TableCell className="whitespace-nowrap">{getCategoryName(commission.category_id)}</TableCell>
                       <TableCell className="whitespace-nowrap">{getVendorName(commission.vendor_id)}</TableCell>
                       <TableCell className="text-right font-semibold whitespace-nowrap">
                         {commission.commission_rate}%

@@ -62,6 +62,68 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
     }, 100);
   };
 
+  // Handle blane click - navigate to blane page
+  const handleBlaneClick = (blaneId?: number, blaneName?: string) => {
+    console.log('🔗 Blane click:', { blaneId, blaneName });
+    
+    // Close the popover first
+    if (onClose) {
+      onClose();
+    }
+    
+    // Navigate immediately - no delay needed
+    if (blaneId) {
+      console.log(`🔗 Navigating to blane by ID: ${blaneId}${blaneName ? ` (name: "${blaneName}")` : ''}`);
+      // Navigate to blanes page with search/filter for the specific blane
+      const params = new URLSearchParams();
+      params.set('blaneId', String(blaneId));
+      if (blaneName) {
+        params.set('search', blaneName);
+      }
+      const url = `/admin/blanes?${params.toString()}`;
+      console.log(`🔗 Navigation URL: ${url}`);
+      navigate(url);
+    } else if (blaneName) {
+      // Fallback to name search if no ID available
+      console.log(`🔗 Navigating to blane by name: "${blaneName}"`);
+      const url = `/admin/blanes?search=${encodeURIComponent(blaneName)}`;
+      console.log(`🔗 Navigation URL: ${url}`);
+      navigate(url);
+    } else {
+      console.log('🔗 No blane info, navigating to blanes page');
+      navigate('/admin/blanes');
+    }
+  };
+
+  // Handle notification click - redirect based on notification type
+  const handleNotificationClick = (notification: Notification, e?: React.MouseEvent) => {
+    // Don't navigate if clicking on buttons
+    if (e) {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'BUTTON' || target.closest('button')) {
+        return;
+      }
+    }
+
+    // Check if notification is for a blane first (prioritize blane over vendor)
+    // Blane notifications are about blanes being created, so they should go to blane page
+    if (notification.blaneId || notification.blaneName) {
+      console.log('🔗 Blane notification clicked:', { blaneId: notification.blaneId, blaneName: notification.blaneName });
+      handleBlaneClick(notification.blaneId, notification.blaneName);
+      return;
+    }
+
+    // Check if notification is for a vendor
+    if (notification.vendorId || notification.vendorName) {
+      console.log('🔗 Vendor notification clicked:', { vendorId: notification.vendorId, vendorName: notification.vendorName });
+      handleVendorClick(notification.vendorId, notification.vendorName);
+      return;
+    }
+
+    // Default: no navigation if no specific entity is associated
+    console.log('🔗 Notification clicked but no vendor or blane info available');
+  };
+
   // Function to parse and render message with clickable vendor names
   const renderMessage = (notification: Notification) => {
     const { message, vendorId, vendorName } = notification;
@@ -192,15 +254,22 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
           </div>
         ) : (
           <ul>
-            {notifications.map((notification) => (
+            {notifications.map((notification) => {
+              // Check if notification is clickable (has vendor or blane info)
+              const isClickable = !!(notification.vendorId || notification.vendorName || notification.blaneId || notification.blaneName);
+              
+              return (
               <li 
                 key={notification.id} 
-                className={`p-3 border-b hover:bg-gray-50 ${!notification.read ? 'bg-blue-50' : ''}`}
+                className={`p-3 border-b ${isClickable ? 'cursor-pointer' : ''} hover:bg-gray-50 ${!notification.read ? 'bg-blue-50' : ''}`}
                 onClick={(e) => {
                   // Prevent click on the list item from interfering with button clicks
                   const target = e.target as HTMLElement;
                   if (target.tagName !== 'BUTTON' && !target.closest('button')) {
-                    // Allow other interactions
+                    // Navigate if notification is clickable
+                    if (isClickable) {
+                      handleNotificationClick(notification, e);
+                    }
                   }
                 }}
               >
@@ -237,7 +306,8 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
                   </div>
                 </div>
               </li>
-            ))}
+            );
+            })}
           </ul>
         )}
       </div>

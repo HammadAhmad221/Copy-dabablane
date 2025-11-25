@@ -12,6 +12,8 @@ export interface Notification {
   type: 'info' | 'warning' | 'error' | 'success';
   vendorId?: number;
   vendorName?: string;
+  blaneId?: number;
+  blaneName?: string;
   originalData?: any;
 }
 
@@ -29,15 +31,19 @@ export const useNotifications = () => {
                      (typeof apiNotification?.data === 'string' ? apiNotification.data : 'Notification') ||
                      'Notification';
       
-      // Extract vendor information from notification data
+      // Extract vendor and blane information from notification data
       let vendorId: number | undefined;
       let vendorName: string | undefined;
+      let blaneId: number | undefined;
+      let blaneName: string | undefined;
       
-      // Check if data is an object with vendor information
+      // Check if data is an object with vendor or blane information
       if (apiNotification?.data && typeof apiNotification.data === 'object' && !Array.isArray(apiNotification.data)) {
         const data = apiNotification.data as any;
         vendorId = data.vendor_id || data.vendorId;
         vendorName = data.vendor_name || data.vendorName;
+        blaneId = data.blane_id || data.blaneId;
+        blaneName = data.blane_name || data.blaneName;
       }
       
       // If vendor info not in data, try to parse from message
@@ -56,6 +62,33 @@ export const useNotifications = () => {
           }
         }
       }
+
+      // If blane info not in data, try to parse from message
+      // Pattern 1: "A new Blane "blaneName" has been created."
+      // Pattern 2: "A new Blane character, "blaneName", has been created."
+      // Pattern 3: Any quoted text after "Blane"
+      if (!blaneName && message) {
+        // First try: look for quoted text after "Blane" or "Blane character"
+        const blaneMatch = message.match(/Blane\s+(?:character,?\s+)?"([^"]+)"/i);
+        if (blaneMatch) {
+          blaneName = blaneMatch[1];
+        } else {
+          // Pattern: "Blane "name""
+          const blaneMatch2 = message.match(/Blane\s+"([^"]+)"/i);
+          if (blaneMatch2) {
+            blaneName = blaneMatch2[1];
+          } else {
+            // Fallback: look for quoted text that might be a blane name
+            // Only if message contains "Blane" keyword and doesn't contain "vendeur"
+            if (message.toLowerCase().includes('blane') && !message.toLowerCase().includes('vendeur')) {
+              const quotedMatch = message.match(/"([^"]+)"/);
+              if (quotedMatch) {
+                blaneName = quotedMatch[1];
+              }
+            }
+          }
+        }
+      }
       
       return {
         id: apiNotification.id || String(apiNotification.id),
@@ -65,6 +98,8 @@ export const useNotifications = () => {
         type: 'info', // You can map this based on notification type if needed
         vendorId,
         vendorName,
+        blaneId,
+        blaneName,
         originalData: apiNotification.data
       };
     } catch (error) {

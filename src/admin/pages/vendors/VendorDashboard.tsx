@@ -32,7 +32,6 @@ import {
   PieChartIcon,
   UsersIcon,
   ArrowUpRightIcon,
-  DollarSignIcon,
   ActivityIcon,
   BookCheck,
   BookmarkCheck,
@@ -68,7 +67,7 @@ const getIcon = (iconType: string) => {
     case "OrdersIcon":
       return <EyeIcon className="h-5 w-5" />;
     case "DollarSignIcon":
-      return <DollarSignIcon className="h-5 w-5" />;
+      return <span className="text-lg font-bold text-[#00897B]">DH</span>;
     case "UsersIcon":
       return <UsersIcon className="h-5 w-5" />;
     case "ReservationsIcon":
@@ -443,7 +442,7 @@ const VendorDashboard = () => {
                           const revenueValue = typeof kpi.value === 'string' 
                             ? parseFloat(kpi.value.replace(/[^0-9.-]/g, '')) || 0 
                             : kpi.value as number;
-                          return `$${revenueValue.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                          return `${revenueValue.toLocaleString(undefined, {minimumFractionDigits: 2})} DH`;
                         }
                         return typeof kpi.value === 'number' 
                           ? kpi.value.toLocaleString()

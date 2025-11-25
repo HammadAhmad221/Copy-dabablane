@@ -421,7 +421,9 @@ const EditVendorDialog = React.memo(({
                 <Input
                   id="name"
                   value={formData.name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  readOnly={true}
+                  disabled={true}
+                  className="bg-gray-100 cursor-not-allowed"
                   required
                 />
               </div>
@@ -431,7 +433,9 @@ const EditVendorDialog = React.memo(({
                   id="email"
                   type="email"
                   value={formData.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
+                  readOnly={true}
+                  disabled={true}
+                  className="bg-gray-100 cursor-not-allowed"
                   required
                 />
               </div>
@@ -649,42 +653,199 @@ const EditVendorDialog = React.memo(({
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Fichiers Médias</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Logo URL Preview Card */}
               <div className="space-y-2">
-                <Label htmlFor="logoUrl">Logo URL</Label>
-                <Input
-                  id="logoUrl"
-                  value={formData.logoUrl}
-                  onChange={(e) => handleInputChange('logoUrl', e.target.value)}
-                  placeholder="nom-fichier.png"
-                />
+                <Label>Logo URL</Label>
+                {formData.logoUrl ? (
+                  <Card className="p-3 border-2 border-gray-200 hover:border-gray-300 transition-colors">
+                    <div className="space-y-2">
+                      <div className="relative w-full h-32 bg-gray-100 rounded-md overflow-hidden flex items-center justify-center">
+                        <img
+                          src={`https://dev.dabablane.com/storage/uploads/vendor_images/${formData.logoUrl}`}
+                          alt="Logo"
+                          className="max-w-full max-h-full object-contain"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            const parent = target.parentElement;
+                            if (parent) {
+                              parent.innerHTML = '<div class="text-gray-400 text-sm">Image non disponible</div>';
+                            }
+                          }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-600 truncate" title={formData.logoUrl}>
+                        {formData.logoUrl}
+                      </p>
+                    </div>
+                  </Card>
+                ) : (
+                  <Card className="p-3 border-2 border-dashed border-gray-300">
+                    <div className="w-full h-32 bg-gray-50 rounded-md flex items-center justify-center">
+                      <p className="text-gray-400 text-sm">Aucun logo</p>
+                    </div>
+                  </Card>
+                )}
               </div>
+
+              {/* RC Certificate URL Preview Card */}
               <div className="space-y-2">
-                <Label htmlFor="rcCertificateUrl">Certificat RC URL</Label>
-                <Input
-                  id="rcCertificateUrl"
-                  value={formData.rcCertificateUrl}
-                  onChange={(e) => handleInputChange('rcCertificateUrl', e.target.value)}
-                  placeholder="nom-fichier.png"
-                />
+                <Label>Certificat RC URL</Label>
+                {formData.rcCertificateUrl ? (
+                  <Card className="p-3 border-2 border-gray-200 hover:border-gray-300 transition-colors">
+                    <div className="space-y-2">
+                      <div className="relative w-full h-32 bg-gray-100 rounded-md overflow-hidden flex items-center justify-center">
+                        <img
+                          src={`https://dev.dabablane.com/storage/uploads/vendor_images/${formData.rcCertificateUrl}`}
+                          alt="RC Certificate"
+                          className="max-w-full max-h-full object-contain"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            const parent = target.parentElement;
+                            if (parent) {
+                              parent.innerHTML = '<div class="text-gray-400 text-sm">Image non disponible</div>';
+                            }
+                          }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-600 truncate" title={formData.rcCertificateUrl}>
+                        {formData.rcCertificateUrl}
+                      </p>
+                    </div>
+                  </Card>
+                ) : (
+                  <Card className="p-3 border-2 border-dashed border-gray-300">
+                    <div className="w-full h-32 bg-gray-50 rounded-md flex items-center justify-center">
+                      <p className="text-gray-400 text-sm">Aucun certificat</p>
+                    </div>
+                  </Card>
+                )}
               </div>
+
+              {/* RIB URL Preview Card */}
               <div className="space-y-2">
-                <Label htmlFor="ribUrl">RIB URL</Label>
-                <Input
-                  id="ribUrl"
-                  value={formData.ribUrl}
-                  onChange={(e) => handleInputChange('ribUrl', e.target.value)}
-                  placeholder="nom-fichier.pdf"
-                />
+                <Label>RIB URL</Label>
+                {formData.ribUrl ? (
+                  <Card className="p-3 border-2 border-gray-200 hover:border-gray-300 transition-colors">
+                    <div className="space-y-2">
+                      <div className="relative w-full h-32 bg-gray-100 rounded-md overflow-hidden flex items-center justify-center">
+                        {formData.ribUrl.toLowerCase().endsWith('.pdf') ? (
+                          <div className="text-center p-4">
+                            <div className="text-4xl mb-2">📄</div>
+                            <p className="text-xs text-gray-600">Fichier PDF</p>
+                            <a
+                              href={`https://dev.dabablane.com/storage/uploads/vendor_images/${formData.ribUrl}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:underline mt-1 inline-block"
+                            >
+                              Voir le PDF
+                            </a>
+                          </div>
+                        ) : (
+                          <img
+                            src={`https://dev.dabablane.com/storage/uploads/vendor_images/${formData.ribUrl}`}
+                            alt="RIB"
+                            className="max-w-full max-h-full object-contain"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                              const parent = target.parentElement;
+                              if (parent) {
+                                parent.innerHTML = '<div class="text-gray-400 text-sm">Image non disponible</div>';
+                              }
+                            }}
+                          />
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-600 truncate" title={formData.ribUrl}>
+                        {formData.ribUrl}
+                      </p>
+                    </div>
+                  </Card>
+                ) : (
+                  <Card className="p-3 border-2 border-dashed border-gray-300">
+                    <div className="w-full h-32 bg-gray-50 rounded-md flex items-center justify-center">
+                      <p className="text-gray-400 text-sm">Aucun RIB</p>
+                    </div>
+                  </Card>
+                )}
               </div>
               <div className="space-y-2 md:col-span-3">
-                <Label htmlFor="cover_media_urls">URLs des Médias de Couverture (séparées par des virgules)</Label>
-                <Input
-                  id="cover_media_urls"
-                  value={formData.cover_media_urls.join(', ')}
-                  onChange={(e) => handleArrayChange('cover_media_urls', e.target.value)}
-                  placeholder="image1.jpg, image2.png, video1.mp4"
-                />
-                <p className="text-xs text-gray-500">Entrez les noms de fichiers séparés par des virgules</p>
+                <Label>URLs des Médias de Couverture</Label>
+                
+                {/* Cover Media Preview Cards */}
+                {formData.cover_media_urls.length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {formData.cover_media_urls.map((mediaUrl, index) => {
+                      const isVideo = mediaUrl.toLowerCase().match(/\.(mp4|webm|ogg|mov|avi)$/);
+                      const isPdf = mediaUrl.toLowerCase().endsWith('.pdf');
+                      const isImage = !isVideo && !isPdf;
+                      
+                      return (
+                        <Card key={index} className="p-3 border-2 border-gray-200 hover:border-gray-300 transition-colors">
+                          <div className="space-y-2">
+                            <div className="relative w-full h-32 bg-gray-100 rounded-md overflow-hidden flex items-center justify-center">
+                              {isVideo ? (
+                                <video
+                                  src={`https://dev.dabablane.com/storage/uploads/vendor_images/${mediaUrl}`}
+                                  className="max-w-full max-h-full object-contain"
+                                  controls
+                                  preload="metadata"
+                                  onError={(e) => {
+                                    const target = e.target as HTMLVideoElement;
+                                    target.style.display = 'none';
+                                    const parent = target.parentElement;
+                                    if (parent) {
+                                      parent.innerHTML = '<div class="text-gray-400 text-sm">Vidéo non disponible</div>';
+                                    }
+                                  }}
+                                />
+                              ) : isPdf ? (
+                                <div className="text-center p-4">
+                                  <div className="text-4xl mb-2">📄</div>
+                                  <p className="text-xs text-gray-600">Fichier PDF</p>
+                                  <a
+                                    href={`https://dev.dabablane.com/storage/uploads/vendor_images/${mediaUrl}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-blue-600 hover:underline mt-1 inline-block"
+                                  >
+                                    Voir le PDF
+                                  </a>
+                                </div>
+                              ) : (
+                                <img
+                                  src={`https://dev.dabablane.com/storage/uploads/vendor_images/${mediaUrl}`}
+                                  alt={`Cover media ${index + 1}`}
+                                  className="max-w-full max-h-full object-contain"
+                                  onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = 'none';
+                                    const parent = target.parentElement;
+                                    if (parent) {
+                                      parent.innerHTML = '<div class="text-gray-400 text-sm">Image non disponible</div>';
+                                    }
+                                  }}
+                                />
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-600 truncate" title={mediaUrl}>
+                              {mediaUrl}
+                            </p>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <Card className="p-3 border-2 border-dashed border-gray-300">
+                    <div className="w-full h-32 bg-gray-50 rounded-md flex items-center justify-center">
+                      <p className="text-gray-400 text-sm">Aucun média de couverture</p>
+                    </div>
+                  </Card>
+                )}
               </div>
             </div>
           </div>
