@@ -71,7 +71,7 @@ import { Checkbox } from "@/admin/components/ui/checkbox";
 import { motion, AnimatePresence } from "framer-motion";
 import { cityApi } from "@/admin/lib/api/services/cityService";
 import { City } from "@/admin/lib/api/types/city";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -296,6 +296,8 @@ const ImportDialog = ({
 const Blanes: React.FC = () => {
   const { user } = useAuth();
   const isUserRole = user?.role === 'user';
+  const location = useLocation();
+  const navigate = useNavigate();
 
   // State for blanes, categories, subcategories, vendors, loading, and pagination
   const [blanes, setBlanes] = useState<Blane[]>([]);
@@ -376,6 +378,28 @@ const Blanes: React.FC = () => {
 
     fetchInitialData();
   }, []);
+
+  // Read URL parameters on mount and when location changes
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const searchParam = params.get('search');
+    const blaneIdParam = params.get('blaneId');
+    
+    if (searchParam) {
+      console.log('🔍 Setting search term from URL:', searchParam);
+      setSearchTerm(searchParam);
+    }
+    
+    if (blaneIdParam) {
+      console.log('🔍 Blane ID from URL:', blaneIdParam);
+      // If we have a blaneId, we can use it to filter or search
+      // For now, we'll just set it as a search term if no search is provided
+      if (!searchParam) {
+        // Try to find the blane by ID in the list, or search for it
+        // The search will be handled by the fetchBlanes function
+      }
+    }
+  }, [location.search]);
 
   // Update the fetchBlanes function to handle pagination correctly
   const fetchBlanes = useCallback(async () => {
@@ -523,8 +547,6 @@ const Blanes: React.FC = () => {
       ));
     }
   };
-
-  const navigate = useNavigate()
 
   // First, update the mobile dropdown menu implementation
   const MobileActions: React.FC<{ blane: Blane }> = ({ blane }) => {

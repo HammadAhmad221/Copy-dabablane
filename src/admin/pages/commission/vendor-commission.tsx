@@ -78,6 +78,7 @@ const VendorCommission = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
+  const [categoryMap, setCategoryMap] = useState<Record<number, string>>({});
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -86,8 +87,8 @@ const VendorCommission = () => {
   const [formData, setFormData] = useState({
     category: "",
     categoryId: "",
-    percentage: 0,
-    partialPercentage: 0,
+    percentage: undefined as number | undefined,
+    partialPercentage: undefined as number | undefined,
     isActive: true,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -111,11 +112,18 @@ const VendorCommission = () => {
     fetchCategories();
   }, []);
 
+
   // Map API response to component format
-  const mapApiResponseToCommission = (apiData: CategoryDefaultCommission): VendorCommission => {
+  const mapApiResponseToCommission = (apiData: CategoryDefaultCommission, categoryNameMap?: Record<number, string>): VendorCommission => {
+    // Try to get category name from map, then from apiData, then fallback to ID
+    const categoryName = categoryNameMap?.[apiData.category_id] 
+      || apiData.category_name 
+      || categories.find(cat => cat.id === apiData.category_id)?.name
+      || `Category ${apiData.category_id}`;
+    
     return {
       id: apiData.id,
-      category: apiData.category_name || `Category ${apiData.category_id}`,
+      category: categoryName,
       categoryId: apiData.category_id,
       percentage: apiData.commission_rate,
       partialPercentage: apiData.partial_commission_rate,
@@ -129,8 +137,45 @@ const VendorCommission = () => {
       setIsLoading(true);
       try {
         const response = await commissionApi.getCategoryDefaults();
+        
+        // Build category map from categories already loaded
+        const categoryNameMap: Record<number, string> = {};
+        categories.forEach((category) => {
+          categoryNameMap[category.id] = category.name;
+        });
+        
+        // Also check if category names are in the API response
+        response.forEach((commission: any) => {
+          if (commission.category_name && commission.category_id) {
+            categoryNameMap[commission.category_id] = commission.category_name;
+          }
+        });
+        
+        // If we still have missing category names, fetch them
+        const categoryIds = new Set(response.map((c: any) => c.category_id));
+        const missingCategoryIds = Array.from(categoryIds).filter(id => !categoryNameMap[id]);
+        
+        if (missingCategoryIds.length > 0) {
+          try {
+            const categoryResponse = await categoryApi.getCategories({ paginationSize: 1000 });
+            categoryResponse.data.forEach((category: any) => {
+              if (categoryIds.has(category.id)) {
+                categoryNameMap[category.id] = category.name;
+                console.log(`✅ Mapped category ${category.id} -> "${category.name}" from category API`);
+              }
+            });
+          } catch (error) {
+            console.error("Error fetching categories for mapping:", error);
+          }
+        }
+        
+        setCategoryMap(categoryNameMap);
+        console.log("✅ Category map created with", Object.keys(categoryNameMap).length, "entries:", categoryNameMap);
+        
         // Map all commissions (including inactive ones for reference)
-        const allCommissions = response.map(mapApiResponseToCommission);
+        const allCommissions = response.map((apiData: CategoryDefaultCommission) => 
+          mapApiResponseToCommission(apiData, categoryNameMap)
+        );
         // Only display active commissions in the UI
         const activeCommissions = allCommissions.filter(commission => commission.isActive);
         setCommissions(activeCommissions);
@@ -147,7 +192,7 @@ const VendorCommission = () => {
     };
 
     fetchCommissions();
-  }, []);
+  }, [categories]); // Re-fetch when categories are loaded
 
   const handleCreate = async () => {
     setErrors({});
@@ -157,17 +202,15 @@ const VendorCommission = () => {
     if (!formData.categoryId) {
       newErrors.category = "Category is required";
     }
-    if (formData.percentage < 0 || formData.percentage > 100) {
+    if (formData.percentage === undefined || formData.percentage === null) {
+      newErrors.percentage = "Percentage is required";
+    } else if (formData.percentage < 0 || formData.percentage > 100) {
       newErrors.percentage = "Percentage must be between 0 and 100";
     }
-    if (formData.percentage === 0) {
-      newErrors.percentage = "Percentage is required";
-    }
-    if (formData.partialPercentage < 0 || formData.partialPercentage > 100) {
-      newErrors.partialPercentage = "Partial percentage must be between 0 and 100";
-    }
-    if (formData.partialPercentage === 0) {
+    if (formData.partialPercentage === undefined || formData.partialPercentage === null) {
       newErrors.partialPercentage = "Partial percentage is required";
+    } else if (formData.partialPercentage < 0 || formData.partialPercentage > 100) {
+      newErrors.partialPercentage = "Partial percentage must be between 0 and 100";
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -193,7 +236,7 @@ const VendorCommission = () => {
 
       const newCommission = mapApiResponseToCommission(response);
       setCommissions([...commissions, newCommission]);
-      setFormData({ category: "", categoryId: "", percentage: 0, partialPercentage: 0, isActive: true });
+      setFormData({ category: "", categoryId: "", percentage: undefined, partialPercentage: undefined, isActive: true });
       setIsCreateDialogOpen(false);
       toast.success("Vendor commission created successfully");
     } catch (error: any) {
@@ -214,14 +257,15 @@ const VendorCommission = () => {
     if (!formData.categoryId) {
       newErrors.category = "Category is required";
     }
-    if (formData.percentage < 0 || formData.percentage > 100) {
+    if (formData.percentage === undefined || formData.percentage === null) {
+      newErrors.percentage = "Percentage is required";
+    } else if (formData.percentage < 0 || formData.percentage > 100) {
       newErrors.percentage = "Percentage must be between 0 and 100";
     }
-    if (formData.partialPercentage < 0 || formData.partialPercentage > 100) {
-      newErrors.partialPercentage = "Partial percentage must be between 0 and 100";
-    }
-    if (formData.partialPercentage === 0) {
+    if (formData.partialPercentage === undefined || formData.partialPercentage === null) {
       newErrors.partialPercentage = "Partial percentage is required";
+    } else if (formData.partialPercentage < 0 || formData.partialPercentage > 100) {
+      newErrors.partialPercentage = "Partial percentage must be between 0 and 100";
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -376,7 +420,7 @@ const VendorCommission = () => {
           {isAdmin && (
             <Button
               onClick={() => {
-                setFormData({ category: "", categoryId: "", percentage: 0, partialPercentage: 0, isActive: true });
+                setFormData({ category: "", categoryId: "", percentage: undefined, partialPercentage: undefined, isActive: true });
                 setErrors({});
                 setIsCreateDialogOpen(true);
               }}
@@ -416,17 +460,25 @@ const VendorCommission = () => {
                     )}
                   </div>
 
-                  {/* Category & Percentage */}
+                  {/* Category & Rates */}
                   <div className="space-y-2">
                     <div>
                       <Label className="text-xs text-gray-500">Category</Label>
                       <p className="text-sm font-medium mt-0.5">{commission.category}</p>
                     </div>
-                    <div>
-                      <Label className="text-xs text-gray-500">Percentage</Label>
-                      <p className="text-lg font-bold text-[#00897B] mt-0.5">
-                        {commission.percentage}%
-                      </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs text-gray-500">Percentage</Label>
+                        <p className="text-lg font-bold text-[#00897B] mt-0.5">
+                          {commission.percentage}%
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-500">Partial Percentage</Label>
+                        <p className="text-base font-semibold text-gray-700 mt-0.5">
+                          {commission.partialPercentage}%
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -445,6 +497,9 @@ const VendorCommission = () => {
                     <TableHead className="text-right whitespace-nowrap min-w-[120px] font-semibold text-white hover:bg-[#00897B]">
                       Percentage
                     </TableHead>
+                    <TableHead className="text-right whitespace-nowrap min-w-[120px] font-semibold text-white hover:bg-[#00897B]">
+                      Partial Percentage
+                    </TableHead>
                     {isAdmin && (
                       <TableHead className="whitespace-nowrap min-w-[100px] font-semibold text-white hover:bg-[#00897B]">Actions</TableHead>
                     )}
@@ -459,6 +514,9 @@ const VendorCommission = () => {
                       <TableCell className="whitespace-nowrap">{commission.category}</TableCell>
                       <TableCell className="text-right font-semibold whitespace-nowrap text-[#00897B]">
                         {commission.percentage}%
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap text-gray-700">
+                        {commission.partialPercentage}%
                       </TableCell>
                       {isAdmin && (
                         <TableCell className="whitespace-nowrap">
@@ -487,7 +545,7 @@ const VendorCommission = () => {
             {isAdmin && (
               <Button
                 onClick={() => {
-                  setFormData({ category: "", categoryId: "", percentage: 0, partialPercentage: 0, isActive: true });
+                  setFormData({ category: "", categoryId: "", percentage: undefined, partialPercentage: undefined, isActive: true });
                   setErrors({});
                   setIsCreateDialogOpen(true);
                 }}
@@ -574,10 +632,19 @@ const VendorCommission = () => {
                 max="100"
                 step="0.01"
                 placeholder="e.g., 10.5"
-                value={formData.percentage || ""}
+                value={formData.percentage === undefined || formData.percentage === null ? "" : formData.percentage}
                 onChange={(e) => {
-                  const value = e.target.value === "" ? 0 : Number(e.target.value);
-                  setFormData({ ...formData, percentage: value });
+                  const inputValue = e.target.value;
+                  if (inputValue === "" || inputValue === null) {
+                    setFormData({ ...formData, percentage: undefined });
+                  } else {
+                    const numValue = Number(inputValue);
+                    if (!isNaN(numValue)) {
+                      // Allow 0 as a valid value, only prevent negative values
+                      const clampedValue = Math.max(0, Math.min(100, numValue));
+                      setFormData({ ...formData, percentage: clampedValue });
+                    }
+                  }
                   if (errors.percentage) setErrors({ ...errors, percentage: "" });
                 }}
                 className="h-10"
@@ -599,10 +666,19 @@ const VendorCommission = () => {
                 max="100"
                 step="0.01"
                 placeholder="e.g., 3.5"
-                value={formData.partialPercentage || ""}
+                value={formData.partialPercentage === undefined || formData.partialPercentage === null ? "" : formData.partialPercentage}
                 onChange={(e) => {
-                  const value = e.target.value === "" ? 0 : Number(e.target.value);
-                  setFormData({ ...formData, partialPercentage: value });
+                  const inputValue = e.target.value;
+                  if (inputValue === "" || inputValue === null) {
+                    setFormData({ ...formData, partialPercentage: undefined });
+                  } else {
+                    const numValue = Number(inputValue);
+                    if (!isNaN(numValue)) {
+                      // Allow 0 as a valid value, only prevent negative values
+                      const clampedValue = Math.max(0, Math.min(100, numValue));
+                      setFormData({ ...formData, partialPercentage: clampedValue });
+                    }
+                  }
                   if (errors.partialPercentage) setErrors({ ...errors, partialPercentage: "" });
                 }}
                 className="h-10"
@@ -619,7 +695,7 @@ const VendorCommission = () => {
               variant="outline"
               onClick={() => {
                 setIsCreateDialogOpen(false);
-                setFormData({ category: "", categoryId: "", percentage: 0, partialPercentage: 0, isActive: true });
+                setFormData({ category: "", categoryId: "", percentage: undefined, partialPercentage: undefined, isActive: true });
                 setErrors({});
               }}
               className="w-full sm:w-auto"
@@ -630,7 +706,7 @@ const VendorCommission = () => {
             <Button
               onClick={handleCreate}
               className="bg-[#00897B] hover:bg-[#00796B] w-full sm:w-auto"
-              disabled={isSubmitting || !formData.categoryId || formData.percentage <= 0 || formData.partialPercentage <= 0}
+              disabled={isSubmitting || !formData.categoryId || formData.percentage === undefined || formData.percentage === null || formData.partialPercentage === undefined || formData.partialPercentage === null}
             >
               {isSubmitting ? (
                 <>
@@ -723,10 +799,19 @@ const VendorCommission = () => {
                 max="100"
                 step="0.01"
                 placeholder="e.g., 10.5"
-                value={formData.percentage || ""}
+                value={formData.percentage === undefined || formData.percentage === null ? "" : formData.percentage}
                 onChange={(e) => {
-                  const value = e.target.value === "" ? 0 : Number(e.target.value);
-                  setFormData({ ...formData, percentage: value });
+                  const inputValue = e.target.value;
+                  if (inputValue === "" || inputValue === null) {
+                    setFormData({ ...formData, percentage: undefined });
+                  } else {
+                    const numValue = Number(inputValue);
+                    if (!isNaN(numValue)) {
+                      // Allow 0 as a valid value, only prevent negative values
+                      const clampedValue = Math.max(0, Math.min(100, numValue));
+                      setFormData({ ...formData, percentage: clampedValue });
+                    }
+                  }
                   if (errors.percentage) setErrors({ ...errors, percentage: "" });
                 }}
                 className="h-10"
@@ -748,10 +833,19 @@ const VendorCommission = () => {
                 max="100"
                 step="0.01"
                 placeholder="e.g., 3.5"
-                value={formData.partialPercentage || ""}
+                value={formData.partialPercentage === undefined || formData.partialPercentage === null ? "" : formData.partialPercentage}
                 onChange={(e) => {
-                  const value = e.target.value === "" ? 0 : Number(e.target.value);
-                  setFormData({ ...formData, partialPercentage: value });
+                  const inputValue = e.target.value;
+                  if (inputValue === "" || inputValue === null) {
+                    setFormData({ ...formData, partialPercentage: undefined });
+                  } else {
+                    const numValue = Number(inputValue);
+                    if (!isNaN(numValue)) {
+                      // Allow 0 as a valid value, only prevent negative values
+                      const clampedValue = Math.max(0, Math.min(100, numValue));
+                      setFormData({ ...formData, partialPercentage: clampedValue });
+                    }
+                  }
                   if (errors.partialPercentage) setErrors({ ...errors, partialPercentage: "" });
                 }}
                 className="h-10"
@@ -769,7 +863,7 @@ const VendorCommission = () => {
               onClick={() => {
                 setIsEditDialogOpen(false);
                 setSelectedCommission(null);
-                setFormData({ category: "", categoryId: "", percentage: 0, partialPercentage: 0, isActive: true });
+                setFormData({ category: "", categoryId: "", percentage: undefined, partialPercentage: undefined, isActive: true });
                 setErrors({});
               }}
               className="w-full sm:w-auto"
@@ -780,7 +874,7 @@ const VendorCommission = () => {
             <Button
               onClick={handleUpdate}
               className="bg-[#00897B] hover:bg-[#00796B] w-full sm:w-auto"
-              disabled={isSubmitting || !formData.categoryId || formData.percentage <= 0 || formData.partialPercentage <= 0}
+              disabled={isSubmitting || !formData.categoryId || formData.percentage === undefined || formData.percentage === null || formData.partialPercentage === undefined || formData.partialPercentage === null}
             >
               {isSubmitting ? (
                 <>
