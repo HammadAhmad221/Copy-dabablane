@@ -47,12 +47,29 @@ export const orderApi = {
   // Create a new order
   createOrder: async (data: OrderFormData): Promise<OrderType> => {
     try {
+      console.log('📤 Order API - Create request:', {
+        endpoint: BACK_ORDERS_ENDPOINTS.createOrder(),
+        payload: data,
+        payloadTypes: Object.keys(data).reduce((acc, key) => {
+          acc[key] = typeof (data as any)[key];
+          return acc;
+        }, {} as Record<string, string>)
+      });
+      
       const response = await apiClient.post<ApiResponse<OrderType>>(
         BACK_ORDERS_ENDPOINTS.createOrder(),
         data
       );
+      
+      console.log('✅ Order API - Create response:', response.data);
       return response.data.data;
-    } catch (error) {
+    } catch (error: any) {
+      console.error('❌ Order API - Create error:', {
+        error: error,
+        response: error.response,
+        status: error.response?.status,
+        data: error.response?.data
+      });
       throw error;
     }
   },

@@ -99,7 +99,7 @@ interface AnalyticsRecord {
 interface AnalyticsItem {
   name: string;
   value: number | string;
-  change?: number;
+  change?: number | null;
   icon: string;
   details?: {
     near_expiration?: number;
@@ -204,6 +204,17 @@ const VendorDashboard = () => {
       const data = await getVendorAnalytics(params);
       console.log("Vendor Analytics Data:", data);
       console.log("Vendor Analytics Params:", params);
+      
+      // Log change values for debugging
+      if (Array.isArray(data) && data.length > 0) {
+        console.log("Change values for each metric:", data.map(item => ({
+          name: item.name,
+          change: item.change,
+          changeType: typeof item.change,
+          isNull: item.change === null,
+          isUndefined: item.change === undefined
+        })));
+      }
       
       setAnalyticsData(Array.isArray(data) ? data : []);
       if (Array.isArray(data) && data.length > 0) {
@@ -426,13 +437,6 @@ const VendorDashboard = () => {
                       </div>
                     ) : (
                       <div className="w-5 h-5"></div>
-                    )}
-                    {kpi.change !== undefined && (
-                      <div className={`text-xs sm:text-sm font-medium ${
-                        kpi.change > 0 ? 'text-green-600' : kpi.change < 0 ? 'text-red-600' : 'text-gray-600'
-                      }`}>
-                        {kpi.change > 0 ? '+' : ''}{kpi.change}%
-                      </div>
                     )}
                   </div>
                   <div className="mt-2">
