@@ -335,7 +335,13 @@ const SubscriptionManagement = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {plans.sort((a, b) => a.display_order - b.display_order).map((plan) => (
+                        {plans.sort((a, b) => {
+                          // Sort by created_at descending (newest first), fallback to id descending
+                          if (a.created_at && b.created_at) {
+                            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                          }
+                          return b.id - a.id;
+                        }).map((plan) => (
                           <TableRow key={plan.id}>
                             <TableCell className="font-medium">#{plan.display_order}</TableCell>
                             <TableCell>
@@ -372,7 +378,13 @@ const SubscriptionManagement = () => {
 
               {!isLoading && (
                 <div className="md:hidden space-y-3">
-                  {plans.sort((a, b) => a.display_order - b.display_order).map((plan) => (
+                  {plans.sort((a, b) => {
+                    // Sort by created_at descending (newest first), fallback to id descending
+                    if (a.created_at && b.created_at) {
+                      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                    }
+                    return b.id - a.id;
+                  }).map((plan) => (
                     <Card key={plan.id} className="p-4">
                       <div className="space-y-3">
                         <div className="flex items-start justify-between">
@@ -447,7 +459,10 @@ const SubscriptionManagement = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {addOns.map((addOn) => (
+                    {addOns.sort((a, b) => {
+                      // Sort by id descending (newest first) - higher IDs are typically newer
+                      return (b.id || 0) - (a.id || 0);
+                    }).map((addOn) => (
                       <TableRow key={addOn.id}>
                         <TableCell className="font-medium">{addOn.title}</TableCell>
                         <TableCell>${(Number(addOn.price_ht) || 0).toFixed(2)}</TableCell>
@@ -480,7 +495,10 @@ const SubscriptionManagement = () => {
 
               {/* Mobile Cards */}
               <div className="md:hidden space-y-3">
-                {addOns.map((addOn) => (
+                {addOns.sort((a, b) => {
+                  // Sort by id descending (newest first) - higher IDs are typically newer
+                  return (b.id || 0) - (a.id || 0);
+                }).map((addOn) => (
                   <Card key={addOn.id} className="p-4">
                     <div className="space-y-3">
                       <div className="flex items-start justify-between">

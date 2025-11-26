@@ -4,7 +4,7 @@ import BACK_VENDOR_ANALYTICS_ENDPOINTS from '../endpoints/VendorAnalytics';
 export interface VendorAnalyticsResponse {
   name: string;
   value: number | string;
-  change: number;
+  change: number | null;
   icon: string;
   details?: {
     near_expiration?: number;
@@ -44,17 +44,46 @@ export const getVendorAnalytics = async (params: VendorAnalyticsParams): Promise
     console.log('Vendor Analytics Raw Response:', response.data);
     
     // Handle different response structures
+    let data: any[] = [];
     if (Array.isArray(response.data)) {
-      return response.data;
+      data = response.data;
     } else if (response.data?.data && Array.isArray(response.data.data)) {
-      return response.data.data;
+      data = response.data.data;
     } else if (response.data?.analytics && Array.isArray(response.data.analytics)) {
-      return response.data.analytics;
+      data = response.data.analytics;
+    } else {
+      // Log unexpected response structure
+      console.warn('Unexpected vendor analytics response structure:', response.data);
+      return [];
     }
     
-    // Log unexpected response structure
-    console.warn('Unexpected vendor analytics response structure:', response.data);
-    return [];
+    // Normalize the data: ensure change is a number or null
+    const normalizedData = data.map((item) => {
+      let changeValue: number | null = null;
+      
+      // Handle different formats: number, string, null, undefined
+      if (item.change !== null && item.change !== undefined && item.change !== '') {
+        const parsed = Number(item.change);
+        // Only set if it's a valid number (not NaN)
+        if (!isNaN(parsed)) {
+          changeValue = parsed;
+        }
+      }
+      
+      return {
+        ...item,
+        change: changeValue,
+      };
+    });
+    
+    console.log('Normalized Vendor Analytics Data:', normalizedData);
+    console.log('Change values summary:', normalizedData.map(item => ({
+      name: item.name,
+      originalChange: data.find(d => d.name === item.name)?.change,
+      normalizedChange: item.change
+    })));
+    
+    return normalizedData;
   } catch (error: any) {
     console.error('Vendor Analytics API Error:', error);
     if (error.response) {
