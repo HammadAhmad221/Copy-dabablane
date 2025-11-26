@@ -179,7 +179,12 @@ const Orders: React.FC = () => {
   const fetchCustomers = async () => {
     try {
       const response = await CustomerService.getAll({ paginationSize: 9999 });
-      setCustomers(response.data);
+      // Remove duplicate customers by email - keep only the first occurrence of each email
+      const uniqueCustomers = response.data.filter((customer, index, self) => 
+        index === self.findIndex((c) => c.email?.toLowerCase().trim() === customer.email?.toLowerCase().trim())
+      );
+      setCustomers(uniqueCustomers);
+      console.log(`✅ Loaded ${uniqueCustomers.length} unique customers (removed ${response.data.length - uniqueCustomers.length} duplicates)`);
     } catch (error) {
       toast.error("Failed to fetch customers");
     }
@@ -199,7 +204,12 @@ const Orders: React.FC = () => {
 
         // Fetch customers after other data is loaded
         const customersResponse = await CustomerService.getAll({ paginationSize: 9999 });
-        setCustomers(customersResponse.data);
+        // Remove duplicate customers by email - keep only the first occurrence of each email
+        const uniqueCustomers = customersResponse.data.filter((customer, index, self) => 
+          index === self.findIndex((c) => c.email?.toLowerCase().trim() === customer.email?.toLowerCase().trim())
+        );
+        setCustomers(uniqueCustomers);
+        console.log(`✅ Loaded ${uniqueCustomers.length} unique customers (removed ${customersResponse.data.length - uniqueCustomers.length} duplicates)`);
       } catch (error) {
         toast.error("Failed to fetch necessary data");
       }
@@ -335,10 +345,55 @@ const Orders: React.FC = () => {
       };
 
       if (selectedOrder) {
-        await orderApi.updateOrder(selectedOrder.id.toString(), validatedData);
+        // For updates, prepare the payload matching the API structure
+        const updatePayload: any = {
+          blane_id: validatedData.blane_id,
+          name: validatedData.name.trim(),
+          email: validatedData.email.trim(),
+          phone: validatedData.phone.trim(),
+          city: validatedData.city.trim(),
+          quantity: Number(validatedData.quantity),
+          delivery_address: validatedData.delivery_address.trim(),
+          status: validatedData.status,
+          total_price: Number(calculatedTotalPrice.toFixed(2)),
+          payment_method: (selectedOrder as any).payment_method || 'cash',
+          is_digital: selectedBlane.is_digital || false, // Include is_digital from blane
+          partiel_price: (selectedOrder as any).partiel_price || null, // Preserve or set to null
+          comments: validatedData.comments && validatedData.comments.trim() ? validatedData.comments.trim() : null, // Use null instead of empty string
+        };
+        
+        console.log('📤 Updating order:', {
+          orderId: selectedOrder.id,
+          payload: updatePayload,
+          payloadTypes: Object.keys(updatePayload).reduce((acc, key) => {
+            acc[key] = typeof updatePayload[key];
+            return acc;
+          }, {} as Record<string, string>)
+        });
+
+        await orderApi.updateOrder(selectedOrder.id.toString(), updatePayload);
         toast.success("Order updated successfully");
       } else {
-        await orderApi.createOrder(validatedData);
+        // For creation, ensure all required fields are included
+        const createPayload: any = {
+          blane_id: validatedData.blane_id,
+          name: validatedData.name.trim(),
+          email: validatedData.email.trim(),
+          phone: validatedData.phone.trim(),
+          city: validatedData.city.trim(),
+          quantity: Number(validatedData.quantity),
+          delivery_address: validatedData.delivery_address.trim(),
+          status: validatedData.status,
+          total_price: Number(calculatedTotalPrice.toFixed(2)),
+          source: 'web', // Required by backend
+          payment_method: 'cash', // Required by backend - default to 'cash' for admin-created orders
+          is_digital: selectedBlane.is_digital || false, // Include is_digital from blane
+          partiel_price: null, // Set to null for new orders
+          comments: validatedData.comments && validatedData.comments.trim() ? validatedData.comments.trim() : null, // Use null instead of empty string
+        };
+        
+        console.log('📤 Creating order:', createPayload);
+        await orderApi.createOrder(createPayload);
         toast.success("Order created successfully");
       }
 
@@ -348,7 +403,12 @@ const Orders: React.FC = () => {
       // Close dialog and refresh data
       handleDialogClose();
       await fetchOrders();
-    } catch (error) {
+    } catch (error: any) {
+      console.error('❌ Error saving order:', error);
+      console.error('❌ Error response:', error.response);
+      console.error('❌ Error data:', error.response?.data);
+      console.error('❌ Full error data (expanded):', JSON.stringify(error.response?.data, null, 2));
+      
       if (error instanceof z.ZodError) {
         const errorMap: Record<string, string> = {};
         error.errors.forEach((err) => {
@@ -359,10 +419,56 @@ const Orders: React.FC = () => {
         setErrors(errorMap);
         toast.error("Please fix the errors in the form.");
       } else {
-        if (error.response?.data?.message === "Only pending orders can be updated") {
+        // Extract error message from response
+        let errorMessage = "Failed to save order";
+        const errorData = error.response?.data;
+        
+        if (errorData) {
+          // Check for validation errors object
+          if (errorData.error && typeof errorData.error === 'object') {
+            const errorObj = errorData.error;
+            const errorMessages: string[] = [];
+            
+            // Extract all error messages from the error object
+            Object.keys(errorObj).forEach((key) => {
+              const fieldErrors = Array.isArray(errorObj[key]) ? errorObj[key] : [errorObj[key]];
+              fieldErrors.forEach((msg: string) => {
+                errorMessages.push(`${key}: ${msg}`);
+              });
+            });
+            
+            if (errorMessages.length > 0) {
+              errorMessage = errorMessages.join(', ');
+              console.error('❌ Validation errors:', errorMessages);
+            } else {
+              errorMessage = errorData.message || errorData.error || error.message || errorMessage;
+            }
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (typeof errorData.error === 'string') {
+            errorMessage = errorData.error;
+          }
+        }
+        
+        // Log detailed error information
+        if (error.response?.status === 500) {
+          console.error('❌ Server Error (500):', {
+            status: error.response.status,
+            data: error.response.data,
+            message: errorMessage
+          });
+          toast.error(`Server error: ${errorMessage}`);
+        } else if (error.response?.status === 400) {
+          console.error('❌ Validation Error (400):', {
+            status: error.response.status,
+            data: error.response.data,
+            message: errorMessage
+          });
+          toast.error(`Validation error: ${errorMessage}`);
+        } else if (error.response?.data?.message === "Only pending orders can be updated") {
           toast.error("Only pending orders can be updated");
         } else {
-          toast.error("Failed to save order");
+          toast.error(errorMessage);
         }
       }
     } finally {
@@ -526,18 +632,21 @@ const Orders: React.FC = () => {
   };
 
   const getStatusStyle = (status: OrderType["status"]) => {
+    // Base rounded-full class to ensure all badges are pill-shaped
+    const baseClasses = "rounded-full";
     switch (status) {
       case "pending":
-        return "bg-yellow-100 text-yellow-800 hover:bg-yellow-100/80";
+        return `${baseClasses} bg-yellow-100 text-yellow-800 hover:bg-yellow-100/80`;
       case "confirmed":
       case "paid":
-        return "bg-green-100 text-green-800 hover:bg-green-100/80";
+        // Extra rounded with more padding for confirmed/paid status to make it more pill-shaped
+        return `${baseClasses} bg-green-100 text-green-800 hover:bg-green-100/80`;
       case "shipped":
-        return "bg-blue-100 text-blue-800 hover:bg-blue-100/80";
+        return `${baseClasses} bg-blue-100 text-blue-800 hover:bg-blue-100/80`;
       case "cancelled":
-        return "bg-red-100 text-red-800 hover:bg-red-100/80";
+        return `${baseClasses} bg-red-100 text-red-800 hover:bg-red-100/80`;
       default:
-        return "bg-gray-100 text-gray-800 hover:bg-gray-100/80";
+        return `${baseClasses} bg-gray-100 text-gray-800 hover:bg-gray-100/80`;
     }
   };
 
@@ -575,23 +684,23 @@ const Orders: React.FC = () => {
   }, []);
 
   return (
-  <div className="">
-    <Card className="overflow-hidden">
+  <div className="w-full">
+    <Card className="overflow-hidden w-full">
       <motion.div 
         initial="hidden"
         animate="visible"
         variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }}
-        className="p-4 md:p-6 bg-gradient-to-r from-[#00897B] to-[#00796B]"
+        className="p-3 sm:p-4 md:p-6 bg-gradient-to-r from-[#00897B] to-[#00796B]"
       >
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-          <div className="text-white w-full lg:w-auto">
-            <h2 className="text-2xl font-bold">Gestion des Commandes</h2>
-            <p className="text-gray-100 mt-1">Gérez vos commandes et réservations</p>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+          <div className="text-white flex-1 min-w-0">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold break-words">Gestion des Commandes</h2>
+            <p className="text-gray-100 mt-1 text-sm sm:text-base">Gérez vos commandes et réservations</p>
           </div>
-          <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 w-full sm:w-auto shrink-0">
             <Button
               onClick={() => setIsDialogOpen(true)}
-              className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 shadow h-9 px-4 py-2 bg-white text-[#00897B] hover:bg-gray-100 transition-colors w-full sm:w-auto"
+              className="bg-white text-[#00897B] hover:bg-gray-100 transition-colors text-sm sm:text-base w-full sm:w-auto"
             >
               <PlusIcon className="h-4 w-4 mr-2" />
               <span className="hidden sm:inline">Ajouter une Commande</span>
@@ -599,11 +708,11 @@ const Orders: React.FC = () => {
             </Button>
             <Button
               onClick={handleExport}
-              className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 shadow h-9 px-4 py-2 bg-white text-[#00897B] hover:bg-gray-100 transition-colors w-full sm:w-auto"
+              className="bg-white text-[#00897B] hover:bg-gray-100 transition-colors text-sm sm:text-base w-full sm:w-auto"
             >
               <DownloadIcon className="h-4 w-4 mr-2" />
               <span className="hidden sm:inline">Exporter</span>
-              <span className="sm:hidden">Exp.</span>
+              <span className="sm:hidden">Export</span>
             </Button>
           </div>
         </div>
@@ -613,15 +722,18 @@ const Orders: React.FC = () => {
         initial="hidden"
         animate="visible"
         variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }}
-        className="p-2 md:p-6 border-b space-y-2 md:space-y-4"
+        className="p-3 sm:p-4 md:p-6 border-b space-y-3 sm:space-y-4"
       >
-        <div className="flex flex-col gap-4">
-          <div className="relative">
+        <div className="flex flex-col gap-3 sm:gap-4">
+          <div className="relative w-full">
             <Input
               placeholder="Rechercher des commandes..."
               value={searchTerm}
-              onChange={(e) => handleSearch(e.target.value)}
-              className="pl-10"
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                handleSearch(e.target.value);
+              }}
+              className="pl-10 w-full text-xs md:text-xs lg:text-base h-9 md:h-9 lg:h-10"
             />
             <Icon 
               icon="lucide:search" 
@@ -629,7 +741,7 @@ const Orders: React.FC = () => {
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 gap-2 sm:gap-3 md:gap-3 lg:gap-4">
             <Select
               value={filters.customerId ? filters.customerId.toString() : "all"}
               onValueChange={(value) => {
@@ -642,14 +754,14 @@ const Orders: React.FC = () => {
                 fetchOrders(newFilters);
               }}
             >
-              <SelectTrigger className="h-[42px] w-full bg-white">
+              <SelectTrigger className="h-9 md:h-9 lg:h-10 w-full bg-white text-xs md:text-xs lg:text-base">
                 <SelectValue placeholder="All Customers" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Customers</SelectItem>
                 {customers.map((customer) => (
                   <SelectItem key={customer.id} value={customer.id.toString()}>
-                    {customer.name} ({customer.email})
+                    <span className="truncate">{customer.name} ({customer.email})</span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -659,7 +771,7 @@ const Orders: React.FC = () => {
               value={pagination.perPage.toString()}
               onValueChange={handlePaginationChange}
             >
-              <SelectTrigger className="h-[42px] w-full bg-white">
+              <SelectTrigger className="h-9 md:h-9 lg:h-10 w-full bg-white text-xs md:text-xs lg:text-base">
                 <SelectValue placeholder="Éléments par page" />
               </SelectTrigger>
               <SelectContent>
@@ -674,289 +786,394 @@ const Orders: React.FC = () => {
         </div>
       </motion.div>
 
-      <div className="w-full overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-gray-50">
-              <TableHead className="w-[150px] hidden md:table-cell">Client</TableHead>
-              <TableHead className="w-[2px] md:w-[200px]">Détails</TableHead>
-              <TableHead className="w-[100px] hidden lg:table-cell">Blane</TableHead>
-              <TableHead className="w-[100px] hidden lg:table-cell">Prix-Qté</TableHead>
-              <TableHead className="w-[120px] hidden lg:table-cell">Localisation</TableHead>
-              <TableHead className="w-[80px]">Statut</TableHead>
-              <TableHead className="w-[50px] text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={10} className="text-center py-8">
-                  <div className="flex items-center justify-center">
-                    <Icon icon="lucide:loader" className="h-6 w-6 animate-spin text-[#00897B]" />
-                    <span className="ml-2">Chargement...</span>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : orders.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={10} className="text-center py-8">
-                  <div className="flex flex-col items-center justify-center text-gray-500">
-                    <Icon icon="lucide:inbox" className="h-12 w-12 mb-2" />
-                    <p>Aucune commande trouvée</p>
-                    <Button
-                      variant="link"
-                      onClick={() => setIsDialogOpen(true)}
-                      className="mt-2 text-[#00897B]"
-                    >
-                      Créez votre première commande
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              orders.map((order) => (
-                <TableRow key={order.id} className="group hover:bg-gray-50">
-                  <TableCell className="w-[150px] hidden md:table-cell">
-                    <div className="flex flex-col space-y-1">
-                      <div className="font-medium text-[13px] md:text-base truncate">
-                        {findCustomerName(order.customers_id)}
-                      </div>
-                      <div className="text-[11px] text-gray-600 truncate">
-                        {findCustomerEmail(order.customers_id)}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="w-[2px] md:w-[200px] bg-opacity-10 py-2">
-                    <div className="flex flex-col space-y-1">
-                      <div className="font-medium text-[13px] md:text-base truncate">
-                        {findBlaneName(order.blane_id)}
-                      </div>
-                      <div className="space-y-0.5 text-[11px] text-gray-600">
-                        <div className="flex items-center gap-1 md:hidden">
-                          <Icon icon="lucide:user" className="h-3 w-3" />
-                          <span className="truncate">{findCustomerName(order.customers_id)}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Icon icon="lucide:package" className="h-3 w-3" />
-                          <span className="truncate">
-                            {order.quantity} × {blanes.find(b => b.id === order.blane_id)?.price_current || 0} DH
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Icon icon="lucide:map-pin" className="h-3 w-3" />
-                          <span className="truncate">
-                            {findCustomerCity(order.customers_id)} - {order.delivery_address}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    {findBlaneName(order.blane_id)}
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    {order.quantity} × {blanes.find(b => b.id === order.blane_id)?.price_current || 0} DH
-                    <span className="block text-sm text-gray-500">
-                      Total: {(blanes.find(b => b.id === order.blane_id)?.price_current || 0) * order.quantity} DH
-                    </span>
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    <div className="flex flex-col">
-                      <span className="font-medium">{findCustomerCity(order.customers_id)}</span>
-                      <span className="text-sm text-gray-500 truncate">{order.delivery_address}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="table-cell-interactive">
-                    <Select
-                      value={order.status}
-                      onValueChange={(value: OrderType["status"]) => handleStatusChange(order.id, value)}
-                    >
-                      <SelectTrigger className="w-[90px] sm:w-[110px] h-7 sm:h-8 text-xs sm:text-sm">
-                        <SelectValue>
-                          <Badge variant="secondary" className={cn("text-[11px] sm:text-xs px-1.5 py-0.5", getStatusStyle(order.status))}>
-                            {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                          </Badge>
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">
-                          <Badge variant="secondary" className={cn("text-[11px] sm:text-xs px-1.5 py-0.5", getStatusStyle("pending"))}>
-                            En attente
-                          </Badge>
-                        </SelectItem>
-                        <SelectItem value="confirmed">
-                          <Badge variant="secondary" className={cn("text-[11px] sm:text-xs px-1.5 py-0.5", getStatusStyle("confirmed"))}>
-                            Confirmé
-                          </Badge>
-                        </SelectItem>
-                        <SelectItem value="shipped">
-                          <Badge variant="secondary" className={cn("text-[11px] sm:text-xs px-1.5 py-0.5", getStatusStyle("shipped"))}>
-                            Expédié
-                          </Badge>
-                        </SelectItem>
-                        <SelectItem value="paid">
-                          <Badge variant="secondary" className={cn("text-[11px] sm:text-xs px-1.5 py-0.5", getStatusStyle("paid"))}>
-                            Payé
-                          </Badge>
-                        </SelectItem>
-                        <SelectItem value="cancelled">
-                          <Badge variant="secondary" className={cn("text-[11px] sm:text-xs px-1.5 py-0.5", getStatusStyle("cancelled"))}>
-                            Annulé
-                          </Badge>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell className="text-right p-1 md:p-4">
-                    <div className="flex items-center justify-end">
-                      <div className="hidden md:flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-9 w-9"
-                          onClick={() => handleViewClick(order)}
-                        >
-                          <EyeIcon className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-9 w-9"
-                          onClick={() => handleEditOrder(order)}
-                        >
-                          <PencilIcon className="h-4 w-4" />
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button 
-                              variant="destructive" 
-                              size="icon"
-                              className="h-9 w-9"
-                            >
-                              <Trash2Icon className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent className="sm:max-w-[425px]">
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Supprimer la Commande</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Êtes-vous sûr de vouloir supprimer cette commande ? Cette action est irréversible.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Annuler</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleDelete(order.id)}
-                              >
-                                Supprimer
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                      <div className="md:hidden">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-6 w-6">
-                              <MoreVerticalIcon className="h-3 w-3" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-[110px]">
-                            <DropdownMenuItem onClick={() => handleViewClick(order)} className="py-0.5">
-                              <EyeIcon className="h-3 w-3 mr-1" />
-                              <span className="text-[11px]">Voir</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => handleEditOrder(order)}
-                              className="py-0.5"
-                            >
-                              <PencilIcon className="h-3 w-3 mr-1" />
-                              <span className="text-[11px]">Modifier</span>
-                            </DropdownMenuItem>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <DropdownMenuItem 
-                                  className="text-red-600 py-0.5"
-                                  onSelect={(e) => e.preventDefault()}
-                                >
-                                  <TrashIcon className="h-3 w-3 mr-1" />
-                                  <span className="text-[11px]">Supprimer</span>
-                                </DropdownMenuItem>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent className="sm:max-w-[425px]">
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Supprimer la Commande</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Êtes-vous sûr de vouloir supprimer cette commande ? Cette action est irréversible.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDelete(order.id)}
-                                  >
-                                    Supprimer
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-                  </TableCell>
+      <div className="w-full overflow-x-auto -mx-0 sm:mx-0">
+        {/* Desktop/Tablet Table View */}
+        <div className="hidden md:block">
+          <div className="overflow-x-auto">
+            <Table className="w-full md:min-w-[680px] lg:min-w-0">
+              <TableHeader>
+                <TableRow className="bg-gray-50">
+                  <TableHead className="w-[20%] md:w-[20%] lg:w-[15%] md:min-w-[130px] lg:min-w-[150px] text-xs md:text-xs lg:text-base px-1 md:px-2">Client</TableHead>
+                  <TableHead className="w-[30%] md:w-[30%] lg:w-[25%] md:min-w-[180px] lg:min-w-[200px] text-xs md:text-xs lg:text-base px-1 md:px-2">Détails</TableHead>
+                  <TableHead className="w-[15%] hidden lg:table-cell text-sm md:text-base">Blane</TableHead>
+                  <TableHead className="w-[15%] hidden lg:table-cell text-sm md:text-base">Prix-Qté</TableHead>
+                  <TableHead className="w-[15%] hidden lg:table-cell text-sm md:text-base">Localisation</TableHead>
+                  <TableHead className="w-[20%] md:w-[20%] lg:w-[10%] md:min-w-[100px] lg:w-[120px] text-xs md:text-xs lg:text-base px-1 md:px-2">Statut</TableHead>
+                  <TableHead className="w-[30%] md:w-[30%] lg:w-[5%] md:min-w-[120px] lg:w-[120px] text-right text-xs md:text-xs lg:text-base px-1 md:px-2">Actions</TableHead>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8">
+                      <div className="flex items-center justify-center">
+                        <Icon icon="lucide:loader" className="h-6 w-6 animate-spin text-[#00897B]" />
+                        <span className="ml-2 text-sm sm:text-base">Chargement...</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : orders.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8">
+                      <div className="flex flex-col items-center justify-center text-gray-500">
+                        <Icon icon="lucide:inbox" className="h-12 w-12 mb-2" />
+                        <p className="text-sm sm:text-base">Aucune commande trouvée</p>
+                        <Button
+                          variant="link"
+                          onClick={() => setIsDialogOpen(true)}
+                          className="mt-2 text-[#00897B] text-sm sm:text-base"
+                        >
+                          Créez votre première commande
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  orders.map((order) => (
+                    <TableRow key={order.id} className="group hover:bg-gray-50">
+                      <TableCell className="p-1.5 md:p-2 lg:p-4">
+                        <div className="flex flex-col space-y-0.5 md:space-y-1">
+                          <div className="font-medium text-xs leading-tight truncate">
+                            {findCustomerName(order.customers_id)}
+                          </div>
+                          <div className="text-[10px] md:text-[10px] lg:text-xs text-gray-600 truncate leading-tight">
+                            {findCustomerEmail(order.customers_id)}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="p-1.5 md:p-2 lg:p-4">
+                        <div className="flex flex-col space-y-0.5 md:space-y-1">
+                          <div className="font-medium text-xs leading-tight truncate">
+                            {findBlaneName(order.blane_id)}
+                          </div>
+                          <div className="text-[10px] md:text-[10px] lg:text-xs text-gray-600 leading-tight">
+                            {order.quantity} × {blanes.find(b => b.id === order.blane_id)?.price_current || 0} DH
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell p-2 md:p-3 lg:p-4">
+                        <div className="text-xs md:text-sm lg:text-base">
+                          {findBlaneName(order.blane_id)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell p-2 md:p-3 lg:p-4">
+                        <div className="text-xs md:text-sm lg:text-base">
+                          {order.quantity} × {blanes.find(b => b.id === order.blane_id)?.price_current || 0} DH
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Total: {(blanes.find(b => b.id === order.blane_id)?.price_current || 0) * order.quantity} DH
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell p-2 md:p-3 lg:p-4">
+                        <div className="flex flex-col">
+                          <span className="font-medium text-xs md:text-sm">{findCustomerCity(order.customers_id)}</span>
+                          <span className="text-xs text-gray-500 truncate">{order.delivery_address}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="p-1.5 md:p-2 lg:p-4">
+                        <Select
+                          value={order.status}
+                          onValueChange={(value: OrderType["status"]) => handleStatusChange(order.id, value)}
+                        >
+                          <SelectTrigger className={cn(
+                            "w-full md:w-[100px] lg:w-[120px] h-6 md:h-7 text-[10px] md:text-[10px]",
+                            order.status === "confirmed" || order.status === "paid" ? "md:w-[110px] lg:w-[130px]" : "md:w-[90px] lg:w-[110px]"
+                          )}>
+                            <SelectValue>
+                              <Badge variant="secondary" className={cn(
+                                "text-[10px] md:text-[10px] px-1 py-0.5",
+                                getStatusStyle(order.status)
+                              )}>
+                                {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                              </Badge>
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">
+                              <Badge variant="secondary" className={cn("text-[10px] px-1 py-0.5", getStatusStyle("pending"))}>
+                                En attente
+                              </Badge>
+                            </SelectItem>
+                            <SelectItem value="confirmed">
+                              <Badge variant="secondary" className={cn("text-[10px] px-1 py-0.5", getStatusStyle("confirmed"))}>
+                                Confirmé
+                              </Badge>
+                            </SelectItem>
+                            <SelectItem value="shipped">
+                              <Badge variant="secondary" className={cn("text-[10px] px-1 py-0.5", getStatusStyle("shipped"))}>
+                                Expédié
+                              </Badge>
+                            </SelectItem>
+                            <SelectItem value="paid">
+                              <Badge variant="secondary" className={cn("text-[10px] px-1 py-0.5", getStatusStyle("paid"))}>
+                                Payé
+                              </Badge>
+                            </SelectItem>
+                            <SelectItem value="cancelled">
+                              <Badge variant="secondary" className={cn("text-[10px] px-1 py-0.5", getStatusStyle("cancelled"))}>
+                                Annulé
+                              </Badge>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell className="text-right p-1.5 md:p-2 lg:p-4">
+                        <div className="flex items-center justify-end gap-0.5 md:gap-1">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-6 w-6 md:h-7 md:w-7"
+                            onClick={() => handleViewClick(order)}
+                          >
+                            <EyeIcon className="h-3 w-3 md:h-3.5 md:w-3.5" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-6 w-6 md:h-7 md:w-7"
+                            onClick={() => handleEditOrder(order)}
+                          >
+                            <PencilIcon className="h-3 w-3 md:h-3.5 md:w-3.5" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button 
+                                variant="destructive" 
+                                size="icon"
+                                className="h-6 w-6 md:h-7 md:w-7"
+                              >
+                                <Trash2Icon className="h-3 w-3 md:h-3.5 md:w-3.5" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent className="sm:max-w-[425px]">
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Supprimer la Commande</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Êtes-vous sûr de vouloir supprimer cette commande ? Cette action est irréversible.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDelete(order.id)}
+                                >
+                                  Supprimer
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden space-y-3 p-3 sm:p-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Icon icon="lucide:loader" className="h-6 w-6 animate-spin text-[#00897B]" />
+              <span className="ml-2 text-sm">Chargement...</span>
+            </div>
+          ) : orders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center text-gray-500 py-12">
+              <Icon icon="lucide:inbox" className="h-12 w-12 mb-2" />
+              <p className="text-sm">Aucune commande trouvée</p>
+              <Button
+                variant="link"
+                onClick={() => setIsDialogOpen(true)}
+                className="mt-2 text-[#00897B] text-sm"
+              >
+                Créez votre première commande
+              </Button>
+            </div>
+          ) : (
+            orders.map((order) => (
+              <Card key={order.id} className="p-4 space-y-3">
+                {/* Customer Info */}
+                <div className="space-y-1 pb-3 border-b">
+                  <div className="font-semibold text-base">{findCustomerName(order.customers_id)}</div>
+                  <div className="text-sm text-gray-600 truncate">{findCustomerEmail(order.customers_id)}</div>
+                </div>
+
+                {/* Order Details */}
+                <div className="space-y-2">
+                  <div className="font-medium text-sm text-gray-700">
+                    {findBlaneName(order.blane_id)}
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Icon icon="lucide:package" className="h-4 w-4" />
+                    <span>{order.quantity} × {blanes.find(b => b.id === order.blane_id)?.price_current || 0} DH</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Icon icon="lucide:map-pin" className="h-4 w-4" />
+                    <span className="break-words">{findCustomerCity(order.customers_id)} - {order.delivery_address}</span>
+                  </div>
+                  <div className="text-sm font-medium text-gray-700">
+                    Total: {(blanes.find(b => b.id === order.blane_id)?.price_current || 0) * order.quantity} DH
+                  </div>
+                </div>
+
+                {/* Status & Actions */}
+                <div className="flex items-center justify-between pt-2 border-t">
+                  <Select
+                    value={order.status}
+                    onValueChange={(value: OrderType["status"]) => handleStatusChange(order.id, value)}
+                  >
+                    <SelectTrigger className="w-[110px] h-8 text-xs">
+                      <SelectValue>
+                        <Badge variant="secondary" className={cn("text-xs px-2 py-0.5", getStatusStyle(order.status))}>
+                          {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                        </Badge>
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">
+                        <Badge variant="secondary" className={cn("text-xs px-2 py-0.5", getStatusStyle("pending"))}>
+                          En attente
+                        </Badge>
+                      </SelectItem>
+                      <SelectItem value="confirmed">
+                        <Badge variant="secondary" className={cn("text-xs px-2 py-0.5", getStatusStyle("confirmed"))}>
+                          Confirmé
+                        </Badge>
+                      </SelectItem>
+                      <SelectItem value="shipped">
+                        <Badge variant="secondary" className={cn("text-xs px-2 py-0.5", getStatusStyle("shipped"))}>
+                          Expédié
+                        </Badge>
+                      </SelectItem>
+                      <SelectItem value="paid">
+                        <Badge variant="secondary" className={cn("text-xs px-2 py-0.5", getStatusStyle("paid"))}>
+                          Payé
+                        </Badge>
+                      </SelectItem>
+                      <SelectItem value="cancelled">
+                        <Badge variant="secondary" className={cn("text-xs px-2 py-0.5", getStatusStyle("cancelled"))}>
+                          Annulé
+                        </Badge>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreVerticalIcon className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[120px]">
+                      <DropdownMenuItem onClick={() => handleViewClick(order)} className="py-2">
+                        <EyeIcon className="h-4 w-4 mr-2" />
+                        <span className="text-sm">Voir</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => handleEditOrder(order)}
+                        className="py-2"
+                      >
+                        <PencilIcon className="h-4 w-4 mr-2" />
+                        <span className="text-sm">Modifier</span>
+                      </DropdownMenuItem>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <DropdownMenuItem 
+                            className="text-red-600 py-2"
+                            onSelect={(e) => e.preventDefault()}
+                          >
+                            <TrashIcon className="h-4 w-4 mr-2" />
+                            <span className="text-sm">Supprimer</span>
+                          </DropdownMenuItem>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="sm:max-w-[425px]">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Supprimer la Commande</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Êtes-vous sûr de vouloir supprimer cette commande ? Cette action est irréversible.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Annuler</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDelete(order.id)}
+                            >
+                              Supprimer
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
       </div>
 
-      <div className="p-2 md:p-4">
-        <Pagination className="justify-end">
-          <PaginationContent>
-            {pagination.currentPage > 1 && (
-              <PaginationItem>
-                <PaginationPrevious
-                  onClick={() => handlePageChange(pagination.currentPage - 1)}
-                />
-              </PaginationItem>
+      <div className="p-3 sm:p-4 border-t">
+        <div className="flex flex-col gap-3 md:gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="text-xs md:text-sm text-gray-500 text-center md:text-left order-2 md:order-1">
+            {pagination.perPage === 99999 ? (
+              <span className="break-words">Affichage de toutes les {pagination.total} entrées</span>
+            ) : (
+              <span className="break-words">
+                Affichage de {((pagination.currentPage - 1) * pagination.perPage) + 1} à {Math.min(pagination.currentPage * pagination.perPage, pagination.total)} sur {pagination.total} entrées
+              </span>
             )}
-            {Array.from({ length: pagination.lastPage }, (_, i) => i + 1)
-              .filter(page => {
-                if (pagination.lastPage <= 7) return true;
-                if (page === 1 || page === pagination.lastPage) return true;
-                if (Math.abs(page - pagination.currentPage) <= 2) return true;
-                return false;
-              })
-              .map((page, i, array) => {
-                if (i > 0 && array[i - 1] !== page - 1) {
-                  return (
-                    <PaginationItem key={`ellipsis-${page}`}>
-                      <span className="px-4 py-2">...</span>
-                    </PaginationItem>
-                  );
-                }
-                return (
-                  <PaginationItem key={page}>
-                    <PaginationLink
-                      isActive={page === pagination.currentPage}
-                      onClick={() => handlePageChange(page)}
-                    >
-                      {page}
-                    </PaginationLink>
+          </div>
+          <div className="w-full md:w-auto flex justify-center md:justify-end order-1 md:order-2">
+            <Pagination>
+              <PaginationContent className="flex-wrap gap-1 md:gap-0">
+                {pagination.currentPage > 1 && (
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() => handlePageChange(pagination.currentPage - 1)}
+                      className="text-xs md:text-sm h-8 md:h-10"
+                    />
                   </PaginationItem>
-                );
-              })}
-            {pagination.currentPage < pagination.lastPage && (
-              <PaginationItem>
-                <PaginationNext
-                  onClick={() => handlePageChange(pagination.currentPage + 1)}
-                />
-              </PaginationItem>
-            )}
-          </PaginationContent>
-        </Pagination>
+                )}
+                {Array.from({ length: pagination.lastPage }, (_, i) => i + 1)
+                  .filter(page => {
+                    if (pagination.lastPage <= 7) return true;
+                    if (page === 1 || page === pagination.lastPage) return true;
+                    if (Math.abs(page - pagination.currentPage) <= 2) return true;
+                    return false;
+                  })
+                  .map((page, i, array) => {
+                    if (i > 0 && array[i - 1] !== page - 1) {
+                      return (
+                        <PaginationItem key={`ellipsis-${page}`}>
+                          <span className="px-2 md:px-4 py-2 text-xs md:text-sm">...</span>
+                        </PaginationItem>
+                      );
+                    }
+                    return (
+                      <PaginationItem key={page}>
+                        <PaginationLink
+                          isActive={page === pagination.currentPage}
+                          onClick={() => handlePageChange(page)}
+                          className="text-xs md:text-sm h-8 md:h-10 min-w-[32px] md:min-w-[40px]"
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  })}
+                {pagination.currentPage < pagination.lastPage && (
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() => handlePageChange(pagination.currentPage + 1)}
+                      className="text-xs md:text-sm h-8 md:h-10"
+                    />
+                  </PaginationItem>
+                )}
+              </PaginationContent>
+            </Pagination>
+          </div>
+        </div>
       </div>
     </Card>
 
@@ -974,34 +1191,34 @@ const Orders: React.FC = () => {
         }
       }}
     >
-      <DialogContent className="fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] max-w-[95vw] w-full sm:max-w-3xl p-0 overflow-hidden bg-white rounded-lg shadow-lg">
+      <DialogContent className="fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] max-w-[95vw] sm:max-w-[90vw] md:max-w-[85vw] lg:max-w-3xl w-full p-0 overflow-hidden bg-white rounded-lg shadow-lg max-h-[95vh] sm:max-h-[90vh] md:max-h-[85vh] flex flex-col">
         <motion.div
           initial="hidden"
           animate="visible"
           exit="exit"
           variants={popupAnimationVariants.content}
-          className="max-h-[90vh] overflow-y-auto"
+          className="flex-1 overflow-y-auto"
         >
-          <div className="sticky top-0 bg-white z-20 px-4 sm:px-6 pt-6 pb-4 border-b">
+          <div className="sticky top-0 bg-white z-20 px-4 sm:px-5 md:px-6 pt-4 sm:pt-5 md:pt-6 pb-3 sm:pb-3 md:pb-4 border-b">
             <DialogHeader>
-              <DialogTitle className="text-xl sm:text-2xl font-bold text-[#00897B] flex items-center gap-2">
-                <div className="w-8 sm:w-10 h-8 sm:h-10 rounded-full bg-[#00897B]/10 flex items-center justify-center">
+              <DialogTitle className="text-lg sm:text-xl md:text-xl lg:text-2xl font-bold text-[#00897B] flex items-center gap-2">
+                <div className="w-8 sm:w-9 md:w-10 h-8 sm:h-9 md:h-10 rounded-full bg-[#00897B]/10 flex items-center justify-center flex-shrink-0">
                   <Icon 
                     icon={selectedOrder ? "lucide:edit" : "lucide:plus"} 
-                    className="h-4 sm:h-5 w-4 sm:w-5 text-[#00897B]" 
+                    className="h-4 sm:h-4 md:h-5 w-4 sm:w-4 md:w-5 text-[#00897B]" 
                   />
                 </div>
-                {selectedOrder ? 'Modifier la Commande' : 'Ajouter une Commande'}
+                <span className="break-words">{selectedOrder ? 'Modifier la Commande' : 'Ajouter une Commande'}</span>
               </DialogTitle>
-              <DialogDescription className="text-sm text-gray-500">
+              <DialogDescription className="text-xs sm:text-sm md:text-sm text-gray-500 mt-1">
                 {selectedOrder ? 'Modifiez les détails de la commande ci-dessous.' : 'Remplissez les détails de la commande ci-dessous.'}
               </DialogDescription>
             </DialogHeader>
           </div>
 
-          <div className="p-4 sm:p-6">
-            <form id="orderForm" onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-4 sm:p-5 md:p-6">
+            <form id="orderForm" onSubmit={handleSubmit} className="space-y-4 sm:space-y-5 md:space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
                 <div className="space-y-4">
                   <Label>Nom</Label>
                   <Input
@@ -1127,7 +1344,7 @@ const Orders: React.FC = () => {
                         </Badge>
                       </SelectItem>
                       <SelectItem value="confirmed">
-                        <Badge variant="secondary" className={cn("text-xs px-2 py-0.5", getStatusStyle("confirmed"))}>
+                        <Badge variant="secondary" className={cn("text-xs px-2.5 py-1", getStatusStyle("confirmed"))}>
                           Confirmé
                         </Badge>
                       </SelectItem>
@@ -1137,7 +1354,7 @@ const Orders: React.FC = () => {
                         </Badge>
                       </SelectItem>
                       <SelectItem value="paid">
-                        <Badge variant="secondary" className={cn("text-xs px-2 py-0.5", getStatusStyle("paid"))}>
+                        <Badge variant="secondary" className={cn("text-xs px-2.5 py-1", getStatusStyle("paid"))}>
                           Payé
                         </Badge>
                       </SelectItem>
@@ -1154,13 +1371,13 @@ const Orders: React.FC = () => {
             </form>
           </div>
 
-          <div className="sticky bottom-0 bg-white border-t p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+          <div className="sticky bottom-0 bg-white border-t p-4 sm:p-5 md:p-6 z-10">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 md:gap-3 sm:justify-end">
               <DialogClose asChild>
                 <Button
                   type="button"
                   variant="outline"
-                  className="w-full sm:w-auto"
+                  className="w-full sm:w-auto text-sm md:text-sm lg:text-base order-2 sm:order-1"
                 >
                   Annuler
                 </Button>
@@ -1169,17 +1386,19 @@ const Orders: React.FC = () => {
                 type="submit"
                 form="orderForm"
                 disabled={isSaving}
-                className="w-full sm:w-auto bg-[#00897B] hover:bg-[#00796B] text-white"
+                className="w-full sm:w-auto bg-[#00897B] hover:bg-[#00796B] text-white text-sm md:text-sm lg:text-base order-1 sm:order-2"
               >
                 {isSaving ? (
                   <div className="flex items-center gap-2">
                     <Icon icon="lucide:loader" className="h-4 w-4 animate-spin" />
-                    <span>{selectedOrder ? 'Mise à jour...' : 'Ajout...'}</span>
+                    <span className="hidden sm:inline">{selectedOrder ? 'Mise à jour...' : 'Ajout...'}</span>
+                    <span className="sm:hidden">{selectedOrder ? 'Mise à jour...' : 'Ajout...'}</span>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
                     <Icon icon={selectedOrder ? "lucide:check" : "lucide:plus"} className="h-4 w-4" />
-                    <span>{selectedOrder ? 'Mettre à jour la Commande' : 'Ajouter la Commande'}</span>
+                    <span className="hidden sm:inline">{selectedOrder ? 'Mettre à jour la Commande' : 'Ajouter la Commande'}</span>
+                    <span className="sm:hidden">{selectedOrder ? 'Mettre à jour' : 'Ajouter'}</span>
                   </div>
                 )}
               </Button>
@@ -1202,12 +1421,12 @@ const Orders: React.FC = () => {
         }
       }}
     >
-      <DialogContent className="fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] max-w-[95vw] w-full sm:max-w-2xl p-0 overflow-hidden bg-white rounded-lg shadow-lg">
+      <DialogContent className="fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] max-w-[95vw] sm:max-w-[90vw] md:max-w-[85vw] lg:max-w-2xl w-full p-0 overflow-hidden bg-white rounded-lg shadow-lg max-h-[95vh] sm:max-h-[90vh] md:max-h-[85vh] flex flex-col">
         <button
-          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+          className="absolute right-2 sm:right-3 md:right-4 top-2 sm:top-3 md:top-4 z-30 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
           onClick={() => setIsViewDialogOpen(false)}
         >
-          <Icon icon="lucide:x" className="h-4 w-4" />
+          <Icon icon="lucide:x" className="h-4 w-4 sm:h-4 sm:w-4 md:h-5 md:w-5" />
           <span className="sr-only">Fermer</span>
         </button>
         
@@ -1217,25 +1436,25 @@ const Orders: React.FC = () => {
             animate="visible"
             exit="exit"
             variants={popupAnimationVariants.content}
-            className="max-h-[90vh] overflow-y-auto"
+            className="flex-1 overflow-y-auto"
           >
-            <div className="sticky top-0 bg-white z-20 px-6 pt-6 pb-4 border-b">
+            <div className="sticky top-0 bg-white z-20 px-4 sm:px-5 md:px-6 pt-4 sm:pt-5 md:pt-6 pb-3 sm:pb-3 md:pb-4 border-b">
               <DialogHeader>
-                <DialogTitle className="text-xl sm:text-2xl font-bold text-[#00897B] flex items-center gap-2">
-                  <div className="w-8 sm:w-10 h-8 sm:h-10 rounded-full bg-[#00897B]/10 flex items-center justify-center">
-                    <Icon icon="lucide:package" className="h-4 sm:h-5 w-4 sm:w-5 text-[#00897B]" />
+                <DialogTitle className="text-lg sm:text-xl md:text-xl lg:text-2xl font-bold text-[#00897B] flex items-center gap-2">
+                  <div className="w-8 sm:w-9 md:w-10 h-8 sm:h-9 md:h-10 rounded-full bg-[#00897B]/10 flex items-center justify-center flex-shrink-0">
+                    <Icon icon="lucide:package" className="h-4 sm:h-4 md:h-5 w-4 sm:w-4 md:w-5 text-[#00897B]" />
                   </div>
-                  Détails de la Commande
+                  <span className="break-words">Détails de la Commande</span>
                 </DialogTitle>
-                <DialogDescription className="text-sm text-gray-500">
+                <DialogDescription className="text-xs sm:text-sm md:text-sm text-gray-500 mt-1">
                   Commande #{selectedOrder.NUM_ORD}
                 </DialogDescription>
               </DialogHeader>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-5 md:p-6 space-y-4 sm:space-y-5 md:space-y-6">
               {/* Informations sur la commande */}
-              <div className="grid gap-6 sm:grid-cols-2">
+              <div className="grid gap-4 sm:gap-5 md:gap-6 grid-cols-1 sm:grid-cols-2">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-500">Blane</label>
                   <div className="flex items-center gap-2">
@@ -1300,7 +1519,11 @@ const Orders: React.FC = () => {
                       <Icon icon="lucide:check-circle" className="h-5 w-5 text-gray-600" />
                     </div>
                     <div>
-                      <Badge variant="secondary" className={cn("text-xs px-2 py-0.5", getStatusStyle(selectedOrder.status))}>
+                      <Badge variant="secondary" className={cn(
+                        "text-xs",
+                        selectedOrder.status === "confirmed" || selectedOrder.status === "paid" ? "px-2.5 py-1" : "px-2 py-0.5",
+                        getStatusStyle(selectedOrder.status)
+                      )}>
                         {selectedOrder.status?.charAt(0).toUpperCase() + selectedOrder.status?.slice(1)}
                       </Badge>
                       <p className="text-sm text-gray-500 mt-1">
@@ -1338,11 +1561,11 @@ const Orders: React.FC = () => {
               </div>
             </div>
 
-            <div className="sticky bottom-0 bg-white border-t p-4 sm:p-6">
+            <div className="sticky bottom-0 bg-white border-t p-4 sm:p-5 md:p-6 z-10">
               <Button
                 variant="outline"
                 onClick={() => setIsViewDialogOpen(false)}
-                className="w-full sm:w-auto"
+                className="w-full sm:w-auto text-sm md:text-sm lg:text-base"
               >
                 Fermer
               </Button>
@@ -1354,31 +1577,31 @@ const Orders: React.FC = () => {
 
     {/* Boîte de dialogue de confirmation de suppression */}
     <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-      <AlertDialogContent className="fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] max-w-[95vw] w-full sm:max-w-[400px] p-0 overflow-hidden bg-white rounded-lg shadow-lg">
+      <AlertDialogContent className="fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] max-w-[95vw] sm:max-w-[90vw] md:max-w-[400px] w-full p-0 overflow-hidden bg-white rounded-lg shadow-lg">
         <motion.div
           initial="hidden"
           animate="visible"
           exit="exit"
           variants={popupAnimationVariants.content}
-          className="p-6"
+          className="p-4 sm:p-5 md:p-6"
         >
           <div className="flex flex-col items-center text-center">
-            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
-              <Icon icon="lucide:trash-2" className="h-6 w-6 text-red-600" />
+            <div className="w-10 h-10 sm:w-11 md:w-12 sm:h-11 md:h-12 rounded-full bg-red-100 flex items-center justify-center mb-3 sm:mb-3 md:mb-4">
+              <Icon icon="lucide:trash-2" className="h-5 w-5 sm:h-5 sm:w-5 md:h-6 md:w-6 text-red-600" />
             </div>
             <AlertDialogHeader className="space-y-2">
-              <AlertDialogTitle className="text-xl font-semibold">
+              <AlertDialogTitle className="text-lg sm:text-xl md:text-xl font-semibold">
                 Supprimer la Commande
               </AlertDialogTitle>
-              <AlertDialogDescription className="text-gray-500">
+              <AlertDialogDescription className="text-sm md:text-sm lg:text-base text-gray-500">
                 Êtes-vous sûr de vouloir supprimer cette commande ? Cette action est irréversible.
               </AlertDialogDescription>
             </AlertDialogHeader>
 
-            <div className="w-full mt-6">
-              <AlertDialogFooter className="flex flex-col sm:flex-row gap-2 w-full">
+            <div className="w-full mt-4 sm:mt-5 md:mt-6">
+              <AlertDialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-2 md:gap-3 w-full">
                 <AlertDialogCancel 
-                  className="w-full sm:w-auto mt-0"
+                  className="w-full sm:w-auto mt-0 text-sm md:text-sm lg:text-base order-2 sm:order-1"
                   onClick={() => {
                     setOrderToDelete(null);
                     setIsDeleteDialogOpen(false);
@@ -1387,7 +1610,7 @@ const Orders: React.FC = () => {
                   Annuler
                 </AlertDialogCancel>
                 <AlertDialogAction
-                  className="w-full sm:w-auto bg-red-600 hover:bg-red-700"
+                  className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-sm md:text-sm lg:text-base order-1 sm:order-2"
                   onClick={async () => {
                     if (orderToDelete) {
                       try {
@@ -1401,7 +1624,8 @@ const Orders: React.FC = () => {
                     }
                   }}
                 >
-                  Supprimer la Commande
+                  <span className="hidden sm:inline">Supprimer la Commande</span>
+                  <span className="sm:hidden">Supprimer</span>
                 </AlertDialogAction>
               </AlertDialogFooter>
             </div>

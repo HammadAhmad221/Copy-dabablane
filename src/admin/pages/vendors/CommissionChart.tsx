@@ -61,15 +61,6 @@ const formatFileSize = (bytes: number): string => {
 };
 
 // Utility function to extract filename from path
-const getFileName = (file: CommissionFile): string => {
-  if (file.file_name) return file.file_name;
-  if (file.commission_file) {
-    const parts = file.commission_file.split('/');
-    return parts[parts.length - 1];
-  }
-  return `commission_file_${file.id}.pdf`;
-};
-
 const CommissionChart = () => {
   const { toast } = useToast();
   const [page, setPage] = useState(1);
@@ -99,12 +90,56 @@ const CommissionChart = () => {
   const [updateCategoryId, setUpdateCategoryId] = useState<string>("");
   const [updateFile, setUpdateFile] = useState<File | null>(null);
 
+  // Store the updated file names to preserve them after refetch and page refresh
+  // Load from localStorage on mount
+  const [updatedFileNames, setUpdatedFileNames] = useState<Record<number, string>>(() => {
+    try {
+      const stored = localStorage.getItem('commission_chart_file_names');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Save to localStorage whenever updatedFileNames changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('commission_chart_file_names', JSON.stringify(updatedFileNames));
+    } catch (error) {
+      console.error('Failed to save file names to localStorage:', error);
+    }
+  }, [updatedFileNames]);
+
+  // Get file name with priority: preserved updated name > file_name > commission_file path > default
+  const getFileName = (file: CommissionFile): string => {
+    // First check if we have a preserved updated file name
+    if (updatedFileNames[file.id]) {
+      return updatedFileNames[file.id];
+    }
+    // Then check the file_name field
+    if (file.file_name) return file.file_name;
+    // Then try to extract from commission_file path
+    if (file.commission_file) {
+      const parts = file.commission_file.split('/');
+      return parts[parts.length - 1];
+    }
+    // Fallback to default
+    return `commission_file_${file.id}.pdf`;
+  };
+
   // Fetch commission files
   const fetchCommissionFiles = async () => {
     setLoading(true);
     try {
       const files = await commissionChartApi.getCommissionFiles();
-      setCommissionFiles(files);
+      // Apply any preserved file names from recent updates
+      const filesWithUpdatedNames = files.map(file => {
+        if (updatedFileNames[file.id]) {
+          return { ...file, file_name: updatedFileNames[file.id] };
+        }
+        return file;
+      });
+      setCommissionFiles(filesWithUpdatedNames);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -149,10 +184,44 @@ const CommissionChart = () => {
 
     setUploading(true);
     try {
-      await commissionChartApi.uploadCommissionFile({
+      const uploadedFile = await commissionChartApi.uploadCommissionFile({
         category_id: uploadCategoryId,
         commission_file: uploadFile,
       });
+      
+      // Preserve the original file name
+      const originalFileName = uploadFile.name;
+      
+      // Check if backend returned a file_name in the response
+      let finalFileName = originalFileName;
+      if (uploadedFile.file_name) {
+        finalFileName = uploadedFile.file_name;
+      } else if (uploadedFile.commission_file) {
+        // Try to extract file name from the path
+        const pathParts = uploadedFile.commission_file.split('/');
+        const extractedName = pathParts[pathParts.length - 1];
+        // Only use extracted name if it looks like a valid file name (not just an ID)
+        if (extractedName && extractedName.includes('.') && !extractedName.startsWith('commission_file_')) {
+          finalFileName = extractedName;
+        }
+      }
+      
+      // Store the file name in state and localStorage so it persists after refresh
+      if (uploadedFile.id) {
+        setUpdatedFileNames(prev => {
+          const updated = {
+            ...prev,
+            [uploadedFile.id]: finalFileName
+          };
+          // Also save to localStorage immediately
+          try {
+            localStorage.setItem('commission_chart_file_names', JSON.stringify(updated));
+          } catch (error) {
+            console.error('Failed to save file names to localStorage:', error);
+          }
+          return updated;
+        });
+      }
       
       toast({
         title: "Success",
@@ -194,10 +263,67 @@ const CommissionChart = () => {
 
     setUpdating(true);
     try {
-      await commissionChartApi.updateCommissionFile(fileToUpdate.id, {
+      const updatedFile = await commissionChartApi.updateCommissionFile(fileToUpdate.id, {
         category_id: updateCategoryId || undefined,
         commission_file: updateFile || undefined,
       });
+      
+      // If a new file was uploaded, preserve the new file name
+      // This ensures the UI reflects the new file name even after refetch and page refresh
+      if (updateFile) {
+        const newFileName = updateFile.name;
+        
+        // Check if backend returned a file_name in the response
+        // If not, check if we can extract it from commission_file path
+        let finalFileName = newFileName;
+        if (updatedFile.file_name) {
+          finalFileName = updatedFile.file_name;
+        } else if (updatedFile.commission_file) {
+          // Try to extract file name from the path
+          const pathParts = updatedFile.commission_file.split('/');
+          const extractedName = pathParts[pathParts.length - 1];
+          // Only use extracted name if it looks like a valid file name (not just an ID)
+          if (extractedName && extractedName.includes('.') && !extractedName.startsWith('commission_file_')) {
+            finalFileName = extractedName;
+          }
+        }
+        
+        // Store the new file name in state and localStorage so it persists after refresh
+        setUpdatedFileNames(prev => {
+          const updated = {
+            ...prev,
+            [fileToUpdate.id]: finalFileName
+          };
+          // Also save to localStorage immediately
+          try {
+            localStorage.setItem('commission_chart_file_names', JSON.stringify(updated));
+          } catch (error) {
+            console.error('Failed to save file names to localStorage:', error);
+          }
+          return updated;
+        });
+        
+        // Update the local state immediately to reflect the new file name
+        setCommissionFiles(prevFiles => 
+          prevFiles.map(file => 
+            file.id === fileToUpdate.id 
+              ? { 
+                  ...updatedFile, 
+                  file_name: finalFileName, // Use the determined file name
+                  // Also update commission_file path if backend returned new path
+                  commission_file: updatedFile.commission_file || file.commission_file
+                }
+              : file
+          )
+        );
+      } else if (updateCategoryId) {
+        // If only category was updated, still update the local state
+        setCommissionFiles(prevFiles => 
+          prevFiles.map(file => 
+            file.id === fileToUpdate.id ? updatedFile : file
+          )
+        );
+      }
       
       toast({
         title: "Success",
@@ -208,6 +334,9 @@ const CommissionChart = () => {
       setFileToUpdate(null);
       setUpdateFile(null);
       setUpdateCategoryId("");
+      
+      // Always refetch to ensure we have the latest data from backend
+      // The updatedFileNames state will preserve the new file name
       fetchCommissionFiles();
     } catch (error: any) {
       toast({

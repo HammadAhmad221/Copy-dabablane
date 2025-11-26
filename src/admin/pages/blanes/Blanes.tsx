@@ -881,14 +881,9 @@ const Blanes: React.FC = () => {
                       fetchSubcategoriesForCategory(value);
                     }
                   }}
-                  disabled={selectedVendorFilter !== "all"}
                 >
                   <SelectTrigger className="w-full bg-white">
-                    <SelectValue placeholder={
-                      selectedVendorFilter !== "all"
-                        ? "Désélectionnez le vendeur d'abord"
-                        : "Filtrer par catégorie"
-                    } />
+                    <SelectValue placeholder="Filtrer par catégorie" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Toutes les catégories</SelectItem>
@@ -904,14 +899,12 @@ const Blanes: React.FC = () => {
                 <Select
                   value={selectedSubcategoryFilter}
                   onValueChange={handleSubcategoryFilterChange}
-                  disabled={selectedCategoryFilter === "all" || selectedVendorFilter !== "all"}
+                  disabled={selectedCategoryFilter === "all"}
                 >
                   <SelectTrigger className="w-full bg-white">
                     <SelectValue placeholder={
-                      selectedVendorFilter !== "all"
-                        ? "Désélectionnez le vendeur d'abord"
-                        : selectedCategoryFilter === "all"
-                          ? "Sélectionnez d'abord une catégorie"
+                      selectedCategoryFilter === "all"
+                        ? "Sélectionnez d'abord une catégorie"
                           : "Filtrer par sous-catégorie"
                     } />
                   </SelectTrigger>
