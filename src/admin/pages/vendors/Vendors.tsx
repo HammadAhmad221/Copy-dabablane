@@ -296,13 +296,18 @@ const EditVendorDialog = React.memo(({
     isDiamond: (vendor as any).isDiamond === true || (vendor as any).isDiamond === "1" || (vendor as any).isDiamond === 1,
   });
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [errors, setErrors] = React.useState<Record<string, string>>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setErrors({});
     try {
       // The API expects all fields including empty strings
-      const payload: any = { ...formData };
+      // Exclude name and email since they are read-only and cannot be changed
+      const { name, email, ...editableFields } = formData;
+      const payload: any = { ...editableFields };
+      
       // Ensure empty strings are sent as empty strings, not undefined
       Object.keys(payload).forEach(key => {
         if (payload[key] === null || payload[key] === undefined) {
@@ -315,8 +320,33 @@ const EditVendorDialog = React.memo(({
       }
       await onSave(payload);
       setOpen(false);
-    } catch (error) {
+      setErrors({});
+    } catch (error: any) {
       console.error('Error updating vendor:', error);
+      
+      // Handle validation errors from API
+      if (error.response?.data) {
+        const responseData = error.response.data;
+        
+        // Handle Laravel validation errors
+        if (responseData.errors) {
+          const newErrors: Record<string, string> = {};
+          Object.entries(responseData.errors).forEach(([key, value]) => {
+            // Laravel returns errors as arrays
+            if (Array.isArray(value)) {
+              newErrors[key] = value[0];
+            } else if (typeof value === 'string') {
+              newErrors[key] = value;
+            }
+          });
+          setErrors(newErrors);
+        } else if (responseData.message) {
+          // Handle single error message
+          setErrors({ general: responseData.message });
+        }
+      } else if (error.message) {
+        setErrors({ general: error.message });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -353,6 +383,15 @@ const EditVendorDialog = React.memo(({
   }, [vendor]);
 
   const handleInputChange = (field: string, value: string) => {
+    // Clear error for this field when user starts typing
+    if (errors[field]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+    
     if (field === 'city') {
       // Clear district and subdistrict when city changes (if new city has no districts or current district is not valid)
       const districts = cityDistricts[value] || [];
@@ -390,8 +429,16 @@ const EditVendorDialog = React.memo(({
     }));
   };
 
+  const handleDialogOpenChange = (isOpen: boolean) => {
+    setOpen(isOpen);
+    if (!isOpen) {
+      // Clear errors when dialog is closed
+      setErrors({});
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogTrigger asChild>
         <Button
           variant="outline"
@@ -412,6 +459,13 @@ const EditVendorDialog = React.memo(({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* General Error Message */}
+          {errors.general && (
+            <div className="p-3 mb-4 text-sm text-red-700 bg-red-100 border border-red-300 rounded-md">
+              {errors.general}
+            </div>
+          )}
+          
           {/* Basic Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Informations de Base</h3>
@@ -426,6 +480,9 @@ const EditVendorDialog = React.memo(({
                   className="bg-gray-100 cursor-not-allowed"
                   required
                 />
+                {errors.name && (
+                  <p className="text-sm text-red-600">{errors.name}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email *</Label>
@@ -438,6 +495,9 @@ const EditVendorDialog = React.memo(({
                   className="bg-gray-100 cursor-not-allowed"
                   required
                 />
+                {errors.email && (
+                  <p className="text-sm text-red-600">{errors.email}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Téléphone Mobile *</Label>
@@ -445,8 +505,12 @@ const EditVendorDialog = React.memo(({
                   id="phone"
                   value={formData.phone}
                   onChange={(e) => handleInputChange('phone', e.target.value)}
+                  className={errors.phone ? 'border-red-500' : ''}
                   required
                 />
+                {errors.phone && (
+                  <p className="text-sm text-red-600">{errors.phone}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="landline">Téléphone Fixe</Label>
@@ -454,7 +518,11 @@ const EditVendorDialog = React.memo(({
                   id="landline"
                   value={formData.landline}
                   onChange={(e) => handleInputChange('landline', e.target.value)}
+                  className={errors.landline ? 'border-red-500' : ''}
                 />
+                {errors.landline && (
+                  <p className="text-sm text-red-600">{errors.landline}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="city">Ville *</Label>
@@ -463,7 +531,7 @@ const EditVendorDialog = React.memo(({
                     value={formData.city}
                     onValueChange={(value) => handleInputChange('city', value)}
                   >
-                    <SelectTrigger className="flex-1">
+                    <SelectTrigger className={`flex-1 ${errors.city ? 'border-red-500' : ''}`}>
                       <SelectValue placeholder="Sélectionner une ville" />
                     </SelectTrigger>
                     <SelectContent>
@@ -487,6 +555,9 @@ const EditVendorDialog = React.memo(({
                     />
                   </div>
                 </div>
+                {errors.city && (
+                  <p className="text-sm text-red-600">{errors.city}</p>
+                )}
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="address">Adresse</Label>
@@ -494,7 +565,11 @@ const EditVendorDialog = React.memo(({
                   id="address"
                   value={formData.address}
                   onChange={(e) => handleInputChange('address', e.target.value)}
+                  className={errors.address ? 'border-red-500' : ''}
                 />
+                {errors.address && (
+                  <p className="text-sm text-red-600">{errors.address}</p>
+                )}
               </div>
             </div>
           </div>
@@ -541,7 +616,11 @@ const EditVendorDialog = React.memo(({
                   id="ice"
                   value={formData.ice}
                   onChange={(e) => handleInputChange('ice', e.target.value)}
+                  className={errors.ice ? 'border-red-500' : ''}
                 />
+                {errors.ice && (
+                  <p className="text-sm text-red-600">{errors.ice}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="rc">RC</Label>
@@ -549,7 +628,11 @@ const EditVendorDialog = React.memo(({
                   id="rc"
                   value={formData.rc}
                   onChange={(e) => handleInputChange('rc', e.target.value)}
+                  className={errors.rc ? 'border-red-500' : ''}
                 />
+                {errors.rc && (
+                  <p className="text-sm text-red-600">{errors.rc}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="vat">TVA</Label>
@@ -557,7 +640,11 @@ const EditVendorDialog = React.memo(({
                   id="vat"
                   value={formData.vat}
                   onChange={(e) => handleInputChange('vat', e.target.value)}
+                  className={errors.vat ? 'border-red-500' : ''}
                 />
+                {errors.vat && (
+                  <p className="text-sm text-red-600">{errors.vat}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="district">District</Label>
@@ -566,7 +653,7 @@ const EditVendorDialog = React.memo(({
                   onValueChange={(value) => handleInputChange('district', value)}
                   disabled={!formData.city || (cityDistricts[formData.city] || []).length === 0}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className={errors.district ? 'border-red-500' : ''}>
                     <SelectValue placeholder={
                       !formData.city 
                         ? "Sélectionner d'abord une ville" 
@@ -583,6 +670,9 @@ const EditVendorDialog = React.memo(({
                     ))}
                   </SelectContent>
                 </Select>
+                {errors.district && (
+                  <p className="text-sm text-red-600">{errors.district}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="subdistrict">Sous-District</Label>
@@ -591,7 +681,7 @@ const EditVendorDialog = React.memo(({
                   onValueChange={(value) => handleInputChange('subdistrict', value)}
                   disabled={!formData.district || (districtSubdistricts[formData.district] || []).length === 0}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className={errors.subdistrict ? 'border-red-500' : ''}>
                     <SelectValue placeholder={
                       !formData.district 
                         ? "Sélectionner d'abord un district" 
@@ -608,6 +698,9 @@ const EditVendorDialog = React.memo(({
                     ))}
                   </SelectContent>
                 </Select>
+                {errors.subdistrict && (
+                  <p className="text-sm text-red-600">{errors.subdistrict}</p>
+                )}
               </div>
             </div>
           </div>
@@ -624,7 +717,11 @@ const EditVendorDialog = React.memo(({
                   value={formData.facebook}
                   onChange={(e) => handleInputChange('facebook', e.target.value)}
                   placeholder="https://www.facebook.com/..."
+                  className={errors.facebook ? 'border-red-500' : ''}
                 />
+                {errors.facebook && (
+                  <p className="text-sm text-red-600">{errors.facebook}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="tiktok">TikTok</Label>
@@ -634,7 +731,11 @@ const EditVendorDialog = React.memo(({
                   value={formData.tiktok}
                   onChange={(e) => handleInputChange('tiktok', e.target.value)}
                   placeholder="https://www.tiktok.com/..."
+                  className={errors.tiktok ? 'border-red-500' : ''}
                 />
+                {errors.tiktok && (
+                  <p className="text-sm text-red-600">{errors.tiktok}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="instagram">Instagram</Label>
@@ -644,7 +745,11 @@ const EditVendorDialog = React.memo(({
                   value={formData.instagram}
                   onChange={(e) => handleInputChange('instagram', e.target.value)}
                   placeholder="https://www.instagram.com/..."
+                  className={errors.instagram ? 'border-red-500' : ''}
                 />
+                {errors.instagram && (
+                  <p className="text-sm text-red-600">{errors.instagram}</p>
+                )}
               </div>
             </div>
           </div>

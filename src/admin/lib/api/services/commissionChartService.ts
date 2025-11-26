@@ -20,6 +20,8 @@ export const commissionChartApi = {
     const formData = new FormData();
     formData.append('category_id', String(data.category_id));
     formData.append('commission_file', data.commission_file);
+    // Also send the file name so backend can store it
+    formData.append('file_name', data.commission_file.name);
 
     const response = await adminApiClient.post<{ data: CommissionFile }>(
       `${BASE_URL}/upload`,
@@ -40,6 +42,8 @@ export const commissionChartApi = {
     }
     if (data.commission_file) {
       formData.append('commission_file', data.commission_file);
+      // Also send the file name so backend can update it
+      formData.append('file_name', data.commission_file.name);
     }
 
     const response = await adminApiClient.post<{ data: CommissionFile }>(

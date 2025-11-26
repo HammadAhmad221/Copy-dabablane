@@ -25,6 +25,7 @@ export const reservationApi = {
       ]);
 
       // Map customer data to reservations
+      // Note: Preserve original reservation email if it exists, as it might differ from customer email
       const reservationsWithCustomerData = {
         ...reservationsResponse.data,
         data: reservationsResponse.data.data.map(reservation => {
@@ -32,9 +33,10 @@ export const reservationApi = {
           if (customer) {
             return {
               ...reservation,
-              name: customer.name,
-              email: customer.email,
-              city: customer.city
+              // Use customer data but preserve original reservation email if it exists
+              name: customer.name || reservation.name,
+              email: reservation.email || customer.email, // Prefer reservation email
+              city: customer.city || reservation.city
             };
           }
           return reservation;

@@ -112,8 +112,12 @@ export const useVendors = (): UseVendorsState & UseVendorsActions => {
       ));
       toast.success('Vendeur mis à jour avec succès');
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Erreur lors de la mise à jour du vendeur';
-      toast.error(errorMessage);
+      // Don't show toast for validation errors - they will be displayed inline in the form
+      const hasValidationErrors = error.response?.data?.errors && Object.keys(error.response.data.errors).length > 0;
+      if (!hasValidationErrors) {
+        const errorMessage = error.response?.data?.message || error.message || 'Erreur lors de la mise à jour du vendeur';
+        toast.error(errorMessage);
+      }
       throw error;
     }
   }, []);
