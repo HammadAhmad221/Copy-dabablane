@@ -2,15 +2,14 @@ import { Link } from 'react-router-dom';
 import { Card } from '@/user/components/ui/card';
 import { memo } from 'react';
 import { BlaneCardProps } from '@/user/lib/types/blane';
-import { Calendar, MapPinned, Star } from 'lucide-react';
+import { Calendar, MapPinned } from 'lucide-react';
 import {
   getDisplayImages,
   getRemainingDays,
   formatDate,
   calculateDiscountPercentage,
   isBlaneExpired,
-  getRoundedRating,
-  getStarClass
+  getRoundedRating
 } from '@/user/lib/utils/blane';
 import { getPlaceholderImage } from '@/user/lib/utils/home';
 import SimpleCarousel from '@/user/components/ui/SimpleCarousel';
@@ -57,16 +56,6 @@ const BlaneCard = ({ blane, isPriority = false }: BlaneCardProps & { isPriority?
 
       <div className="p-4 grid grid-rows-[auto_auto_auto_1fr_auto] gap-2">
         <h3 className="font-medium text-base md:text-lg text-gray-900 line-clamp-2">{blane.name}</h3>
-        
-        {/* Stars/rating using flexbox */}
-        {blane.rating && (
-          <div className="flex items-center gap-1">
-            {Array.from({ length: 5 }, (_, i) => (
-              <Star key={i} size={16} className={getStarClass(i, roundedRating)} />
-            ))}
-            <span className="text-sm text-gray-600 ml-1">({roundedRating.toFixed(1)})</span>
-          </div>
-        )}
         
         <p className="text-gray-600 text-xs md:text-sm line-clamp-2">{blane.description}</p>
         

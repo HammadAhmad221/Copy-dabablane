@@ -1,4 +1,4 @@
-import { Star, MapPin, Calendar, Clock, Package, Download, CheckCircle, AlertCircle, Store, Phone } from 'lucide-react';
+import { MapPin, Calendar, Clock, Package, Download, CheckCircle, AlertCircle, Store, Phone } from 'lucide-react';
 import { Blane } from '@/user/lib/types/blane';
 import { Badge } from '@/user/components/ui/badge';
 
@@ -26,24 +26,6 @@ export const BlaneInfo = ({
   
   return (
     <div className="space-y-5">
-      {/* Rating */}
-      <div className="flex items-center">
-        <div className="flex">
-          {[1, 2, 3, 4, 5].map((star) => (
-            <Star
-              key={star}
-              size={16}
-              className={`${
-                parseFloat(blane.rating) >= star
-                  ? 'text-yellow-400 fill-yellow-400'
-                  : 'text-gray-300'
-              }`}
-            />
-          ))}
-        </div>
-        <span className="ml-2 text-sm text-gray-600">({Number(blane.rating).toFixed(1)})</span>
-      </div>
-
       {/* Product Badges */}
       <div className="flex flex-wrap gap-2">
         {isDigitalProduct && (
