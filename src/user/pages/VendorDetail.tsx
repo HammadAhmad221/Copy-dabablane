@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Star, ChevronLeft, ChevronRight, MapPin, Facebook, Instagram, Phone } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MapPin, Facebook, Instagram, Phone } from 'lucide-react';
 import { Blane } from '@/user/lib/types/home';
 import Loader from '@/user/components/ui/Loader';
 import { getPlaceholderImage } from '@/user/lib/utils/home';
@@ -30,6 +30,10 @@ interface VendorInfo {
   name: string;
   description: string;
   city: string;
+  address?: string;
+  district?: string;
+  subdistrict?: string;
+  logoUrl?: string;
   coverImages: string[];
   social: {
     facebook?: string;
@@ -104,6 +108,10 @@ const VendorDetail = () => {
           name: vendor.company_name || vendor.name,
           description: vendor.description || 'Découvrez nos offres exclusives',
           city: vendor.city || 'Ville non renseignée',
+          address: vendor.address || undefined,
+          district: vendor.district || undefined,
+          subdistrict: vendor.subdistrict || undefined,
+          logoUrl: buildVendorAssetUrl(vendor.logoUrl),
           coverImages: imageSet.length > 0 ? imageSet : [''],
           social: {
             facebook: sanitizeUrl(vendor.facebook),
@@ -216,6 +224,17 @@ const VendorDetail = () => {
         {/* Content */}
         <div className="absolute inset-0 flex flex-col items-center justify-center px-4">
           <div className="text-center text-white max-w-3xl">
+            {/* Logo */}
+            {vendorInfo.logoUrl && (
+              <div className="flex justify-center mb-4">
+                <img
+                  src={vendorInfo.logoUrl}
+                  alt={`${vendorInfo.name} logo`}
+                  className="w-32 h-32 rounded-full drop-shadow-lg object-cover"
+                />
+              </div>
+            )}
+            
             {/* Description/Tagline */}
             <p className="text-sm md:text-base text-white/90 mb-2">
               {vendorInfo.description}
@@ -284,9 +303,30 @@ const VendorDetail = () => {
             </div>
             
             {/* Location */}
-            <div className="flex items-center justify-center gap-2 text-sm md:text-base">
-              <MapPin className="w-5 h-5" />
-              <span>{vendorInfo.city}</span>
+            <div className="flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm md:text-base flex-wrap px-2">
+              {(() => {
+                const locationParts = [
+                  vendorInfo.address,
+                  vendorInfo.subdistrict,
+                  vendorInfo.district,
+                  vendorInfo.city,
+                ].filter(Boolean);
+                const fullLocation = locationParts.join(', ');
+                const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(fullLocation)}`;
+                
+                return (
+                  <a
+                    href={mapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 sm:gap-2 hover:opacity-80 active:opacity-60 transition-opacity duration-200 touch-action-manipulation"
+                    title={`Voir sur Google Maps: ${fullLocation}`}
+                  >
+                    <MapPin className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 flex-shrink-0" />
+                    <span className="line-clamp-2 sm:line-clamp-1">{fullLocation || vendorInfo.city}</span>
+                  </a>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -344,17 +384,11 @@ const VendorDetail = () => {
 
                   {/* Content */}
                   <div className="p-4">
-                    {/* Title and Rating */}
+                    {/* Title */}
                     <div className="flex items-start justify-between mb-3">
                       <h3 className="text-lg font-bold text-gray-800 flex-1">
                         {blane.name}
                       </h3>
-                      <div className="flex items-center gap-1 ml-2">
-                        <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                        <span className="text-sm font-semibold text-gray-700">
-                          {rating.toFixed(1)}
-                        </span>
-                      </div>
                     </div>
 
                     {/* Price */}

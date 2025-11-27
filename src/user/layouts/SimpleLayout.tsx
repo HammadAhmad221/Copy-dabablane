@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import Footer from '../components/Footer';
 import ScrollToTop from '../components/ScrollToTop';
-import Logo from '@/assets/images/dabablane.svg';
+import Logo from '@/assets/images/dabablane.png';
 
 interface SimpleLayoutProps {
   children: React.ReactNode;
@@ -21,7 +21,7 @@ const SimpleLayout = ({ children }: SimpleLayoutProps) => {
               <img 
                 src={Logo} 
                 alt="DabaBlane" 
-                className="h-8 md:h-10 w-auto"
+                className="h-7 md:h-8 w-auto object-contain"
               />
             </Link>
           </div>

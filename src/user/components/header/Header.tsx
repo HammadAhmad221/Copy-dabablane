@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import Logo from '@/assets/images/dabablane.svg';
+import Logo from '@/assets/images/dabablane.png';
 import { Menu } from 'lucide-react';
 import { Button } from '@/user/components/ui/button';
 import { Category, City, MenuItem } from '@/user/lib/types/home';
@@ -43,7 +43,7 @@ const Header = ({
               <img 
                 src={Logo} 
                 alt="DabaBlane" 
-                className={`transition-all duration-300 `}
+                className="h-8 md:h-10 w-auto object-contain"
               />
             </Link>
             <Button 

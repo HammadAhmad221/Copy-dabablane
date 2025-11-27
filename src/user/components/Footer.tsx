@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Instagram, Mail, Phone, MapPin, MessageCircle } from 'lucide-react';
-import logo from '@/assets/images/dabablane.svg';
+import logo from '@/assets/images/dabablane.png';
 import CMI from '@/assets/images/logo_cmi.png';
 import VISA from '@/assets/images/tn_verified_by_visa.png';
 import MASTER from '@/assets/images/secure_code_logo.png';
@@ -37,7 +37,7 @@ const Footer = () => {
       <div className="max-w-7xl mx-auto px-4 pt-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
           <div className="space-y-4">
-            <img src={logo} alt="DabaBlane Logo" className="h-12 w-auto mb-4" width="120" height="48" />
+            <img src={logo} alt="DabaBlane Logo" className="h-10 w-auto mb-4 object-contain" width="100" height="40" />
             <p className="text-sm text-gray-400 max-w-xs">
               DabaBlane est votre destination en ligne pour découvrir les meilleures offres et promotions au Maroc.
             </p>
