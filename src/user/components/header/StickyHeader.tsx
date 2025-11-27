@@ -1,5 +1,5 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import Logo from '@/assets/images/dabablane.svg';
+import Logo from '@/assets/images/dabablane.png';
 import { Menu, Search, ChevronDown, MapPin } from 'lucide-react';
 import { Button } from '@/user/components/ui/button';
 import { Category, City, MenuItem } from '@/user/lib/types/home';
@@ -144,9 +144,9 @@ const StickyHeader = ({
               <img 
                 src={Logo} 
                 alt="DabaBlane" 
-                className="h-10 w-auto" 
-                width="120" 
-                height="48"
+                className="h-8 md:h-9 w-auto object-contain" 
+                width="100" 
+                height="36"
               />
             </Link>
             

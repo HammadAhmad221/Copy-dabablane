@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
-import logo from '../../../assets/images/dabablanelogo.webp';
+import logo from '../../../assets/images/dabablane.png';
 
 const AdminLogin = () => {
   const [email, setEmail] = useState('');
@@ -64,7 +64,7 @@ const AdminLogin = () => {
       <div className="w-full max-w-md">
         <div className="bg-white rounded-lg shadow-md p-8">
           <div className="flex justify-center mb-6">
-            <img src={logo} alt="Dabablane Logo" className="h-16 w-auto" />
+            <img src={logo} alt="Dabablane Logo" className="h-12 md:h-14 w-auto object-contain" />
           </div>
           
           {(formError || error) && (

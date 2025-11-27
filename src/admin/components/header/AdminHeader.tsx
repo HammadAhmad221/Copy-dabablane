@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import Logo from '@/assets/images/dabablanelogo.webp';
+import Logo from '@/assets/images/dabablane.png';
 import { Menu, Bell, Clock, Search } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/admin/components/ui/avatar';
 import { Button } from '@/admin/components/ui/button';
@@ -73,7 +73,7 @@ const AdminHeader = ({ onMenuClick }: AdminHeaderProps) => {
             <Menu className="h-6 w-6" />
           </Button>
           <Link to="/"> 
-            <img src={Logo} alt="DabaBlane" className="h-12 " />
+            <img src={Logo} alt="DabaBlane" className="h-8 md:h-9 w-auto object-contain" />
           </Link>
         </div>
 

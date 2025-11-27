@@ -23,7 +23,7 @@ export const createModernPDF = async (data: PdfDocumentData) => {
   
   try {
     // Load and add logo
-    const logoUrl = 'https://dabablane.com/assets/dabablanelogo.webp';
+    const logoUrl = 'https://dabablane.com/assets/dabablane.png';
     let base64 = '';
     try {
       const response = await fetch(logoUrl);
