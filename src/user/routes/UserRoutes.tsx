@@ -26,7 +26,7 @@ const UserRoutes: React.FC = () => {
       <ScrollToTopOnNavigate />
       <Routes>
         {/* Vendor Detail route with SimpleLayout */}
-        <Route path="/vendors/:name" element={
+        <Route path="/:name" element={
           <SimpleLayout>
             <Suspense fallback={<Loader />}>
               <VendorDetail />
