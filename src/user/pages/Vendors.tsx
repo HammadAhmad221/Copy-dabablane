@@ -212,7 +212,7 @@ const VendorsPage = () => {
               return (
                 <Link
                   key={vendor.id}
-                  to={`/vendors/${slugify(vendor.company_name || vendor.name || '')}`}
+                  to={`/${slugify(vendor.company_name || vendor.name || '')}`}
                   className="group bg-white rounded-2xl shadow-sm hover:shadow-lg transition-shadow duration-300 overflow-hidden border border-gray-100"
                 >
                   <div className="relative h-56 overflow-hidden bg-gray-100">
