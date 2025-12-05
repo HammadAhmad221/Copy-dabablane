@@ -12,6 +12,13 @@ import {
   DialogTitle,
 } from "@/admin/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/admin/components/ui/select";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -70,10 +77,12 @@ const getPdfUrl = (pdfPath: string): string => {
 };
 
 const TermsAndCondition = () => {
-  const [pdfFile, setPdfFile] = useState<TermsAndCondition | null>(null);
+  const [userPdf, setUserPdf] = useState<TermsAndCondition | null>(null);
+  const [vendorPdf, setVendorPdf] = useState<TermsAndCondition | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [pdfToDelete, setPdfToDelete] = useState<TermsAndCondition | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -81,32 +90,37 @@ const TermsAndCondition = () => {
     title: "",
     description: "",
     version: "1.0",
+    type: "",
   });
 
-  // Fetch existing PDF
+  // Fetch existing PDFs
   useEffect(() => {
-    const fetchPDF = async () => {
+    const fetchPDFs = async () => {
       setIsLoading(true);
       try {
-        const response = await termsConditionsApi.getActive();
-        if (response) {
-          setPdfFile(response);
+        const response = await termsConditionsApi.getAll();
+        if (response && response.length > 0) {
+          // Separate user and vendor PDFs
+          const userPdfData = response.find(pdf => pdf.type === "user");
+          const vendorPdfData = response.find(pdf => pdf.type === "vendor");
+          
+          setUserPdf(userPdfData || null);
+          setVendorPdf(vendorPdfData || null);
         } else {
-          setPdfFile(null);
+          setUserPdf(null);
+          setVendorPdf(null);
         }
       } catch (error: any) {
-        console.error("Error fetching PDF:", error);
-        // If it's a 404, that's fine - no active terms exist
-        if (error.response?.status !== 404) {
-          toast.error("Failed to load Terms & Conditions");
-        }
-        setPdfFile(null);
+        console.error("Error fetching PDFs:", error);
+        toast.error("Failed to load Terms & Conditions");
+        setUserPdf(null);
+        setVendorPdf(null);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchPDF();
+    fetchPDFs();
   }, []);
 
   const formatFileSize = (bytes?: number): string => {
@@ -164,12 +178,18 @@ const TermsAndCondition = () => {
       return;
     }
 
+    if (!formData.type) {
+      toast.error("Please select a type");
+      return;
+    }
+
     setIsUploading(true);
     try {
-      // If PDF exists, delete old one first (API handles this automatically when uploading new one)
-      if (pdfFile?.id) {
+      // If PDF of same type exists, delete old one first
+      const existingPdf = formData.type === "user" ? userPdf : vendorPdf;
+      if (existingPdf?.id) {
         try {
-          await termsConditionsApi.delete(pdfFile.id);
+          await termsConditionsApi.delete(existingPdf.id);
         } catch (error) {
           console.warn("Error deleting old PDF (may not exist):", error);
           // Continue anyway - the upload will create a new one
@@ -181,15 +201,22 @@ const TermsAndCondition = () => {
         title: formData.title.trim(),
         description: formData.description.trim() || undefined,
         version: formData.version.trim(),
+        type: formData.type,
         is_active: 1,
         pdf_file: selectedFile,
       });
 
-      setPdfFile(response);
+      // Update the appropriate PDF based on type
+      if (formData.type === "user") {
+        setUserPdf(response);
+      } else if (formData.type === "vendor") {
+        setVendorPdf(response);
+      }
+
       setSelectedFile(null);
-      setFormData({ title: "", description: "", version: "1.0" });
+      setFormData({ title: "", description: "", version: "1.0", type: "" });
       setIsUploadDialogOpen(false);
-      toast.success("Terms & Conditions PDF uploaded successfully");
+      toast.success(`Terms & Conditions PDF uploaded successfully for ${formData.type}`);
     } catch (error: any) {
       console.error("Error uploading PDF:", error);
       const errorMessage =
@@ -201,14 +228,22 @@ const TermsAndCondition = () => {
   };
 
   const handleDelete = async () => {
-    if (!pdfFile?.id) return;
+    if (!pdfToDelete?.id) return;
 
     setIsDeleting(true);
     try {
-      await termsConditionsApi.delete(pdfFile.id);
-      setPdfFile(null);
+      await termsConditionsApi.delete(pdfToDelete.id);
+      
+      // Update the appropriate PDF based on type
+      if (pdfToDelete.type === "user") {
+        setUserPdf(null);
+      } else if (pdfToDelete.type === "vendor") {
+        setVendorPdf(null);
+      }
+      
+      setPdfToDelete(null);
       setIsDeleteDialogOpen(false);
-      toast.success("Terms & Conditions PDF deleted successfully");
+      toast.success(`Terms & Conditions PDF deleted successfully for ${pdfToDelete.type}`);
     } catch (error: any) {
       console.error("Error deleting PDF:", error);
       const errorMessage =
@@ -219,7 +254,7 @@ const TermsAndCondition = () => {
     }
   };
 
-  const handleView = () => {
+  const handleView = (pdfFile: TermsAndCondition) => {
     if (!pdfFile) {
       toast.error("No PDF file available");
       return;
@@ -267,17 +302,34 @@ const TermsAndCondition = () => {
     }
   };
 
-  const handleEdit = () => {
+  const handleEdit = (pdfFile: TermsAndCondition) => {
     // Pre-fill form with existing data
     if (pdfFile) {
       setFormData({
         title: pdfFile.title || "",
         description: pdfFile.description || "",
         version: pdfFile.version || "1.0",
+        type: pdfFile.type || "",
       });
     }
     setSelectedFile(null);
     setIsUploadDialogOpen(true);
+  };
+
+  const handleOpenUploadDialog = (type?: string) => {
+    setFormData({ 
+      title: "", 
+      description: "", 
+      version: "1.0", 
+      type: type || "" 
+    });
+    setSelectedFile(null);
+    setIsUploadDialogOpen(true);
+  };
+
+  const handleOpenDeleteDialog = (pdfFile: TermsAndCondition) => {
+    setPdfToDelete(pdfFile);
+    setIsDeleteDialogOpen(true);
   };
 
   if (isLoading) {
@@ -293,6 +345,119 @@ const TermsAndCondition = () => {
     );
   }
 
+  // Render PDF Card Component
+  const renderPdfCard = (pdfFile: TermsAndCondition | null, type: string) => {
+    if (!pdfFile) {
+      return (
+        <Card className="p-6 sm:p-8">
+          <div className="text-center">
+            <div className="mx-auto w-12 h-12 sm:w-14 sm:h-14 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+              <FileText className="h-6 w-6 sm:h-7 sm:w-7 text-gray-400" />
+            </div>
+            <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
+              No {type.charAt(0).toUpperCase() + type.slice(1)} Terms & Conditions
+            </h3>
+            <p className="text-gray-500 text-xs sm:text-sm mb-4">
+              Upload a PDF file for {type} terms & conditions.
+            </p>
+            <Button
+              onClick={() => handleOpenUploadDialog(type)}
+              className="bg-[#00897B] hover:bg-[#00796B] text-sm"
+              size="sm"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Upload PDF
+            </Button>
+          </div>
+        </Card>
+      );
+    }
+
+    return (
+      <Card className="p-4 sm:p-5 border-l-4 border-l-[#00897B]">
+        <div className="flex flex-col lg:flex-row lg:items-start gap-4 lg:gap-6">
+          {/* PDF Info */}
+          <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0 w-full">
+            <div className="p-2 sm:p-3 bg-[#00897B]/10 rounded-lg flex-shrink-0">
+              <FileText className="h-7 w-7 sm:h-8 sm:w-8 text-[#00897B]" />
+            </div>
+            <div className="flex-1 min-w-0 w-full">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 break-words">
+                  {pdfFile.title || pdfFile.pdf_file_name || "Terms & Conditions"}
+                </h3>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-gray-600 mb-2">
+                <span className="px-2 py-1 bg-[#00897B]/10 text-[#00897B] rounded-md font-medium">
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                </span>
+                {pdfFile.version && (
+                  <>
+                    <span>•</span>
+                    <span className="font-medium">Version: {pdfFile.version}</span>
+                  </>
+                )}
+                {pdfFile.pdf_file_size && (
+                  <>
+                    <span>•</span>
+                    <span className="font-medium">{formatFileSize(pdfFile.pdf_file_size)}</span>
+                  </>
+                )}
+                {pdfFile.created_at && (
+                  <>
+                    <span>•</span>
+                    <span>
+                      Uploaded: {new Date(pdfFile.created_at).toLocaleDateString()}
+                    </span>
+                  </>
+                )}
+              </div>
+              {pdfFile.description && (
+                <div className="mt-2 w-full">
+                  <p className="text-xs sm:text-sm text-gray-500 break-words" style={{ wordBreak: 'break-word' }}>
+                    {pdfFile.description}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-row gap-2 flex-shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
+            <Button
+              onClick={() => handleView(pdfFile)}
+              variant="outline"
+              className="border-[#00897B] text-[#00897B] hover:bg-[#00897B] hover:text-white flex-1 sm:flex-initial text-sm"
+              size="sm"
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              View
+            </Button>
+            <Button
+              onClick={() => handleEdit(pdfFile)}
+              variant="outline"
+              className="border-[#00897B] text-[#00897B] hover:bg-[#00897B] hover:text-white flex-1 sm:flex-initial text-sm"
+              size="sm"
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+            <Button
+              onClick={() => handleOpenDeleteDialog(pdfFile)}
+              variant="outline"
+              className="border-red-500 text-red-600 hover:bg-red-50 hover:border-red-600 flex-1 sm:flex-initial text-sm"
+              size="sm"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete
+            </Button>
+          </div>
+        </div>
+      </Card>
+    );
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 w-full max-w-full overflow-x-hidden">
       {/* Header */}
@@ -303,141 +468,47 @@ const TermsAndCondition = () => {
               Terms & Conditions
             </h1>
             <p className="text-gray-500 mt-1 text-xs sm:text-sm md:text-base">
-              Manage Terms & Conditions PDF document
+              Manage Terms & Conditions PDF documents for Users and Vendors
             </p>
           </div>
-          {!pdfFile && (
-            <Button
-              onClick={() => {
-                setFormData({ title: "", description: "", version: "1.0" });
-                setSelectedFile(null);
-                setIsUploadDialogOpen(true);
-              }}
-              className="bg-[#00897B] hover:bg-[#00796B] w-full md:w-auto whitespace-nowrap flex-shrink-0 text-sm sm:text-sm md:text-base"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Upload PDF
-            </Button>
-          )}
         </div>
       </div>
 
-      {/* PDF Display Card */}
-      {pdfFile ? (
-        <Card className="p-4 sm:p-5 md:p-6 border-l-4 border-l-[#00897B]">
-          <div className="flex flex-col lg:flex-row lg:items-start gap-4 sm:gap-4 lg:gap-6">
-            {/* PDF Info */}
-            <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0 w-full">
-              <div className="p-2 sm:p-3 bg-[#00897B]/10 rounded-lg flex-shrink-0">
-                <FileText className="h-7 w-7 sm:h-8 sm:w-8 md:h-10 md:w-10 text-[#00897B]" />
-              </div>
-              <div className="flex-1 min-w-0 w-full">
-                <div className="flex items-center gap-2 mb-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
-                  <h3 className="text-base sm:text-lg md:text-lg font-semibold text-gray-900 break-words">
-                    {pdfFile.title || pdfFile.pdf_file_name || "Terms & Conditions"}
-                  </h3>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-gray-600 mb-2">
-                  {pdfFile.version && (
-                    <>
-                      <span className="font-medium">Version: {pdfFile.version}</span>
-                      <span>•</span>
-                    </>
-                  )}
-                  {pdfFile.pdf_file_size && (
-                    <>
-                      <span className="font-medium">{formatFileSize(pdfFile.pdf_file_size)}</span>
-                      <span>•</span>
-                    </>
-                  )}
-                  <span>PDF Document</span>
-                  {pdfFile.created_at && (
-                    <>
-                      <span>•</span>
-                      <span>
-                        Uploaded: {new Date(pdfFile.created_at).toLocaleDateString()}
-                      </span>
-                    </>
-                  )}
-                </div>
-                {pdfFile.description && (
-                  <div className="mt-2 w-full">
-                    <p className="text-xs sm:text-sm text-gray-500 break-words whitespace-normal overflow-wrap-anywhere" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>
-                      {pdfFile.description}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
+      {/* User Terms & Conditions */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
+            User Terms & Conditions
+          </h2>
+        </div>
+        {renderPdfCard(userPdf, "user")}
+      </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row md:flex-row lg:flex-col xl:flex-row gap-2.5 sm:gap-2 md:gap-2 flex-shrink-0 w-full sm:w-auto md:w-auto lg:w-auto mt-2 sm:mt-0">
-              <Button
-                onClick={handleView}
-                variant="outline"
-                className="border-[#00897B] text-[#00897B] hover:bg-[#00897B] hover:text-white w-full sm:w-auto md:w-auto lg:w-full xl:w-auto text-sm py-2.5 sm:py-2 h-auto min-h-[44px] sm:min-h-0"
-              >
-                <Eye className="h-4 w-4 mr-2" />
-                View PDF
-              </Button>
-              <Button
-                onClick={handleEdit}
-                variant="outline"
-                className="border-[#00897B] text-[#00897B] hover:bg-[#00897B] hover:text-white w-full sm:w-auto md:w-auto lg:w-full xl:w-auto text-sm py-2.5 sm:py-2 h-auto min-h-[44px] sm:min-h-0"
-              >
-                <Edit className="h-4 w-4 mr-2" />
-                Edit
-              </Button>
-              <Button
-                onClick={() => setIsDeleteDialogOpen(true)}
-                variant="outline"
-                className="border-red-500 text-red-600 hover:bg-red-50 hover:border-red-600 w-full sm:w-auto md:w-auto lg:w-full xl:w-auto text-sm py-2.5 sm:py-2 h-auto min-h-[44px] sm:min-h-0"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
-              </Button>
-            </div>
-          </div>
-        </Card>
-      ) : (
-        <Card className="p-6 sm:p-8 md:p-10 lg:p-12">
-          <div className="text-center">
-            <div className="mx-auto w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 bg-gray-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
-              <FileText className="h-7 w-7 sm:h-8 sm:w-8 md:h-10 md:w-10 text-gray-400" />
-            </div>
-            <h3 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 mb-2">
-              No Terms & Conditions PDF
-            </h3>
-            <p className="text-gray-500 text-xs sm:text-sm md:text-base mb-4 sm:mb-5 md:mb-6 px-2">
-              Upload a PDF file to get started. Only one PDF can be stored at a time.
-            </p>
-            <Button
-              onClick={() => {
-                setFormData({ title: "", description: "", version: "1.0" });
-                setSelectedFile(null);
-                setIsUploadDialogOpen(true);
-              }}
-              className="bg-[#00897B] hover:bg-[#00796B] text-sm sm:text-sm md:text-base"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Upload PDF
-            </Button>
-          </div>
-        </Card>
-      )}
+      {/* Vendor Terms & Conditions */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
+            Vendor Terms & Conditions
+          </h2>
+        </div>
+        {renderPdfCard(vendorPdf, "vendor")}
+      </div>
+
+
 
       {/* Upload Dialog */}
       <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
         <DialogContent className="w-[95%] sm:max-w-[500px] md:max-w-[550px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {pdfFile ? "Edit Terms & Conditions" : "Upload Terms & Conditions"}
+              {formData.type && (userPdf?.type === formData.type || vendorPdf?.type === formData.type) 
+                ? `Edit ${formData.type.charAt(0).toUpperCase()}${formData.type.slice(1)} Terms & Conditions` 
+                : "Upload Terms & Conditions"}
             </DialogTitle>
             <DialogDescription>
-              {pdfFile
-                ? "Upload a new PDF to replace the existing one. The old PDF will be deleted automatically."
-                : "Upload a PDF file for Terms & Conditions. Only PDF files are accepted."}
+              {formData.type && (userPdf?.type === formData.type || vendorPdf?.type === formData.type)
+                ? `Upload a new PDF to replace the existing ${formData.type} terms. The old PDF will be deleted automatically.`
+                : "Upload a PDF file for Terms & Conditions. Select the type (User or Vendor) and upload the PDF file."}
             </DialogDescription>
           </DialogHeader>
 
@@ -491,6 +562,27 @@ const TermsAndCondition = () => {
                 }
                 className="h-10"
               />
+            </div>
+
+            {/* Type Field */}
+            <div className="space-y-2">
+              <Label htmlFor="type" className="text-sm font-semibold">
+                Type <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={formData.type}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, type: value })
+                }
+              >
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="vendor">Vendor</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* PDF File Field */}
@@ -560,7 +652,7 @@ const TermsAndCondition = () => {
               onClick={() => {
                 setIsUploadDialogOpen(false);
                 setSelectedFile(null);
-                setFormData({ title: "", description: "", version: "1.0" });
+                setFormData({ title: "", description: "", version: "1.0", type: "" });
               }}
               className="w-full sm:w-auto md:w-auto text-sm sm:text-sm"
               disabled={isUploading}
@@ -570,7 +662,7 @@ const TermsAndCondition = () => {
             <Button
               onClick={handleUpload}
               className="bg-[#00897B] hover:bg-[#00796B] w-full sm:w-auto md:w-auto text-sm sm:text-sm"
-              disabled={isUploading || !selectedFile || !formData.title.trim() || !formData.version.trim()}
+              disabled={isUploading || !selectedFile || !formData.title.trim() || !formData.version.trim() || !formData.type}
             >
               {isUploading ? (
                 <>
@@ -580,7 +672,9 @@ const TermsAndCondition = () => {
               ) : (
                 <>
                   <Upload className="mr-2 h-4 w-4" />
-                  {pdfFile ? "Replace PDF" : "Upload PDF"}
+                  {formData.type && (userPdf?.type === formData.type || vendorPdf?.type === formData.type) 
+                    ? "Replace PDF" 
+                    : "Upload PDF"}
                 </>
               )}
             </Button>
@@ -592,9 +686,9 @@ const TermsAndCondition = () => {
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Terms & Conditions PDF?</AlertDialogTitle>
+            <AlertDialogTitle>Delete {pdfToDelete?.type?.charAt(0).toUpperCase()}{pdfToDelete?.type?.slice(1)} Terms & Conditions PDF?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the Terms & Conditions PDF? This action cannot be
+              Are you sure you want to delete the {pdfToDelete?.type} Terms & Conditions PDF? This action cannot be
               undone. You will need to upload a new PDF file.
             </AlertDialogDescription>
           </AlertDialogHeader>

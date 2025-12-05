@@ -101,6 +101,8 @@ interface BlaneFormState extends BlaneFormData {
   images: File[];
   nombre_max_reservation: number;
   max_reservation_par_creneau: number;
+  reservation_per_day?: number;
+  order_per_day?: number;
   jours_creneaux: string[];
   dates: string[];
   dateRanges: Array<{ start: string; end: string }>;
@@ -428,6 +430,8 @@ const BlaneForm = ({
     reservation_type: initialData?.reservation_type as ReservationType || "instante" as ReservationType,
     nombre_max_reservation: initialData?.nombre_max_reservation || 0,
     max_reservation_par_creneau: initialData?.max_reservation_par_creneau || 0,
+    reservation_per_day: (initialData as any)?.reservation_per_day || 0,
+    order_per_day: (initialData as any)?.order_per_day || 0,
     jours_creneaux: Array.isArray(initialData?.jours_creneaux)
       ? initialData.jours_creneaux
       : initialData?.jours_creneaux
@@ -791,6 +795,7 @@ const BlaneForm = ({
       if (formData.type === "reservation") {
         submitFormData.set("nombre_max_reservation", formData.nombre_max_reservation.toString());
         submitFormData.set("max_reservation_par_creneau", formData.max_reservation_par_creneau.toString());
+        submitFormData.set("reservation_per_day", (formData.reservation_per_day || 0).toString());
         submitFormData.set("intervale_reservation", formData.intervale_reservation.toString());
         submitFormData.set("personnes_prestation", formData.personnes_prestation.toString());
         submitFormData.set("reservation_type", formData.reservation_type || "instante");
@@ -808,6 +813,7 @@ const BlaneForm = ({
       if (formData.type === "order") {
         submitFormData.set("stock", formData.stock.toString());
         submitFormData.set("max_orders", formData.max_orders.toString());
+        submitFormData.set("order_per_day", (formData.order_per_day || 0).toString());
         submitFormData.set("livraison_in_city", formData.livraison_in_city.toString());
         submitFormData.set("livraison_out_city", formData.livraison_out_city.toString());
       }
@@ -911,6 +917,8 @@ const BlaneForm = ({
         "personnes_prestation",
         "nombre_max_reservation",
         "max_reservation_par_creneau",
+        "reservation_per_day",
+        "order_per_day",
         "max_orders",
         "livraison_in_city",
         "livraison_out_city"
@@ -1672,6 +1680,19 @@ const BlaneForm = ({
                         />
                       </div>
                     </div>
+
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Reservation per day</Label>
+                        <Input
+                          type="text"
+                          value={formData.reservation_per_day === 0 ? "" : formData.reservation_per_day?.toString() || ""}
+                          onChange={(e) => handleNumericInputChange("reservation_per_day", e.target.value)}
+                          className="w-full"
+                          placeholder="Reservation per day"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -1695,6 +1716,19 @@ const BlaneForm = ({
                         onChange={(e) => handleNumericInputChange("max_orders", e.target.value)}
                         className="w-full"
                         placeholder="Commandes max"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Order per day</Label>
+                      <Input
+                        type="text"
+                        value={formData.order_per_day === 0 ? "" : formData.order_per_day?.toString() || ""}
+                        onChange={(e) => handleNumericInputChange("order_per_day", e.target.value)}
+                        className="w-full"
+                        placeholder="Order per day"
                       />
                     </div>
                   </div>
