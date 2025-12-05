@@ -1,6 +1,9 @@
 const TERMS_CONDITIONS_ENDPOINTS = {
   BASE: '/terms-conditions',
   
+  // Get all terms & conditions
+  getAll: () => `${TERMS_CONDITIONS_ENDPOINTS.BASE}`,
+  
   // Get active terms & conditions
   getActive: () => `${TERMS_CONDITIONS_ENDPOINTS.BASE}/active`,
   

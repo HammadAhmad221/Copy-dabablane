@@ -30,6 +30,7 @@ export const VendorSchema = z.object({
   logoUrl: z.string().nullable().optional(),
   coverPhotoUrl: z.string().nullable().optional(),
   rcCertificateUrl: z.string().nullable().optional(),
+  blane_limit: z.number().nullable().optional(),
   status: VendorStatusSchema,
   cover_media: z.array(z.union([
     z.string(),
@@ -123,6 +124,7 @@ export interface Vendor {
   facebook?: string | null;
   tiktok?: string | null;
   instagram?: string | null;
+  blane_limit?: number | null;
   status: VendorStatus;
   cover_media?: (string | {
     id?: number;
@@ -167,6 +169,7 @@ export interface UpdateVendorRequest {
   facebook?: string;
   tiktok?: string;
   instagram?: string;
+  blane_limit?: string | number;
   cover_media_urls?: string[];
   rcCertificateUrl?: string;
   ribUrl?: string;

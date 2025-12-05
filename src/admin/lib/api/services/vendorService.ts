@@ -96,17 +96,26 @@ export const vendorApi = {
     return response.data as Vendor;
   },
 
-  // Update vendor (using /api/updateVendor endpoint)
-  updateVendorInfo: async (vendorData: UpdateVendorRequest): Promise<Vendor> => {
+  // Update vendor (using /api/admin/updateVendor endpoint)
+  updateVendorInfo: async (vendorData: UpdateVendorRequest & { id?: number }): Promise<Vendor> => {
     // Don't validate with schema since API accepts all fields
-    const response = await adminApiClient.put('/updateVendor', vendorData);
+    const { id, ...dataToSend } = vendorData;
+    const endpoint = id ? `/admin/updateVendor/${id}` : '/admin/updateVendor';
+    const response = await adminApiClient.put(endpoint, dataToSend);
     return response.data as Vendor;
   },
 
   // Update vendor status
   updateVendorStatus: async (id: string, statusData: UpdateVendorStatusRequest): Promise<Vendor> => {
     const validatedData = UpdateVendorStatusRequestSchema.parse(statusData);
-    const response = await adminApiClient.patch(`/changeVendorStatus/${id}`, validatedData);
+    
+    // Transform status to match API expectations (lowercase)
+    const apiData = {
+      ...validatedData,
+      status: validatedData.status === 'inActive' ? 'inactive' : validatedData.status
+    };
+    
+    const response = await adminApiClient.patch(`/changeVendorStatus/${id}`, apiData);
     return response.data as Vendor;
   },
 

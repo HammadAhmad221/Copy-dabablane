@@ -4,6 +4,7 @@ export interface TermsAndCondition {
   description?: string;
   version: string;
   is_active: boolean;
+  type: string; // "user" or "vendor"
   pdf_file: string; // URL to the PDF file
   pdf_file_name?: string;
   pdf_file_size?: number;
@@ -15,10 +16,15 @@ export interface TermsAndConditionResponse {
   data: TermsAndCondition;
 }
 
+export interface TermsAndConditionsListResponse {
+  data: TermsAndCondition[];
+}
+
 export interface UploadTermsAndConditionRequest {
   title: string;
   description?: string;
   version: string;
+  type: string; // "user" or "vendor"
   is_active: boolean | number | string;
   pdf_file: File;
 }
@@ -27,6 +33,7 @@ export interface TermsAndConditionFormData {
   title: string;
   description: string;
   version: string;
+  type: string; // "user" or "vendor"
   is_active: boolean;
   pdf_file: File | null;
 }
