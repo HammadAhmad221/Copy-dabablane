@@ -3,10 +3,37 @@ import TERMS_CONDITIONS_ENDPOINTS from "../endpoints/termsConditions";
 import {
   TermsAndCondition,
   TermsAndConditionResponse,
+  TermsAndConditionsListResponse,
   UploadTermsAndConditionRequest,
 } from "../types/termsConditions";
 
 export const termsConditionsApi = {
+  // Get all terms & conditions
+  getAll: async (): Promise<TermsAndCondition[]> => {
+    try {
+      console.log("📤 Fetching all terms & conditions:", TERMS_CONDITIONS_ENDPOINTS.getAll());
+
+      const response = await adminApiClient.get<TermsAndConditionsListResponse>(
+        TERMS_CONDITIONS_ENDPOINTS.getAll()
+      );
+
+      console.log("✅ Terms & Conditions list response:", response.data);
+      
+      // Handle response structure - could be direct data or wrapped in data property
+      const termsData = response.data.data || response.data as any;
+      
+      if (!termsData || !Array.isArray(termsData)) {
+        console.log("ℹ️ No terms & conditions found");
+        return [];
+      }
+
+      return termsData;
+    } catch (error: any) {
+      console.error("❌ Error fetching terms & conditions:", error);
+      return [];
+    }
+  },
+
   // Get active terms & conditions
   getActive: async (): Promise<TermsAndCondition | null> => {
     try {
@@ -55,6 +82,7 @@ export const termsConditionsApi = {
         formData.append("description", data.description);
       }
       formData.append("version", data.version);
+      formData.append("type", data.type);
       formData.append("is_active", String(data.is_active));
       formData.append("pdf_file", data.pdf_file);
 
