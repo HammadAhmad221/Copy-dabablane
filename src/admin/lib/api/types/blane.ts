@@ -49,10 +49,12 @@ export interface Blane {
   is_digital?: boolean;
   allow_out_of_city_delivery?: boolean;
   max_orders: number;
+  order_per_day?: number;
   reservation_type?: ReservationType;
   intervale_reservation: number;
   personnes_prestation: number;
   max_reservation_par_creneau?: number;
+  reservation_per_day?: number;
   blaneImages?: BlaneImage[];
   rating: number;
   images: string[];
@@ -128,6 +130,7 @@ export interface BlaneFormData {
   allow_out_of_city_delivery?: boolean;
   stock: number;
   max_orders: number;
+  order_per_day?: number;
   livraison_in_city: number;
   livraison_out_city: number;
   start_date: string;
@@ -142,6 +145,7 @@ export interface BlaneFormData {
   personnes_prestation: number;
   nombre_max_reservation: number;
   max_reservation_par_creneau: number;
+  reservation_per_day?: number;
   partiel_field: number;
   tva: number;
   type_time?: "date" | "time";

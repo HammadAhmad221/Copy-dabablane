@@ -25,6 +25,8 @@ import { Vendor, VendorStatus } from "@/admin/lib/api/types/vendor";
 import { getVendorStatusLabel } from "@/admin/lib/constants/vendor";
 import { useVendors } from "@/admin/hooks/useVendors";
 import { vendorApi } from "@/admin/lib/api/services/vendorService";
+import { categoryApi } from "@/admin/lib/api/services/categoryService";
+import { subcategoryApi } from "@/admin/lib/api/services/subcategoryService";
 import { Icon } from "@iconify/react";
 import { cn } from "@/lib/utils";
 import { debounce } from "lodash";
@@ -294,9 +296,43 @@ const EditVendorDialog = React.memo(({
     rcCertificateUrl: vendor.rcCertificateUrl || '',
     ribUrl: vendor.ribUrl || '',
     isDiamond: (vendor as any).isDiamond === true || (vendor as any).isDiamond === "1" || (vendor as any).isDiamond === 1,
+    blaneLimit: (vendor as any).blane_limit || (vendor as any).blaneLimit || 0,
   });
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
+  const [categories, setCategories] = React.useState<any[]>([]);
+  const [subcategories, setSubcategories] = React.useState<any[]>([]);
+  const [loadingCategories, setLoadingCategories] = React.useState(false);
+
+  // Fetch categories and subcategories when dialog opens
+  React.useEffect(() => {
+    if (open) {
+      const fetchCategoriesAndSubcategories = async () => {
+        setLoadingCategories(true);
+        try {
+          const [categoriesRes, subcategoriesRes] = await Promise.all([
+            categoryApi.getCategories({ paginationSize: 1000 }),
+            subcategoryApi.getSubcategories({ paginationSize: 1000 })
+          ]);
+          setCategories(categoriesRes.data || []);
+          setSubcategories(subcategoriesRes.data || []);
+        } catch (error) {
+          console.error('Error fetching categories:', error);
+        } finally {
+          setLoadingCategories(false);
+        }
+      };
+      fetchCategoriesAndSubcategories();
+    }
+  }, [open]);
+
+  // Filter subcategories based on selected category
+  const filteredSubcategories = React.useMemo(() => {
+    if (!formData.businessCategory) return [];
+    const selectedCategory = categories.find(cat => cat.name === formData.businessCategory);
+    if (!selectedCategory) return [];
+    return subcategories.filter(sub => sub.category_id === selectedCategory.id);
+  }, [formData.businessCategory, categories, subcategories]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -305,7 +341,7 @@ const EditVendorDialog = React.memo(({
     try {
       // The API expects all fields including empty strings
       // Exclude name and email since they are read-only and cannot be changed
-      const { name, email, ...editableFields } = formData;
+      const { name, email, blaneLimit, ...editableFields } = formData;
       const payload: any = { ...editableFields };
       
       // Ensure empty strings are sent as empty strings, not undefined
@@ -318,6 +354,12 @@ const EditVendorDialog = React.memo(({
       if (payload.hasOwnProperty('isDiamond')) {
         payload.isDiamond = payload.isDiamond ? "1" : "0";
       }
+      // Convert blaneLimit to blane_limit (API expects underscore format)
+      payload.blane_limit = String(blaneLimit || 0);
+      
+      // Add vendor ID to payload for API endpoint
+      payload.id = vendor.id;
+      
       await onSave(payload);
       setOpen(false);
       setErrors({});
@@ -379,6 +421,7 @@ const EditVendorDialog = React.memo(({
       rcCertificateUrl: vendor.rcCertificateUrl || '',
       ribUrl: vendor.ribUrl || '',
       isDiamond: (vendor as any).isDiamond === true || (vendor as any).isDiamond === "1" || (vendor as any).isDiamond === 1,
+      blaneLimit: (vendor as any).blane_limit || (vendor as any).blaneLimit || 0,
     });
   }, [vendor]);
 
@@ -417,6 +460,13 @@ const EditVendorDialog = React.memo(({
           subdistrict: isValidSubdistrict ? prev.subdistrict : ''
         };
       });
+    } else if (field === 'businessCategory') {
+      // Clear subcategory when category changes
+      setFormData(prev => ({
+        ...prev,
+        [field]: value,
+        subCategory: ''
+      }));
     } else {
       setFormData(prev => ({ ...prev, [field]: value }));
     }
@@ -524,41 +574,63 @@ const EditVendorDialog = React.memo(({
                   <p className="text-sm text-red-600">{errors.landline}</p>
                 )}
               </div>
+            </div>
+            
+            {/* City, Diamond, and Blane Limit Row */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="city">Ville *</Label>
-                <div className="flex items-center gap-3">
-                  <Select
-                    value={formData.city}
-                    onValueChange={(value) => handleInputChange('city', value)}
-                  >
-                    <SelectTrigger className={`flex-1 ${errors.city ? 'border-red-500' : ''}`}>
-                      <SelectValue placeholder="Sélectionner une ville" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Casablanca">Casablanca</SelectItem>
-                      <SelectItem value="Rabat">Rabat</SelectItem>
-                      <SelectItem value="Marrakech">Marrakech</SelectItem>
-                      <SelectItem value="Fes">Fes</SelectItem>
-                      <SelectItem value="Tangier">Tangier</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <Label htmlFor="diamond" className="text-sm font-normal cursor-pointer">
-                      Diamond
-                    </Label>
-                    <Switch
-                      id="diamond"
-                      checked={formData.isDiamond}
-                      onCheckedChange={(checked) => {
-                        setFormData({ ...formData, isDiamond: checked });
-                      }}
-                    />
-                  </div>
-                </div>
+                <Select
+                  value={formData.city}
+                  onValueChange={(value) => handleInputChange('city', value)}
+                >
+                  <SelectTrigger className={errors.city ? 'border-red-500' : ''}>
+                    <SelectValue placeholder="Sélectionner une ville" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Casablanca">Casablanca</SelectItem>
+                    <SelectItem value="Rabat">Rabat</SelectItem>
+                    <SelectItem value="Marrakech">Marrakech</SelectItem>
+                    <SelectItem value="Fes">Fes</SelectItem>
+                    <SelectItem value="Tangier">Tangier</SelectItem>
+                  </SelectContent>
+                </Select>
                 {errors.city && (
                   <p className="text-sm text-red-600">{errors.city}</p>
                 )}
               </div>
+              <div className="space-y-2 flex flex-col justify-end">
+                <div className="flex items-center gap-2 h-10">
+                  <Label htmlFor="diamond" className="text-sm font-normal cursor-pointer">
+                    Diamond
+                  </Label>
+                  <Switch
+                    id="diamond"
+                    checked={formData.isDiamond}
+                    onCheckedChange={(checked) => {
+                      setFormData({ ...formData, isDiamond: checked });
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="blaneLimit">Blane Limit</Label>
+                <Input
+                  id="blaneLimit"
+                  type="number"
+                  min="0"
+                  value={formData.blaneLimit}
+                  onChange={(e) => handleInputChange('blaneLimit', e.target.value)}
+                  className={errors.blaneLimit ? 'border-red-500' : ''}
+                />
+                {errors.blaneLimit && (
+                  <p className="text-sm text-red-600">{errors.blaneLimit}</p>
+                )}
+              </div>
+            </div>
+            
+            {/* Address Field */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="address">Adresse</Label>
                 <Input
@@ -580,19 +652,55 @@ const EditVendorDialog = React.memo(({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="businessCategory">Catégorie d'Activité</Label>
-                <Input
-                  id="businessCategory"
+                <Select
                   value={formData.businessCategory}
-                  onChange={(e) => handleInputChange('businessCategory', e.target.value)}
-                />
+                  onValueChange={(value) => handleInputChange('businessCategory', value)}
+                  disabled={loadingCategories}
+                >
+                  <SelectTrigger className={errors.businessCategory ? 'border-red-500' : ''}>
+                    <SelectValue placeholder={loadingCategories ? "Chargement..." : "Sélectionner une catégorie"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.name}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.businessCategory && (
+                  <p className="text-sm text-red-600">{errors.businessCategory}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="subCategory">Sous-Catégorie</Label>
-                <Input
-                  id="subCategory"
+                <Select
                   value={formData.subCategory}
-                  onChange={(e) => handleInputChange('subCategory', e.target.value)}
-                />
+                  onValueChange={(value) => handleInputChange('subCategory', value)}
+                  disabled={loadingCategories || !formData.businessCategory || filteredSubcategories.length === 0}
+                >
+                  <SelectTrigger className={errors.subCategory ? 'border-red-500' : ''}>
+                    <SelectValue placeholder={
+                      loadingCategories 
+                        ? "Chargement..." 
+                        : !formData.businessCategory
+                        ? "Sélectionner d'abord une catégorie"
+                        : filteredSubcategories.length === 0
+                        ? "Aucune sous-catégorie disponible"
+                        : "Sélectionner une sous-catégorie"
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredSubcategories.map((subcategory) => (
+                      <SelectItem key={subcategory.id} value={subcategory.name}>
+                        {subcategory.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.subCategory && (
+                  <p className="text-sm text-red-600">{errors.subCategory}</p>
+                )}
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="description">Description</Label>

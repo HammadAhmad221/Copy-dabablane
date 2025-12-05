@@ -7,7 +7,8 @@ import { Input } from "@/admin/components/ui/input";
 import { Label } from "@/admin/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/admin/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle } from "@/admin/components/ui/dialog";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Eye, X } from "lucide-react";
+import { useAddOns } from '@/admin/lib/add-ons/useAddOns';
 import {
     Table,
     TableBody,
@@ -23,6 +24,12 @@ interface FormData extends Omit<VendorPlan, 'id' | 'created_at' | 'updated_at'> 
 
 const VendorsPlane = () => {
     const initialVendors: VendorPlan[] = [];
+
+    // Initialize add-ons hook
+    const {
+        addOns,
+        fetchAddOns,
+    } = useAddOns();
 
     const [vendors, setVendors] = useState<VendorPlan[]>(initialVendors);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -42,9 +49,11 @@ const VendorsPlane = () => {
 
     const [vendorList, setVendorList] = useState<VendorListItem[]>([]);
     const [vendorSubscriptions, setVendorSubscriptions] = useState<VendorSubscriptionItem[]>([]);
-    const [pendingSubs, setPendingSubs] = useState<VendorSubscriptionItem[]>([]);
     const [loading, setLoading] = useState<boolean>(false);
     const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
+    const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+    const [selectedSubscription, setSelectedSubscription] = useState<VendorSubscriptionItem | null>(null);
+    const [selectedAddOns, setSelectedAddOns] = useState<{ addOnId: number; quantity: number }[]>([]);
     const [manualForm, setManualForm] = useState<{ user_id: number | '';
         plan_id: number | '';
         add_ons: { id: number; quantity: number }[];
@@ -73,11 +82,11 @@ const VendorsPlane = () => {
         const loadVendorsData = async () => {
             try {
                 setLoading(true);
-                setPendingSubs(readPendingSubs());
                 const [vendorsRes, subsRes, plansRes] = await Promise.all([
                     vendorPlanActivationService.getAllVendors(),
                     vendorPlanActivationService.getAllVendorsSubscription(),
                     vendorPlanService.getAllPlans(),
+                    fetchAddOns(),
                 ]);
                 const vendorsArr = Array.isArray(vendorsRes?.data)
                     ? vendorsRes.data
@@ -92,7 +101,10 @@ const VendorsPlane = () => {
                     status: it?.status ?? it?.state ?? it?.subscription?.status ?? '-',
                     created_at: it?.created_at ?? it?.createdAt ?? undefined,
                     updated_at: it?.updated_at ?? it?.updatedAt ?? undefined,
-                    raw: it,
+                    raw: {
+                        ...it,
+                        add_ons: it?.add_ons ?? it?.addOns ?? it?.subscription?.add_ons ?? it?.subscription?.addOns ?? [],
+                    }
                 }) as unknown as VendorSubscriptionItem;
                 const subsArr = Array.isArray(subsArrRaw) ? subsArrRaw.map(normalizeSub) : [];
                 const uniqByKey = (arr: any[]) => {
@@ -220,6 +232,7 @@ const VendorsPlane = () => {
             promo_code: null,
             payment_method: 'cash',
         });
+        setSelectedAddOns([]);
         setIsManualDialogOpen(true);
     };
 
@@ -237,7 +250,10 @@ const VendorsPlane = () => {
             const manualRes = await vendorPlanActivationService.manualPurchase({
                 user_id: Number(manualForm.user_id),
                 plan_id: Number(manualForm.plan_id),
-                add_ons: manualForm.add_ons,
+                add_ons: selectedAddOns.map(item => ({
+                    id: item.addOnId,
+                    quantity: item.quantity
+                })),
                 promo_code: manualForm.promo_code,
                 payment_method: manualForm.payment_method,
             } as any);
@@ -270,7 +286,13 @@ const VendorsPlane = () => {
                         user_id: Number(manualForm.user_id),
                         plan_id: Number(manualForm.plan_id),
                         status: (activationRes as any)?.data?.subscription?.status || 'active',
-                    } as VendorSubscriptionItem;
+                        raw: {
+                            add_ons: selectedAddOns.map(item => ({
+                                id: item.addOnId,
+                                quantity: item.quantity
+                            }))
+                        }
+                    } as any as VendorSubscriptionItem;
                     setVendorSubscriptions(prev => {
                         const base = Array.isArray(prev) ? prev : [];
                         return [newSub, ...base];
@@ -278,7 +300,6 @@ const VendorsPlane = () => {
                     // Remove from pending (if it exists) since activation succeeded
                     const pendingAfter = readPendingSubs().filter((p: any) => `${p.user_id}-${p.plan_id}` !== `${newSub.user_id}-${newSub.plan_id}`);
                     writePendingSubs(pendingAfter);
-                    setPendingSubs(pendingAfter as any);
                 } catch (e: any) {
                     const msg = e?.response?.data?.message || e?.message || 'Unknown error';
                     toast.success('Manual purchase created; activation will complete shortly');
@@ -292,7 +313,13 @@ const VendorsPlane = () => {
                             user_id: Number(manualForm.user_id),
                             plan_id: Number(manualForm.plan_id),
                             status: planActive !== undefined ? (planActive ? 'active' : 'inactive') : 'pending',
-                        } as any;
+                            raw: {
+                                add_ons: selectedAddOns.map(item => ({
+                                    id: item.addOnId,
+                                    quantity: item.quantity
+                                }))
+                            }
+                        } as any as VendorSubscriptionItem;
                         // Show it immediately in the main list
                         setVendorSubscriptions(prev => {
                             const base = Array.isArray(prev) ? prev : [];
@@ -301,7 +328,6 @@ const VendorsPlane = () => {
                         const existing = readPendingSubs();
                         const updated = [optimistic, ...(Array.isArray(existing) ? existing : [])];
                         writePendingSubs(updated);
-                        setPendingSubs(updated as any);
                     } catch {}
                 }
             } else {
@@ -313,7 +339,13 @@ const VendorsPlane = () => {
                     user_id: Number(manualForm.user_id),
                     plan_id: Number(manualForm.plan_id),
                     status: planActive !== undefined ? (planActive ? 'active' : 'inactive') : 'pending',
-                } as VendorSubscriptionItem;
+                    raw: {
+                        add_ons: selectedAddOns.map(item => ({
+                            id: item.addOnId,
+                            quantity: item.quantity
+                        }))
+                    }
+                } as any as VendorSubscriptionItem;
                 setVendorSubscriptions(prev => {
                     const base = Array.isArray(prev) ? prev : [];
                     return [newSub, ...base];
@@ -322,7 +354,6 @@ const VendorsPlane = () => {
                 const existing = readPendingSubs();
                 const updated = [newSub, ...(Array.isArray(existing) ? existing : [])];
                 writePendingSubs(updated);
-                setPendingSubs(updated as any);
             }
             setIsManualDialogOpen(false);
             await new Promise((r) => setTimeout(r, 600));
@@ -363,7 +394,10 @@ const VendorsPlane = () => {
                 status: it?.status ?? it?.state ?? it?.subscription?.status ?? '-',
                 created_at: it?.created_at ?? it?.createdAt ?? undefined,
                 updated_at: it?.updated_at ?? it?.updatedAt ?? undefined,
-                raw: it,
+                raw: {
+                    ...it,
+                    add_ons: it?.add_ons ?? it?.addOns ?? it?.subscription?.add_ons ?? it?.subscription?.addOns ?? [],
+                }
             }) as unknown as VendorSubscriptionItem;
             const subsArr = pickArray(subsRes as any).map(normalizeSub);
             const uniqByKey = (arr: any[]) => {
@@ -389,7 +423,6 @@ const VendorsPlane = () => {
             const subsArrDedup = uniqByKey(subsArr);
             // Merge with locally pending optimistic items that server does not yet include
             const pending = readPendingSubs();
-            setPendingSubs(pending);
             let merged = uniqByKey([...(Array.isArray(pending) ? pending : []), ...subsArrDedup]);
             // Apply stable status fallback from plan.is_active only when status is empty
             merged = (merged as any[]).map((it: any) => {
@@ -427,6 +460,22 @@ const VendorsPlane = () => {
             if (v === '0' || v === 'false' || v === 'no' || v === 'inactive') return false;
         }
         return undefined;
+    };
+
+    const addAddOn = (addOnId: number) => {
+        if (!selectedAddOns.find(item => item.addOnId === addOnId)) {
+            setSelectedAddOns([...selectedAddOns, { addOnId, quantity: 1 }]);
+        }
+    };
+
+    const removeAddOn = (addOnId: number) => {
+        setSelectedAddOns(selectedAddOns.filter(item => item.addOnId !== addOnId));
+    };
+
+    const updateAddOnQuantity = (addOnId: number, quantity: number) => {
+        setSelectedAddOns(selectedAddOns.map(item =>
+            item.addOnId === addOnId ? { ...item, quantity: Math.max(1, quantity) } : item
+        ));
     };
 
     const renderStatusBadge = (rawVal: any) => {
@@ -556,30 +605,30 @@ const VendorsPlane = () => {
                                 ))}
                             </div>
 
-                            <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                <Card className="p-4">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <h4 className="font-semibold">Vendors</h4>
+                            <div className="mt-6 sm:mt-8 grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                                <Card className="p-3 sm:p-4">
+                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 mb-3 sm:mb-4">
+                                        <h4 className="font-semibold text-sm sm:text-base">Vendors</h4>
                                         <span className="text-xs text-gray-500">Total: {safeVendorList.length}</span>
                                     </div>
                                     <div className="rounded-md border overflow-x-auto">
-                                        <Table>
+                                        <Table className="text-xs sm:text-sm">
                                             <TableHeader>
                                                 <TableRow>
-                                                    <TableHead>Name</TableHead>
-                                                    <TableHead>Email</TableHead>
+                                                    <TableHead className="min-w-[150px] sm:min-w-auto">Name</TableHead>
+                                                    <TableHead className="min-w-[200px] sm:min-w-auto">Email</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
                                                 {(safeVendorList).map((v) => (
                                                     <TableRow key={v.id}>
-                                                        <TableCell>{(v as any).name ?? '-'}</TableCell>
-                                                        <TableCell>{(v as any).email ?? '-'}</TableCell>
+                                                        <TableCell className="whitespace-nowrap sm:whitespace-normal">{(v as any).name ?? '-'}</TableCell>
+                                                        <TableCell className="whitespace-nowrap sm:whitespace-normal">{(v as any).email ?? '-'}</TableCell>
                                                     </TableRow>
                                                 ))}
                                                 {safeVendorList.length === 0 ? (
                                                     <TableRow>
-                                                        <TableCell colSpan={2} className="text-center text-sm text-gray-500">No vendors found</TableCell>
+                                                        <TableCell colSpan={2} className="text-center text-xs sm:text-sm text-gray-500 py-3 sm:py-4">No vendors found</TableCell>
                                                     </TableRow>
                                                 ) : null}
                                             </TableBody>
@@ -587,19 +636,20 @@ const VendorsPlane = () => {
                                     </div>
                                 </Card>
 
-                                <Card className="p-4">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <h4 className="font-semibold">Vendor Subscriptions</h4>
+                                <Card className="p-3 sm:p-4">
+                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 mb-3 sm:mb-4">
+                                        <h4 className="font-semibold text-sm sm:text-base">Vendor Subscriptions</h4>
                                         <span className="text-xs text-gray-500">Total: {safeVendorSubscriptions.length}</span>
                                     </div>
                                     <div className="rounded-md border overflow-x-auto">
-                                        <Table>
+                                        <Table className="text-xs sm:text-sm">
                                             <TableHeader>
                                                 <TableRow>
-                                                    <TableHead>Subscription ID</TableHead>
-                                                    <TableHead>User ID</TableHead>
-                                                    <TableHead>Plan ID</TableHead>
-                                                    <TableHead>Status</TableHead>
+                                                    <TableHead className="min-w-[120px] sm:min-w-auto">Subscription ID</TableHead>
+                                                    <TableHead className="min-w-[80px] sm:min-w-auto">User ID</TableHead>
+                                                    <TableHead className="min-w-[70px] sm:min-w-auto">Plan ID</TableHead>
+                                                    <TableHead className="min-w-[80px] sm:min-w-auto">Status</TableHead>
+                                                    <TableHead className="min-w-[50px] text-right">Actions</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
@@ -618,16 +668,30 @@ const VendorsPlane = () => {
                                                     }
                                                     return (
                                                         <TableRow key={String(subId)}>
-                                                            <TableCell>{String(subId ?? '')}</TableCell>
-                                                            <TableCell>{String(userId ?? '')}</TableCell>
-                                                            <TableCell>{String(planId ?? '')}</TableCell>
-                                                            <TableCell>{renderStatusBadge(status)}</TableCell>
+                                                            <TableCell className="whitespace-nowrap sm:whitespace-normal">{String(subId ?? '')}</TableCell>
+                                                            <TableCell className="whitespace-nowrap sm:whitespace-normal">{String(userId ?? '')}</TableCell>
+                                                            <TableCell className="whitespace-nowrap sm:whitespace-normal">{String(planId ?? '')}</TableCell>
+                                                            <TableCell className="whitespace-nowrap sm:whitespace-normal">{renderStatusBadge(status)}</TableCell>
+                                                            <TableCell className="text-right">
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() => {
+                                                                        setSelectedSubscription(s);
+                                                                        setIsViewDialogOpen(true);
+                                                                    }}
+                                                                    className="h-7 sm:h-8 w-7 sm:w-8 p-0 flex-shrink-0"
+                                                                    title="View details"
+                                                                >
+                                                                    <Eye className="h-3 sm:h-4 w-3 sm:w-4" />
+                                                                </Button>
+                                                            </TableCell>
                                                         </TableRow>
                                                     );
                                                 })}
                                                 {safeVendorSubscriptions.length === 0 ? (
                                                     <TableRow>
-                                                        <TableCell colSpan={4} className="text-center text-sm text-gray-500">No subscriptions found</TableCell>
+                                                        <TableCell colSpan={5} className="text-center text-xs sm:text-sm text-gray-500 py-3 sm:py-4">No subscriptions found</TableCell>
                                                     </TableRow>
                                                 ) : null}
                                             </TableBody>
@@ -760,84 +824,418 @@ const VendorsPlane = () => {
             </Dialog>
 
             <Dialog open={isManualDialogOpen} onOpenChange={setIsManualDialogOpen}>
-                <DialogContent className="max-h-[90vh] p-0">
-                    <DialogHeader className="p-6">
-                        <DialogTitle className="text-[#00897B] text-xl">
+                <DialogContent className="w-[95vw] max-w-[95vw] sm:w-full sm:max-w-2xl md:max-w-3xl max-h-[95vh] sm:max-h-[90vh] p-0 flex flex-col gap-0 rounded-lg overflow-hidden">
+                    <DialogHeader className="p-4 sm:p-6 bg-gradient-to-r from-[#00897B] to-[#00796B] flex-shrink-0 border-0 m-0">
+                        <DialogTitle className="text-white text-lg sm:text-xl m-0 p-0">
                             Manual Activation
                         </DialogTitle>
                     </DialogHeader>
-                    <div className="p-6">
-                        <form className="space-y-4 overflow-y-auto max-h-[60vh] pr-2">
-                            <div className="space-y-1">
-                                <Label htmlFor="manual_vendor">Vendor</Label>
+                    <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6">
+                        <form className="space-y-4 sm:space-y-5">
+                            <div className="space-y-2">
+                                <Label htmlFor="manual_vendor" className="text-sm sm:text-base">Vendor</Label>
                                 <Select
                                     value={manualForm.user_id === '' ? '' : String(manualForm.user_id)}
                                     onValueChange={(val) => handleManualFormChange('user_id', Number(val))}
                                 >
                                     <SelectTrigger
                                         id="manual_vendor"
-                                        className="focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none ring-0 outline-none ring-offset-0 focus:ring-offset-0 focus-visible:ring-offset-0 focus:border-transparent focus-visible:border-transparent data-[state=open]:ring-0"
+                                        className="w-full focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none ring-0 outline-none ring-offset-0 focus:ring-offset-0 focus-visible:ring-offset-0 focus:border-transparent focus-visible:border-transparent data-[state=open]:ring-0 text-sm sm:text-base"
                                     >
                                         <SelectValue placeholder="Select vendor" />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent className="w-[90vw] sm:w-auto">
                                         {safeVendorList.map(v => (
-                                            <SelectItem key={v.id} value={String(v.id)}>
+                                            <SelectItem key={v.id} value={String(v.id)} className="text-sm sm:text-base">
                                                 {('name' in (v as any) ? (v as any).name : `Vendor ${v.id}`)} {('email' in (v as any) && (v as any).email) ? `- ${(v as any).email}` : ''}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="space-y-1">
-                                <Label htmlFor="manual_plan">Plan</Label>
+                            <div className="space-y-2">
+                                <Label htmlFor="manual_plan" className="text-sm sm:text-base">Plan</Label>
                                 <Select
                                     value={manualForm.plan_id === '' ? '' : String(manualForm.plan_id)}
                                     onValueChange={(val) => handleManualFormChange('plan_id', Number(val))}
                                 >
                                     <SelectTrigger
                                         id="manual_plan"
-                                        className="focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none ring-0 outline-none ring-offset-0 focus:ring-offset-0 focus-visible:ring-offset-0 focus:border-transparent focus-visible:border-transparent data-[state=open]:ring-0"
+                                        className="w-full focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none ring-0 outline-none ring-offset-0 focus:ring-offset-0 focus-visible:ring-offset-0 focus:border-transparent focus-visible:border-transparent data-[state=open]:ring-0 text-sm sm:text-base"
                                     >
                                         <SelectValue placeholder="Select plan" />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent className="w-[90vw] sm:w-auto">
                                         {vendors.map(p => (
-                                            <SelectItem key={p.id} value={String(p.id)}>
+                                            <SelectItem key={p.id} value={String(p.id)} className="text-sm sm:text-base">
                                                 {p.title} — ${p.price_ht}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="space-y-1">
-                                <Label htmlFor="manual_payment">Payment Method</Label>
+
+                            {/* Plan Details Summary */}
+                            {manualForm.plan_id && vendors.find(v => v.id === Number(manualForm.plan_id)) && (
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 space-y-2 sm:space-y-3">
+                                    <h4 className="font-semibold text-blue-900 text-sm sm:text-base">Selected Plan Details</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
+                                        <div>
+                                            <p className="text-blue-600 font-medium">Title</p>
+                                            <p className="text-gray-900 break-words">{vendors.find(v => v.id === Number(manualForm.plan_id))?.title}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-blue-600 font-medium">Price</p>
+                                            <p className="text-gray-900">${vendors.find(v => v.id === Number(manualForm.plan_id))?.price_ht}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-blue-600 font-medium">Duration</p>
+                                            <p className="text-gray-900">{vendors.find(v => v.id === Number(manualForm.plan_id))?.duration_days} days</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-blue-600 font-medium">Status</p>
+                                            <p className="text-gray-900">{vendors.find(v => v.id === Number(manualForm.plan_id))?.is_active ? 'Active' : 'Inactive'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Add-ons Section */}
+                            <div className="space-y-2 sm:space-y-3 border-t pt-4 sm:pt-5">
+                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                    <Label htmlFor="manual_addons" className="text-sm sm:text-base">Add-ons</Label>
+                                    <span className="text-xs sm:text-sm text-gray-500">{selectedAddOns.length} selected</span>
+                                </div>
+                                <Select
+                                    value=""
+                                    onValueChange={(val) => {
+                                        addAddOn(Number(val));
+                                    }}
+                                >
+                                    <SelectTrigger
+                                        id="manual_addons"
+                                        className="w-full focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none ring-0 outline-none ring-offset-0 focus:ring-offset-0 focus-visible:ring-offset-0 focus:border-transparent focus-visible:border-transparent data-[state=open]:ring-0 text-sm sm:text-base"
+                                    >
+                                        <SelectValue placeholder="Select add-on to add" />
+                                    </SelectTrigger>
+                                    <SelectContent className="w-[90vw] sm:w-auto">
+                                        {addOns
+                                            .filter(addOn => addOn.is_active && !selectedAddOns.find(item => item.addOnId === addOn.id))
+                                            .map(addOn => (
+                                                <SelectItem key={addOn.id} value={String(addOn.id)} className="text-sm sm:text-base">
+                                                    {addOn.title} — ${Number(addOn.price_ht).toFixed(2)}
+                                                </SelectItem>
+                                            ))}
+                                    </SelectContent>
+                                </Select>
+
+                                {/* Selected Add-ons Display */}
+                                {selectedAddOns.length > 0 && (
+                                    <div className="space-y-2 max-h-[200px] sm:max-h-[250px] overflow-y-auto">
+                                        {selectedAddOns.map(item => {
+                                            const addOnData = addOns.find(ao => ao.id === item.addOnId);
+                                            return (
+                                                <div key={item.addOnId} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 bg-gray-50 p-2 sm:p-3 rounded-lg">
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium text-gray-900 break-words">
+                                                            {addOnData?.title}
+                                                        </p>
+                                                        <p className="text-xs text-gray-500">
+                                                            ${Number(addOnData?.price_ht || 0).toFixed(2)} each
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                                        <Input
+                                                            type="number"
+                                                            min="1"
+                                                            max={addOnData?.max_quantity}
+                                                            value={item.quantity}
+                                                            onChange={(e) => updateAddOnQuantity(item.addOnId, parseInt(e.target.value))}
+                                                            className="w-14 sm:w-16 h-8 text-xs text-center"
+                                                        />
+                                                        <Button
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            onClick={() => removeAddOn(item.addOnId)}
+                                                            className="h-8 w-8 p-0 flex-shrink-0"
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="manual_payment" className="text-sm sm:text-base">Payment Method</Label>
                                 <Input
                                     id="manual_payment"
                                     value={manualForm.payment_method}
                                     onChange={(e) => handleManualFormChange('payment_method', e.target.value)}
                                     placeholder="Manual payment"
-                                    className="focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none ring-0 outline-none ring-offset-0 focus:ring-offset-0 focus-visible:ring-offset-0 focus:border-transparent focus-visible:border-transparent"
+                                    className="focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none ring-0 outline-none ring-offset-0 focus:ring-offset-0 focus-visible:ring-offset-0 focus:border-transparent focus-visible:border-transparent text-sm sm:text-base"
                                 />
                             </div>
-                            <div className="space-y-1">
-                                <Label htmlFor="manual_promo">Promo Code</Label>
+                            <div className="space-y-2">
+                                <Label htmlFor="manual_promo" className="text-sm sm:text-base">Promo Code</Label>
                                 <Input
                                     id="manual_promo"
                                     value={manualForm.promo_code ?? ''}
                                     onChange={(e) => handleManualFormChange('promo_code', e.target.value || null)}
-                                    className="focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none ring-0 outline-none ring-offset-0 focus:ring-offset-0 focus-visible:ring-offset-0 focus:border-transparent focus-visible:border-transparent"
+                                    className="focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none ring-0 outline-none ring-offset-0 focus:ring-offset-0 focus-visible:ring-offset-0 focus:border-transparent focus-visible:border-transparent text-sm sm:text-base"
                                 />
                             </div>
                         </form>
-                        <DialogFooter className="mt-6">
-                            <Button variant="outline" onClick={() => setIsManualDialogOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button onClick={submitManualActivation} className="bg-[#00897B] hover:bg-[#00796B]">
-                                Create Manual Activation
-                            </Button>
-                        </DialogFooter>
+                    </div>
+                    <DialogFooter className="p-4 sm:p-6 border-t bg-gray-50 flex-shrink-0 gap-2 sm:gap-3 flex-col-reverse sm:flex-row">
+                        <Button variant="outline" onClick={() => setIsManualDialogOpen(false)} className="w-full sm:w-auto text-sm sm:text-base">
+                            Cancel
+                        </Button>
+                        <Button onClick={submitManualActivation} className="w-full sm:w-auto bg-[#00897B] hover:bg-[#00796B] text-sm sm:text-base">
+                            Create Manual Activation
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+                <DialogContent className="w-[95vw] max-w-[95vw] sm:w-full sm:max-w-2xl md:max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto p-0 flex flex-col gap-0 rounded-lg overflow-hidden">
+                    <DialogHeader className="bg-gradient-to-r from-[#00897B] to-[#00796B] p-4 sm:p-6 sticky top-0 z-10 border-0 m-0">
+                        <DialogTitle className="text-white text-lg sm:text-xl m-0 p-0">
+                            Subscription Details
+                        </DialogTitle>
+                    </DialogHeader>
+                    {selectedSubscription && (
+                        <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+                            {/* Subscription Information */}
+                            <div className="space-y-3 sm:space-y-4">
+                                <h3 className="text-base sm:text-lg font-semibold text-gray-900">Subscription Information</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                        <p className="text-xs sm:text-sm text-gray-600">Subscription ID</p>
+                                        <p className="text-sm sm:text-lg font-semibold text-gray-900 mt-1 break-all">
+                                            {(selectedSubscription as any).id ?? (selectedSubscription as any).raw?.subscription?.id ?? 'N/A'}
+                                        </p>
+                                    </div>
+                                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                        <p className="text-xs sm:text-sm text-gray-600">User ID</p>
+                                        <p className="text-sm sm:text-lg font-semibold text-gray-900 mt-1">
+                                            {(selectedSubscription as any).user_id ?? (selectedSubscription as any).raw?.user_id ?? 'N/A'}
+                                        </p>
+                                    </div>
+                                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                        <p className="text-xs sm:text-sm text-gray-600">Plan ID</p>
+                                        <p className="text-sm sm:text-lg font-semibold text-gray-900 mt-1">
+                                            {(selectedSubscription as any).plan_id ?? (selectedSubscription as any).raw?.plan_id ?? 'N/A'}
+                                        </p>
+                                    </div>
+                                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                        <p className="text-xs sm:text-sm text-gray-600">Status</p>
+                                        <div className="mt-1">
+                                            {renderStatusBadge((selectedSubscription as any).status ?? (selectedSubscription as any).raw?.status)}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Vendor Information */}
+                            <div className="space-y-3 sm:space-y-4">
+                                <h3 className="text-base sm:text-lg font-semibold text-gray-900">Vendor Information</h3>
+                                {safeVendorList.find(v => v.id === (selectedSubscription as any).user_id) ? (
+                                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg space-y-3">
+                                        <div>
+                                            <p className="text-xs sm:text-sm text-gray-600">Name</p>
+                                            <p className="text-sm sm:text-base font-semibold text-gray-900 mt-1 break-words">
+                                                {(safeVendorList.find(v => v.id === (selectedSubscription as any).user_id) as any)?.name ?? 'N/A'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs sm:text-sm text-gray-600">Email</p>
+                                            <p className="text-sm sm:text-base font-semibold text-gray-900 mt-1 break-all">
+                                                {(safeVendorList.find(v => v.id === (selectedSubscription as any).user_id) as any)?.email ?? 'N/A'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                        <p className="text-xs sm:text-sm text-gray-500">Vendor information not available</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Plan Information */}
+                            <div className="space-y-3 sm:space-y-4">
+                                <h3 className="text-base sm:text-lg font-semibold text-gray-900">Plan Information</h3>
+                                {vendors.find(v => v.id === (selectedSubscription as any).plan_id) ? (
+                                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg space-y-3">
+                                        <div>
+                                            <p className="text-xs sm:text-sm text-gray-600">Title</p>
+                                            <p className="text-sm sm:text-base font-semibold text-gray-900 mt-1 break-words">
+                                                {vendors.find(v => v.id === (selectedSubscription as any).plan_id)?.title ?? 'N/A'}
+                                            </p>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                                            <div>
+                                                <p className="text-xs sm:text-sm text-gray-600">Price</p>
+                                                <p className="text-sm sm:text-base font-semibold text-gray-900 mt-1">
+                                                    ${vendors.find(v => v.id === (selectedSubscription as any).plan_id)?.price_ht ?? 'N/A'}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs sm:text-sm text-gray-600">Duration</p>
+                                                <p className="text-sm sm:text-base font-semibold text-gray-900 mt-1">
+                                                    {vendors.find(v => v.id === (selectedSubscription as any).plan_id)?.duration_days ?? 'N/A'} days
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs sm:text-sm text-gray-600">Description</p>
+                                            <p className="text-sm sm:text-base text-gray-900 mt-1 break-words">
+                                                {vendors.find(v => v.id === (selectedSubscription as any).plan_id)?.description ?? 'N/A'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                        <p className="text-xs sm:text-sm text-gray-500">Plan information not available</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Add-ons Information */}
+                            {(() => {
+                                const addOnsToDisplay = (selectedSubscription as any).raw?.add_ons || 
+                                                       (selectedSubscription as any).raw?.subscription?.add_ons ||
+                                                       (selectedSubscription as any).raw?.addons ||
+                                                       [];
+                                const hasAddOns = Array.isArray(addOnsToDisplay) && addOnsToDisplay.length > 0;
+                                
+                                return hasAddOns ? (
+                                    <div className="space-y-3 sm:space-y-4 border-t pt-4 sm:pt-5">
+                                        <div className="flex items-center justify-between flex-wrap gap-2">
+                                            <h3 className="text-base sm:text-lg font-semibold text-gray-900">Add-ons</h3>
+                                            <span className="text-xs sm:text-sm font-medium text-teal-600 bg-teal-50 px-3 py-1 rounded-full">
+                                                {addOnsToDisplay.length} item{addOnsToDisplay.length !== 1 ? 's' : ''}
+                                            </span>
+                                        </div>
+                                        <div className="space-y-2 sm:space-y-3">
+                                            {addOnsToDisplay.map((addOn: any, index: number) => {
+                                                const addOnData = addOns.find(ao => ao.id === (addOn.id || addOn.addOnId));
+                                                const itemTotal = Number(addOnData?.price_ht || 0) * (addOn.quantity || 1);
+                                                return (
+                                                    <div key={index} className="border border-gray-200 rounded-lg overflow-hidden">
+                                                        <div className="bg-gradient-to-r from-teal-50 to-transparent p-3 sm:p-4">
+                                                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 sm:gap-3 mb-2 sm:mb-3">
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-xs uppercase tracking-wide text-teal-600 font-semibold">Add-on</p>
+                                                                    <p className="text-sm sm:text-base font-bold text-gray-900 mt-1 break-words">
+                                                                        {addOnData?.title || 'Unknown'}
+                                                                    </p>
+                                                                </div>
+                                                                <div className="text-right sm:flex-shrink-0">
+                                                                    <p className="text-xs uppercase tracking-wide text-teal-600 font-semibold">Subtotal</p>
+                                                                    <p className="text-base sm:text-lg font-bold text-teal-600 mt-1">
+                                                                        ${itemTotal.toFixed(2)}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="p-3 sm:p-4 bg-gray-50">
+                                                            <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                                                                <div>
+                                                                    <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Quantity</p>
+                                                                    <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-1 sm:mt-2">{addOn.quantity || 1}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Unit Price</p>
+                                                                    <p className="text-sm sm:text-lg font-semibold text-gray-900 mt-1 sm:mt-2">
+                                                                        ${Number(addOnData?.price_ht || 0).toFixed(2)}
+                                                                    </p>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Total</p>
+                                                                    <p className="text-sm sm:text-lg font-semibold text-teal-600 mt-1 sm:mt-2">
+                                                                        ${itemTotal.toFixed(2)}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            {addOnData?.tooltip && (
+                                                                <div className="mt-2 sm:mt-3 p-2 bg-white rounded border border-gray-200">
+                                                                    <p className="text-xs text-gray-600">{addOnData.tooltip}</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        {/* Add-ons Summary */}
+                                        <div className="bg-teal-50 border-2 border-teal-200 rounded-lg p-3 sm:p-4 mt-3 sm:mt-4">
+                                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                                                <p className="text-xs sm:text-sm font-semibold text-teal-900">Total Add-ons Cost:</p>
+                                                <p className="text-lg sm:text-2xl font-bold text-teal-600">
+                                                    ${addOnsToDisplay.reduce((sum: number, addOn: any) => {
+                                                        const addOnData = addOns.find(ao => ao.id === (addOn.id || addOn.addOnId));
+                                                        return sum + (Number(addOnData?.price_ht || 0) * (addOn.quantity || 1));
+                                                    }, 0).toFixed(2)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="border-t pt-4 sm:pt-5">
+                                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
+                                            <p className="text-xs sm:text-sm text-blue-700">
+                                                <span className="font-semibold">No Add-ons:</span> This subscription does not include any additional add-ons.
+                                            </p>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Timestamps */}
+                            <div className="space-y-3 sm:space-y-4">
+                                <h3 className="text-base sm:text-lg font-semibold text-gray-900">Additional Information</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                    {(selectedSubscription as any).created_at && (
+                                        <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                            <p className="text-xs sm:text-sm text-gray-600">Created</p>
+                                            <p className="text-xs sm:text-sm font-semibold text-gray-900 mt-1 break-all">
+                                                {new Date((selectedSubscription as any).created_at).toLocaleDateString('en-US', {
+                                                    year: 'numeric',
+                                                    month: 'long',
+                                                    day: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                })}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {(selectedSubscription as any).updated_at && (
+                                        <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                            <p className="text-xs sm:text-sm text-gray-600">Updated</p>
+                                            <p className="text-xs sm:text-sm font-semibold text-gray-900 mt-1 break-all">
+                                                {new Date((selectedSubscription as any).updated_at).toLocaleDateString('en-US', {
+                                                    year: 'numeric',
+                                                    month: 'long',
+                                                    day: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                })}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    <div className="p-4 sm:p-6 border-t bg-gray-50 flex-shrink-0">
+                        <Button variant="outline" onClick={() => setIsViewDialogOpen(false)} className="w-full sm:w-auto text-sm sm:text-base">
+                            Close
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>
