@@ -92,6 +92,8 @@ const DuplicateBlane: React.FC = () => {
           personnes_prestation: blaneData.personnes_prestation || 0,
           nombre_max_reservation: blaneData.nombre_max_reservation || 0,
           max_reservation_par_creneau: blaneData.max_reservation_par_creneau || 0,
+          reservation_per_day: blaneData.reservation_per_day || (blaneData as any).reservationPerDay || (blaneData as any).max_reservation_per_day || 0,
+          order_per_day: blaneData.order_per_day || (blaneData as any).orderPerDay || (blaneData as any).max_order_per_day || 0,
           partiel_field: blaneData.partiel_field || 0,
           tva: blaneData.tva || 0,
           type_time: blaneData.type_time || 'time',

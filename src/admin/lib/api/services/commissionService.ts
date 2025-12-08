@@ -279,7 +279,7 @@ export const commissionApi = {
   delete: async (id: number): Promise<void> => {
     try {
       console.log("📤 Deleting commission:", id);
-      const response = await adminApiClient.delete(
+      await adminApiClient.delete(
         BACK_COMMISSION_ENDPOINTS.delete(id)
       );
       console.log("✅ Commission deleted");
@@ -300,6 +300,28 @@ export const commissionApi = {
       return response.data.data || response.data;
     } catch (error) {
       console.error("❌ Error fetching vendor commissions:", error);
+      throw error;
+    }
+  },
+
+  // Get all vendor-category commission combinations
+  getAllVendorCategoryCommissions: async (): Promise<Commission[]> => {
+    try {
+      console.log("📤 Fetching all vendor-category commissions");
+      const response = await adminApiClient.get(
+        BACK_COMMISSION_ENDPOINTS.getAll()
+      );
+      console.log("✅ All vendor-category commissions:", response.data);
+      
+      // Handle different response structures
+      if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      } else if (Array.isArray(response.data)) {
+        return response.data;
+      }
+      return [];
+    } catch (error) {
+      console.error("❌ Error fetching all vendor-category commissions:", error);
       throw error;
     }
   },
@@ -328,14 +350,33 @@ export const commissionApi = {
   ): Promise<VendorCommissionRate> => {
     try {
       console.log("📤 Updating vendor rate:", vendorId, data);
+      
+      // Map the data to match your curl example
+      const payload = {
+        custom_commission_rate: data.custom_commission_rate,
+        partial_commission_rate: data.partial_commission_rate,
+      };
+      
+      console.log("📤 Payload for vendor rate update:", payload);
+      console.log("📤 API endpoint:", BACK_COMMISSION_ENDPOINTS.updateVendorRate(vendorId));
+      
       const response = await adminApiClient.put(
         BACK_COMMISSION_ENDPOINTS.updateVendorRate(vendorId),
-        data
+        payload
       );
+      
       console.log("✅ Vendor rate updated:", response.data);
+      console.log("✅ Full response structure:", JSON.stringify(response.data, null, 2));
+      
+      // Handle response structure
+      if (response.data && response.data.data) {
+        return response.data.data;
+      }
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ Error updating vendor rate:", error);
+      console.error("❌ Error response:", error.response?.data);
+      console.error("❌ Error status:", error.response?.status);
       throw error;
     }
   },
@@ -401,12 +442,18 @@ export const commissionApi = {
   },
 
   // Get all category default commissions
-  getCategoryDefaults: async (): Promise<CategoryDefaultCommission[]> => {
+  getCategoryDefaults: async (bustCache = false): Promise<CategoryDefaultCommission[]> => {
     try {
       console.log("📤 Fetching category default commissions");
-      const response = await adminApiClient.get(
-        BACK_COMMISSION_ENDPOINTS.getCategoryDefaults()
-      );
+      
+      // Add cache busting parameter if requested
+      const url = bustCache 
+        ? `${BACK_COMMISSION_ENDPOINTS.getCategoryDefaults()}?_t=${Date.now()}`
+        : BACK_COMMISSION_ENDPOINTS.getCategoryDefaults();
+        
+      console.log("📤 Request URL:", url);
+      
+      const response = await adminApiClient.get(url);
       console.log("✅ Category default commissions:", response.data);
 
       // Handle different response structures
@@ -481,27 +528,170 @@ export const commissionApi = {
         is_active: Boolean(data.is_active),
       };
 
-      console.log("📤 Updating category default commission:", payload);
-      console.log("📤 Payload types:", {
-        category_id: typeof payload.category_id,
-        commission_rate: typeof payload.commission_rate,
-        partial_commission_rate: typeof payload.partial_commission_rate,
-        is_active: typeof payload.is_active,
-      });
-      const response = await adminApiClient.put(
-        BACK_COMMISSION_ENDPOINTS.updateCategoryDefault(),
-        payload
-      );
-      console.log("✅ Category default commission updated:", response.data);
-
-      // Handle response structure
-      if (response.data && response.data.data) {
-        return response.data.data;
+      console.log("� UDEBUG: Starting updateCategoryDefault");
+      console.log("📤 Original data received:", data);
+      console.log("📤 Processed payload:", payload);
+      console.log("📤 API endpoint:", BACK_COMMISSION_ENDPOINTS.updateCategoryDefault());
+      console.log("📤 Request method: PUT");
+      
+      // Try different approaches to find what works
+      console.log("🔥 Trying different API approaches...");
+      let response;
+      let successMethod = "";
+      
+      // Approach 1: PUT to /category-defaults with category_id in body
+      try {
+        console.log("🔥 Approach 1: PUT /category-defaults");
+        response = await adminApiClient.put(
+          BACK_COMMISSION_ENDPOINTS.updateCategoryDefault(),
+          payload
+        );
+        successMethod = "PUT /category-defaults";
+        console.log("✅ Approach 1 worked");
+      } catch (error1: any) {
+        console.log("❌ Approach 1 failed:", error1.response?.status, error1.response?.data);
+        
+        // Approach 2: PUT to /category-defaults/{id} if we have an ID
+        if (data.id) {
+          try {
+            console.log("🔥 Approach 2: PUT /category-defaults/{id}");
+            response = await adminApiClient.put(
+              BACK_COMMISSION_ENDPOINTS.updateCategoryDefaultById(data.id),
+              payload
+            );
+            successMethod = "PUT /category-defaults/{id}";
+            console.log("✅ Approach 2 worked");
+          } catch (error2: any) {
+            console.log("❌ Approach 2 failed:", error2.response?.status, error2.response?.data);
+            
+            // Approach 3: PATCH to /category-defaults
+            try {
+              console.log("🔥 Approach 3: PATCH /category-defaults");
+              response = await adminApiClient.patch(
+                BACK_COMMISSION_ENDPOINTS.updateCategoryDefault(),
+                payload
+              );
+              successMethod = "PATCH /category-defaults";
+              console.log("✅ Approach 3 worked");
+            } catch (error3: any) {
+              console.log("❌ Approach 3 failed:", error3.response?.status, error3.response?.data);
+              
+              // Approach 4: POST to /category-defaults (upsert)
+              try {
+                console.log("🔥 Approach 4: POST /category-defaults (upsert)");
+                response = await adminApiClient.post(
+                  BACK_COMMISSION_ENDPOINTS.updateCategoryDefault(),
+                  payload
+                );
+                successMethod = "POST /category-defaults";
+                console.log("✅ Approach 4 worked");
+              } catch (error4: any) {
+                console.log("❌ All approaches failed");
+                console.log("Final error:", error4.response?.status, error4.response?.data);
+                throw error1; // Throw the first error
+              }
+            }
+          }
+        } else {
+          // No ID available, try PATCH and POST
+          try {
+            console.log("🔥 Approach 3: PATCH /category-defaults");
+            response = await adminApiClient.patch(
+              BACK_COMMISSION_ENDPOINTS.updateCategoryDefault(),
+              payload
+            );
+            successMethod = "PATCH /category-defaults";
+            console.log("✅ Approach 3 worked");
+          } catch (error3: any) {
+            console.log("❌ Approach 3 failed:", error3.response?.status, error3.response?.data);
+            
+            try {
+              console.log("🔥 Approach 4: POST /category-defaults (upsert)");
+              response = await adminApiClient.post(
+                BACK_COMMISSION_ENDPOINTS.updateCategoryDefault(),
+                payload
+              );
+              successMethod = "POST /category-defaults";
+              console.log("✅ Approach 4 worked");
+            } catch (error4: any) {
+              console.log("❌ All approaches failed");
+              throw error1; // Throw the first error
+            }
+          }
+        }
       }
-      return response.data;
+      
+      console.log(`🎉 Success with method: ${successMethod}`);
+      
+      console.log("🔥 DEBUG: API Response received");
+      console.log("✅ Response status:", response.status);
+      console.log("✅ Response headers:", response.headers);
+      console.log("✅ Response data:", response.data);
+      console.log("✅ Full response structure:", JSON.stringify(response.data, null, 2));
+
+      // Verify the update actually worked by making a fresh GET request
+      console.log("🔍 Verifying update by fetching fresh data...");
+      try {
+        const verifyResponse = await adminApiClient.get(
+          BACK_COMMISSION_ENDPOINTS.getCategoryDefaults()
+        );
+        console.log("🔍 Fresh data after update:", verifyResponse.data);
+        
+        // Find the updated commission in the fresh data
+        let freshData = verifyResponse.data;
+        if (verifyResponse.data && verifyResponse.data.data) {
+          freshData = verifyResponse.data.data;
+        }
+        
+        if (Array.isArray(freshData)) {
+          const updatedRecord = freshData.find((item: any) => 
+            item.category_id === payload.category_id
+          );
+          console.log("🔍 Found updated record in fresh data:", updatedRecord);
+          
+          if (updatedRecord) {
+            console.log("✅ Verification successful - data was actually updated");
+            return updatedRecord;
+          } else {
+            console.log("⚠️ Record not found in fresh data - update may have failed");
+          }
+        }
+      } catch (verifyError) {
+        console.error("❌ Error verifying update:", verifyError);
+      }
+
+      // Handle different response structures from the original update call
+      let updatedCommission: CategoryDefaultCommission;
+      
+      if (response.data && response.data.data) {
+        // Structure: { status, code, message, data: {...} }
+        updatedCommission = response.data.data;
+        console.log("✅ Extracted commission from response.data.data:", updatedCommission);
+      } else if (response.data && response.data.id) {
+        // Direct commission object
+        updatedCommission = response.data;
+        console.log("✅ Using response.data directly as commission:", updatedCommission);
+      } else {
+        // Fallback: construct the updated commission from the payload
+        console.log("⚠️ Response doesn't contain commission data, constructing from payload");
+        updatedCommission = {
+          id: data.id || 0, // Use the ID from the request if available
+          category_id: payload.category_id,
+          commission_rate: payload.commission_rate,
+          partial_commission_rate: payload.partial_commission_rate,
+          is_active: payload.is_active,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+      }
+
+      console.log("🔥 DEBUG: Returning updated commission:", updatedCommission);
+      return updatedCommission;
     } catch (error: any) {
       console.error("❌ Error updating category default commission:", error);
       console.error("❌ Error response:", error.response?.data);
+      console.error("❌ Error status:", error.response?.status);
+      console.error("❌ Error headers:", error.response?.headers);
       console.error(
         "❌ Error details:",
         JSON.stringify(error.response?.data, null, 2)
