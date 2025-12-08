@@ -41,6 +41,18 @@ const EditBlane: React.FC = () => {
           cityApi.getCities(),
         ]);
 
+        // Debug: Log the actual API response to see what fields are returned
+        console.log('🔍 DEBUG: Raw blaneData from API:', blaneData);
+        console.log('🔍 DEBUG: All blaneData keys:', Object.keys(blaneData));
+        console.log('🔍 DEBUG: reservation_per_day value:', blaneData.reservation_per_day);
+        console.log('🔍 DEBUG: order_per_day value:', blaneData.order_per_day);
+        
+        // Check for alternative field names
+        console.log('🔍 DEBUG: reservationPerDay value:', (blaneData as any).reservationPerDay);
+        console.log('🔍 DEBUG: orderPerDay value:', (blaneData as any).orderPerDay);
+        console.log('🔍 DEBUG: max_reservation_per_day value:', (blaneData as any).max_reservation_per_day);
+        console.log('🔍 DEBUG: max_order_per_day value:', (blaneData as any).max_order_per_day);
+
         // Add "Select Category" option
         const categoriesWithDefault = [
           //{ id: 0, name: 'Select Category' },
@@ -97,6 +109,8 @@ const EditBlane: React.FC = () => {
           personnes_prestation: blaneData.personnes_prestation || 0,
           nombre_max_reservation: blaneData.nombre_max_reservation || 0,
           max_reservation_par_creneau: blaneData.max_reservation_par_creneau || 0,
+          reservation_per_day: blaneData.reservation_per_day || (blaneData as any).reservationPerDay || (blaneData as any).max_reservation_per_day || 0,
+          order_per_day: blaneData.order_per_day || (blaneData as any).orderPerDay || (blaneData as any).max_order_per_day || 0,
           partiel_field: blaneData.partiel_field || 0,
           tva: typeof blaneData.tva === 'number' ? blaneData.tva : 0,
           type_time: blaneData.type_time || 'time',
@@ -106,6 +120,11 @@ const EditBlane: React.FC = () => {
           share_url: blaneData.share_url || undefined,
           // Don't set images here as they're handled separately
         };
+
+        // Debug: Log the formatted data to see what's being passed to the form
+        console.log('🔍 DEBUG: Formatted data for form:', formattedData);
+        console.log('🔍 DEBUG: Formatted reservation_per_day:', formattedData.reservation_per_day);
+        console.log('🔍 DEBUG: Formatted order_per_day:', formattedData.order_per_day);
 
         // Try to parse date ranges from dates if it's a JSON string
         if (blaneData.dates) {

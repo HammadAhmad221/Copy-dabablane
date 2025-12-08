@@ -430,8 +430,8 @@ const BlaneForm = ({
     reservation_type: initialData?.reservation_type as ReservationType || "instante" as ReservationType,
     nombre_max_reservation: initialData?.nombre_max_reservation || 0,
     max_reservation_par_creneau: initialData?.max_reservation_par_creneau || 0,
-    reservation_per_day: (initialData as any)?.reservation_per_day || 0,
-    order_per_day: (initialData as any)?.order_per_day || 0,
+    reservation_per_day: initialData?.reservation_per_day || 0,
+    order_per_day: initialData?.order_per_day || 0,
     jours_creneaux: Array.isArray(initialData?.jours_creneaux)
       ? initialData.jours_creneaux
       : initialData?.jours_creneaux
