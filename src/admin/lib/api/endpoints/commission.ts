@@ -20,6 +20,7 @@ const BACK_COMMISSION_ENDPOINTS = {
   getCategoryDefaults: () => `${BACK_COMMISSION_ENDPOINTS.BASE}/category-defaults/all`,
   createCategoryDefault: () => `${BACK_COMMISSION_ENDPOINTS.BASE}/category-defaults`,
   updateCategoryDefault: () => `${BACK_COMMISSION_ENDPOINTS.BASE}/category-defaults`,
+  updateCategoryDefaultById: (id: string | number) => `${BACK_COMMISSION_ENDPOINTS.BASE}/category-defaults/${id}`,
 };
 
 export default BACK_COMMISSION_ENDPOINTS;

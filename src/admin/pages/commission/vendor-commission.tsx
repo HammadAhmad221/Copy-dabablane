@@ -42,7 +42,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { categoryApi } from "@/admin/lib/api/services/categoryService";
 import { commissionApi } from "@/admin/lib/api/services/commissionService";
 import type { Category } from "@/admin/lib/api/types/category";
-import type { CategoryDefaultCommission } from "@/admin/lib/api/types/commission";
 
 // Hook to detect mobile/tablet screen
 const useIsMobile = () => {
@@ -65,6 +64,8 @@ interface VendorCommission {
   id: number;
   category: string;
   categoryId: number;
+  vendor: string;
+  vendorId: number;
   percentage: number;
   partialPercentage: number;
   isActive: boolean;
@@ -78,7 +79,7 @@ const VendorCommission = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
-  const [categoryMap, setCategoryMap] = useState<Record<number, string>>({});
+
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -114,83 +115,96 @@ const VendorCommission = () => {
 
 
   // Map API response to component format
-  const mapApiResponseToCommission = (apiData: CategoryDefaultCommission, categoryNameMap?: Record<number, string>): VendorCommission => {
+  const mapApiResponseToCommission = (apiData: any, categoryNameMap?: Record<number, string>): VendorCommission => {
+    const categoryId = apiData.category_id || 0;
+    const vendorId = apiData.vendor_id || 0;
+    
     // Try to get category name from map, then from apiData, then fallback to ID
-    const categoryName = categoryNameMap?.[apiData.category_id] 
+    const categoryName = (categoryNameMap && categoryId ? categoryNameMap[categoryId] : undefined)
       || apiData.category_name 
-      || categories.find(cat => cat.id === apiData.category_id)?.name
-      || `Category ${apiData.category_id}`;
+      || categories.find(cat => Number(cat.id) === categoryId)?.name
+      || `Category ${categoryId}`;
+    
+    // Try to get vendor name from apiData, then fallback to ID
+    const vendorName = apiData.vendor_name || `Vendor ${vendorId}`;
     
     return {
-      id: apiData.id,
+      id: apiData.id || 0,
       category: categoryName,
-      categoryId: apiData.category_id,
-      percentage: apiData.commission_rate,
-      partialPercentage: apiData.partial_commission_rate,
-      isActive: apiData.is_active,
+      categoryId: categoryId,
+      vendor: vendorName,
+      vendorId: vendorId,
+      percentage: apiData.commission_rate || apiData.custom_commission_rate || 0,
+      partialPercentage: apiData.partial_commission_rate || 0,
+      isActive: apiData.is_active !== false,
     };
+  };
+
+  // Function to fetch commissions from API
+  const fetchCommissions = async () => {
+    setIsLoading(true);
+    try {
+      // Use the general commissions endpoint to get vendor-category combinations
+      const response = await commissionApi.getAllVendorCategoryCommissions();
+      
+      // Build category map from categories already loaded
+      const categoryNameMap: Record<number, string> = {};
+      categories.forEach((category) => {
+        const categoryId = Number(category.id);
+        if (!isNaN(categoryId)) {
+          categoryNameMap[categoryId] = category.name;
+        }
+      });
+      
+      // Also check if category names are in the API response
+      response.forEach((commission: any) => {
+        if (commission.category_name && commission.category_id && typeof commission.category_id === 'number') {
+          categoryNameMap[commission.category_id] = commission.category_name;
+        }
+      });
+      
+      // If we still have missing category names, fetch them
+      const categoryIds = new Set(response.map((c: any) => c.category_id));
+      const missingCategoryIds = Array.from(categoryIds).filter(id => !categoryNameMap[id]);
+      
+      if (missingCategoryIds.length > 0) {
+        try {
+          const categoryResponse = await categoryApi.getCategories({ paginationSize: 1000 });
+          categoryResponse.data.forEach((category: any) => {
+            if (categoryIds.has(category.id)) {
+              categoryNameMap[category.id] = category.name;
+              console.log(`✅ Mapped category ${category.id} -> "${category.name}" from category API`);
+            }
+          });
+        } catch (error) {
+          console.error("Error fetching categories for mapping:", error);
+        }
+      }
+      
+
+      console.log("✅ Category map created with", Object.keys(categoryNameMap).length, "entries:", categoryNameMap);
+      
+      // Map all commissions (including inactive ones for reference)
+      const allCommissions = response.map((apiData: any) => 
+        mapApiResponseToCommission(apiData, categoryNameMap)
+      );
+      // Only display active commissions in the UI
+      const activeCommissions = allCommissions.filter(commission => commission.isActive);
+      setCommissions(activeCommissions);
+      console.log("✅ Vendor commissions loaded:", activeCommissions);
+      console.log("✅ All commissions (including inactive):", allCommissions);
+    } catch (error: any) {
+      console.error("Error fetching vendor commissions:", error);
+      const errorMessage = error.response?.data?.message || "Failed to load vendor commissions";
+      toast.error(errorMessage);
+      setCommissions([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Fetch commissions from API
   useEffect(() => {
-    const fetchCommissions = async () => {
-      setIsLoading(true);
-      try {
-        const response = await commissionApi.getCategoryDefaults();
-        
-        // Build category map from categories already loaded
-        const categoryNameMap: Record<number, string> = {};
-        categories.forEach((category) => {
-          categoryNameMap[category.id] = category.name;
-        });
-        
-        // Also check if category names are in the API response
-        response.forEach((commission: any) => {
-          if (commission.category_name && commission.category_id) {
-            categoryNameMap[commission.category_id] = commission.category_name;
-          }
-        });
-        
-        // If we still have missing category names, fetch them
-        const categoryIds = new Set(response.map((c: any) => c.category_id));
-        const missingCategoryIds = Array.from(categoryIds).filter(id => !categoryNameMap[id]);
-        
-        if (missingCategoryIds.length > 0) {
-          try {
-            const categoryResponse = await categoryApi.getCategories({ paginationSize: 1000 });
-            categoryResponse.data.forEach((category: any) => {
-              if (categoryIds.has(category.id)) {
-                categoryNameMap[category.id] = category.name;
-                console.log(`✅ Mapped category ${category.id} -> "${category.name}" from category API`);
-              }
-            });
-          } catch (error) {
-            console.error("Error fetching categories for mapping:", error);
-          }
-        }
-        
-        setCategoryMap(categoryNameMap);
-        console.log("✅ Category map created with", Object.keys(categoryNameMap).length, "entries:", categoryNameMap);
-        
-        // Map all commissions (including inactive ones for reference)
-        const allCommissions = response.map((apiData: CategoryDefaultCommission) => 
-          mapApiResponseToCommission(apiData, categoryNameMap)
-        );
-        // Only display active commissions in the UI
-        const activeCommissions = allCommissions.filter(commission => commission.isActive);
-        setCommissions(activeCommissions);
-        console.log("✅ Vendor commissions loaded:", activeCommissions);
-        console.log("✅ All commissions (including inactive):", allCommissions);
-      } catch (error: any) {
-        console.error("Error fetching vendor commissions:", error);
-        const errorMessage = error.response?.data?.message || "Failed to load vendor commissions";
-        toast.error(errorMessage);
-        setCommissions([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchCommissions();
   }, [categories]); // Re-fetch when categories are loaded
 
@@ -288,22 +302,44 @@ const VendorCommission = () => {
 
       console.log("📤 Attempting to update commission for category_id:", categoryId);
       console.log("📤 Selected commission:", selectedCommission);
+      console.log("📤 Form data:", formData);
 
-      const response = await commissionApi.updateCategoryDefault({
-        category_id: categoryId,
-        commission_rate: parseFloat(String(formData.percentage)),
+      // Use vendor rate update API instead of category default
+      const response = await commissionApi.updateVendorRate(selectedCommission.vendorId, {
+        custom_commission_rate: parseFloat(String(formData.percentage)),
         partial_commission_rate: parseFloat(String(formData.partialPercentage)),
-        is_active: formData.isActive,
       });
 
-      const updatedCommission = mapApiResponseToCommission(response);
-      const updatedCommissions = commissions.map((item) =>
-        item.id === selectedCommission.id ? updatedCommission : item
-      );
-      setCommissions(updatedCommissions);
+      console.log("🔥 DEBUG: Update API call completed successfully");
+      console.log("✅ Update response received:", response);
+
+      // Close dialog immediately
       setIsEditDialogOpen(false);
       setSelectedCommission(null);
+      
+      // Reset form data
+      setFormData({ 
+        category: "", 
+        categoryId: "", 
+        percentage: undefined, 
+        partialPercentage: undefined, 
+        isActive: true 
+      });
+
+      // Show success message
       toast.success("Vendor commission updated successfully");
+      
+      // Force immediate refresh from server - don't trust local state
+      console.log("🔄 Forcing immediate data refresh from server...");
+      
+      // Wait a bit for the server to process the update
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Force refresh
+      await fetchCommissions();
+      
+      console.log("🔄 Data refresh completed");
+
     } catch (error: any) {
       console.error("Error updating commission:", error);
       // Log full error details for debugging
@@ -313,32 +349,8 @@ const VendorCommission = () => {
         if (Array.isArray(validationErrors) && validationErrors.length > 0) {
           const errorMsg = validationErrors[0];
 
-          // If commission doesn't exist, try to create it instead
-          if (errorMsg.includes("No query results") || errorMsg.includes("does not exist")) {
-            console.log("⚠️ Commission doesn't exist, attempting to create it...");
-            try {
-              const createResponse = await commissionApi.createCategoryDefault({
-                category_id: Number(selectedCommission.categoryId),
-                commission_rate: parseFloat(String(formData.percentage)),
-                partial_commission_rate: parseFloat(String(formData.partialPercentage)),
-                is_active: formData.isActive,
-              });
-
-              const newCommission = mapApiResponseToCommission(createResponse);
-              const updatedCommissions = commissions.map((item) =>
-                item.id === selectedCommission.id ? newCommission : item
-              );
-              setCommissions(updatedCommissions);
-              setIsEditDialogOpen(false);
-              setSelectedCommission(null);
-              toast.success("Vendor commission created successfully");
-              return;
-            } catch (createError: any) {
-              console.error("Error creating commission:", createError);
-              toast.error("Commission doesn't exist and couldn't be created. Please refresh the page.");
-              return;
-            }
-          }
+          // For vendor rate updates, we don't need to create - just show the error
+          console.log("⚠️ Vendor rate update failed:", errorMsg);
 
           toast.error(errorMsg || "Validation error occurred");
           return;
@@ -356,23 +368,22 @@ const VendorCommission = () => {
 
     setIsSubmitting(true);
     try {
-      // Update the commission to set is_active to false (soft delete)
-      await commissionApi.updateCategoryDefault({
-        category_id: Number(selectedCommission.categoryId),
-        commission_rate: parseFloat(String(selectedCommission.percentage)),
-        partial_commission_rate: parseFloat(String(selectedCommission.partialPercentage)),
-        is_active: false,
+      // For vendor rates, we might need to reset to default or delete the custom rate
+      // This depends on your API - you might need to call a different endpoint
+      await commissionApi.updateVendorRate(selectedCommission.vendorId, {
+        custom_commission_rate: 0,
+        partial_commission_rate: 0,
       });
 
-      // Remove from list if successfully deactivated
-      const updatedCommissions = commissions.filter((item) => item.id !== selectedCommission.id);
-      setCommissions(updatedCommissions);
+      // Refresh data from server
+      await fetchCommissions();
+      
       setIsDeleteDialogOpen(false);
       setSelectedCommission(null);
-      toast.success("Vendor commission deleted successfully");
+      toast.success("Vendor commission reset successfully");
     } catch (error: any) {
-      console.error("Error deleting commission:", error);
-      const errorMessage = error.response?.data?.message || error.response?.data?.error || "Failed to delete commission";
+      console.error("Error resetting commission:", error);
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || "Failed to reset commission";
       toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -460,11 +471,17 @@ const VendorCommission = () => {
                     )}
                   </div>
 
-                  {/* Category & Rates */}
+                  {/* Category, Vendor & Rates */}
                   <div className="space-y-2">
-                    <div>
-                      <Label className="text-xs text-gray-500">Category</Label>
-                      <p className="text-sm font-medium mt-0.5">{commission.category}</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs text-gray-500">Category</Label>
+                        <p className="text-sm font-medium mt-0.5">{commission.category}</p>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-500">Vendor</Label>
+                        <p className="text-sm font-medium mt-0.5">{commission.vendor}</p>
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
@@ -494,11 +511,12 @@ const VendorCommission = () => {
                   <TableRow className="bg-[#00897B] border-b border-gray-200 hover:bg-[#00897B]">
                     <TableHead className="whitespace-nowrap min-w-[60px] font-semibold text-white hover:bg-[#00897B]">ID</TableHead>
                     <TableHead className="whitespace-nowrap min-w-[200px] font-semibold text-white hover:bg-[#00897B]">Category</TableHead>
+                    <TableHead className="whitespace-nowrap min-w-[200px] font-semibold text-white hover:bg-[#00897B]">Vendor</TableHead>
                     <TableHead className="text-right whitespace-nowrap min-w-[120px] font-semibold text-white hover:bg-[#00897B]">
-                      Percentage
+                      Commission Rate
                     </TableHead>
                     <TableHead className="text-right whitespace-nowrap min-w-[120px] font-semibold text-white hover:bg-[#00897B]">
-                      Partial Percentage
+                      Partial Rate
                     </TableHead>
                     {isAdmin && (
                       <TableHead className="whitespace-nowrap min-w-[100px] font-semibold text-white hover:bg-[#00897B]">Actions</TableHead>
@@ -512,6 +530,7 @@ const VendorCommission = () => {
                         #{commission.id}
                       </TableCell>
                       <TableCell className="whitespace-nowrap">{commission.category}</TableCell>
+                      <TableCell className="whitespace-nowrap">{commission.vendor}</TableCell>
                       <TableCell className="text-right font-semibold whitespace-nowrap text-[#00897B]">
                         {commission.percentage}%
                       </TableCell>
