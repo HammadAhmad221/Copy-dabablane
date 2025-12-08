@@ -1002,14 +1002,14 @@ const VendorsPlane = () => {
             </Dialog>
 
             <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-                <DialogContent className="w-[95vw] max-w-[95vw] sm:w-full sm:max-w-2xl md:max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto p-0 flex flex-col gap-0 rounded-lg overflow-hidden">
-                    <DialogHeader className="bg-gradient-to-r from-[#00897B] to-[#00796B] p-4 sm:p-6 sticky top-0 z-10 border-0 m-0">
+                <DialogContent className="w-[95vw] max-w-[95vw] sm:w-full sm:max-w-2xl md:max-w-4xl max-h-[95vh] sm:max-h-[90vh] p-0 flex flex-col gap-0 rounded-lg overflow-hidden">
+                    <DialogHeader className="bg-gradient-to-r from-[#00897B] to-[#00796B] p-4 sm:p-6 flex-shrink-0 border-0 m-0">
                         <DialogTitle className="text-white text-lg sm:text-xl m-0 p-0">
                             Subscription Details
                         </DialogTitle>
                     </DialogHeader>
                     {selectedSubscription && (
-                        <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+                        <div className="flex-1 overflow-y-auto min-h-0 space-y-4 sm:space-y-6 p-4 sm:p-6">
                             {/* Subscription Information */}
                             <div className="space-y-3 sm:space-y-4">
                                 <h3 className="text-base sm:text-lg font-semibold text-gray-900">Subscription Information</h3>
