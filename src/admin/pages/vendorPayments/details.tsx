@@ -22,12 +22,39 @@ const VendorPaymentDetails = () => {
 
       setIsLoading(true);
       try {
+        console.log('📤 Fetching payment details for ID:', id);
         const data = await vendorPaymentApi.getPaymentById(id);
+        console.log('✅ Payment details received:', data);
+        console.log('📊 Full payment object:', JSON.stringify(data, null, 2));
+        console.log('📊 Payment amounts:', {
+          total_amount: data.total_amount,
+          total_amount_ttc: (data as any).total_amount_ttc,
+          commission_amount: data.commission_amount,
+          commission_amount_ttc: (data as any).commission_amount_ttc,
+          commission_amount_incl_vat: (data as any).commission_amount_incl_vat,
+          net_amount: data.net_amount,
+          net_amount_ttc: (data as any).net_amount_ttc,
+        });
+        console.log('📊 Vendor info:', {
+          vendor_company: data.vendor_company,
+          vendor_name: data.vendor_name,
+          vendor_object: (data as any).vendor,
+        });
+        console.log('📊 Category info:', {
+          category_name: data.category_name,
+          category_object: (data as any).category,
+        });
         setPayment(data);
+        toast.success('Payment details loaded');
       } catch (error: any) {
-        console.error('Error fetching payment details:', error);
-        toast.error(error.response?.data?.message || 'Failed to load payment details');
-        navigate('/admin/vendor-payments');
+        console.error('❌ Error fetching payment details:', error);
+        console.error('❌ Error response:', error.response?.data);
+        const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to load payment details';
+        toast.error(errorMessage);
+        // Don't navigate away immediately, let user see the error
+        setTimeout(() => {
+          navigate('/admin/vendor-payments');
+        }, 2000);
       } finally {
         setIsLoading(false);
       }
@@ -69,15 +96,32 @@ const VendorPaymentDetails = () => {
         <div className="space-y-4">
           <div className="flex justify-between">
             <Label>Vendor:</Label>
-            <span>{payment.vendor_company}</span>
+            <span>{(() => {
+              const vendorCompany = payment.vendor_company 
+                || (payment as any).vendor?.company_name 
+                || (payment as any).vendor?.name 
+                || 'N/A';
+              return vendorCompany;
+            })()}</span>
           </div>
           <div className="flex justify-between">
             <Label>Vendor Name:</Label>
-            <span>{payment.vendor_name}</span>
+            <span>{(() => {
+              const vendorName = payment.vendor_name 
+                || (payment as any).vendor?.name 
+                || (payment as any).vendor?.company_name 
+                || 'N/A';
+              return vendorName;
+            })()}</span>
           </div>
           <div className="flex justify-between">
             <Label>Category:</Label>
-            <span>{payment.category_name || '-'}</span>
+            <span>{(() => {
+              const categoryName = payment.category_name 
+                || (payment as any).category?.name 
+                || '-';
+              return categoryName;
+            })()}</span>
           </div>
           <div className="flex justify-between">
             <Label>Booking Date:</Label>
@@ -89,19 +133,31 @@ const VendorPaymentDetails = () => {
           </div>
           <div className="flex justify-between">
             <Label>Total Amount:</Label>
-            <span>${payment.total_amount.toFixed(2)}</span>
+            <span>{(() => {
+              const amount = (payment as any).total_amount_ttc || payment.total_amount || 0;
+              return Number(amount).toFixed(2);
+            })()}DH</span>
           </div>
           <div className="flex justify-between text-red-600">
             <Label>Commission:</Label>
-            <span>-${payment.commission_amount.toFixed(2)}</span>
+            <span>-{(() => {
+              const amount = (payment as any).commission_amount_incl_vat || (payment as any).commission_amount_ttc || payment.commission_amount || 0;
+              return Number(amount).toFixed(2);
+            })()}DH</span>
           </div>
           <div className="flex justify-between text-red-600">
             <Label>Commission VAT:</Label>
-            <span>-${payment.commission_vat.toFixed(2)}</span>
+            <span>-{(() => {
+              const amount = payment.commission_vat || 0;
+              return Number(amount).toFixed(2);
+            })()}DH</span>
           </div>
           <div className="flex justify-between font-bold text-xl">
             <Label>Net Amount:</Label>
-            <span className="text-green-600">${payment.net_amount.toFixed(2)}</span>
+            <span className="text-green-600">{(() => {
+              const amount = (payment as any).net_amount_ttc || payment.net_amount || 0;
+              return Number(amount).toFixed(2);
+            })()}DH</span>
           </div>
           <div className="flex justify-between">
             <Label>Payment Type:</Label>

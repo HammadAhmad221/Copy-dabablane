@@ -350,8 +350,8 @@ const SubscriptionManagement = () => {
                                 {plan.is_recommended && <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />}
                               </div>
                             </TableCell>
-                            <TableCell>${Number(plan.price_ht).toFixed(2)}</TableCell>
-                            <TableCell>${Number(plan.original_price_ht).toFixed(2)}</TableCell>
+                            <TableCell>{Number(plan.price_ht).toFixed(2)} DH</TableCell>
+                            <TableCell>{Number(plan.original_price_ht).toFixed(2)} DH</TableCell>
                             <TableCell>{plan.duration_days} days</TableCell>
                             <TableCell>
                               <span className={`px-2 py-1 rounded-full text-xs ${plan.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
@@ -400,8 +400,8 @@ const SubscriptionManagement = () => {
                           </span>
                         </div>
                         <div className="text-sm space-y-1">
-                          <p><span className="font-medium">Price:</span> ${Number(plan.price_ht).toFixed(2)}</p>
-                          <p><span className="font-medium">Original:</span> ${Number(plan.original_price_ht).toFixed(2)}</p>
+                          <p><span className="font-medium">Price:</span> {Number(plan.price_ht).toFixed(2)} DH</p>
+                          <p><span className="font-medium">Original:</span> {Number(plan.original_price_ht).toFixed(2)} DH</p>
                           <p><span className="font-medium">Duration:</span> {plan.duration_days} days</p>
                         </div>
                         <div className="flex gap-2">
@@ -465,7 +465,7 @@ const SubscriptionManagement = () => {
                     }).map((addOn) => (
                       <TableRow key={addOn.id}>
                         <TableCell className="font-medium">{addOn.title}</TableCell>
-                        <TableCell>${(Number(addOn.price_ht) || 0).toFixed(2)}</TableCell>
+                        <TableCell>{(Number(addOn.price_ht) || 0).toFixed(2)} DH</TableCell>
                         <TableCell>{Number(addOn.max_quantity) || 0}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -513,7 +513,7 @@ const SubscriptionManagement = () => {
                       </div>
                       <p className="text-sm text-gray-600">{addOn.tooltip}</p>
                       <div className="text-sm space-y-1">
-                        <p><span className="font-medium">Price:</span> ${(Number(addOn.price_ht) || 0).toFixed(2)}</p>
+                        <p><span className="font-medium">Price:</span> {(Number(addOn.price_ht) || 0).toFixed(2)} DH</p>
                         <p><span className="font-medium">Max Quantity:</span> {Number(addOn.max_quantity) || 0}</p>
                       </div>
                       <div className="flex gap-2">

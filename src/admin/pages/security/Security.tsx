@@ -149,7 +149,7 @@ const Security = () => {
     }
 
     // Basic IP validation
-    const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    const ipRegex = /^(\d{1,3}\.){3}\d{1,3}DH/;
     if (!ipRegex.test(newWhitelistIP)) {
       setErrors(prev => ({ ...prev, whitelistIP: "Invalid IP address format" }));
       return;

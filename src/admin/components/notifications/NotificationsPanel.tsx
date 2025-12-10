@@ -153,7 +153,7 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
     // If we have vendor information, make the vendor name clickable
     if (extractedVendorName) {
       // Try to find the vendor name in the message (could be in quotes or as part of the text)
-      const vendorNameEscaped = extractedVendorName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const vendorNameEscaped = extractedVendorName.replace(/[.*+?^DH{}()|[\]\\]/g, '\\DH&');
       // Match with or without quotes, case insensitive
       const regex = new RegExp(`("?${vendorNameEscaped}"?)`, 'gi');
       const parts = message.split(regex);

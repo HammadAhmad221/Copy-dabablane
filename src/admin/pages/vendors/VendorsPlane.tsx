@@ -19,6 +19,7 @@ import {
 } from "@/admin/components/ui/table";
 import { vendorPlanActivationService } from '@/admin/lib/api/vendor-plan-activation';
 import type { VendorListItem, VendorSubscriptionItem } from '@/admin/lib/api/vendor-plan-activation';
+import { userApi } from '@/admin/lib/api/services/userService';
 
 interface FormData extends Omit<VendorPlan, 'id' | 'created_at' | 'updated_at'> {}
 
@@ -50,6 +51,7 @@ const VendorsPlane = () => {
     const [vendorList, setVendorList] = useState<VendorListItem[]>([]);
     const [vendorSubscriptions, setVendorSubscriptions] = useState<VendorSubscriptionItem[]>([]);
     const [loading, setLoading] = useState<boolean>(false);
+    const [userNames, setUserNames] = useState<Record<number, string>>({});
     const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
     const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
     const [selectedSubscription, setSelectedSubscription] = useState<VendorSubscriptionItem | null>(null);
@@ -76,6 +78,27 @@ const VendorsPlane = () => {
     };
     const writePendingSubs = (items: VendorSubscriptionItem[]) => {
         try { localStorage.setItem(PENDING_KEY, JSON.stringify(items || [])); } catch {}
+    };
+
+    // Fetch user names for given user IDs
+    const fetchUserNames = async (userIds: number[]) => {
+        const uniqueIds = [...new Set(userIds)].filter(id => id && id > 0);
+        const names: Record<number, string> = {};
+        
+        await Promise.all(
+            uniqueIds.map(async (userId) => {
+                try {
+                    const userData = await userApi.getUserById(String(userId));
+                    const user = userData?.data || userData;
+                    names[userId] = user?.name || user?.username || user?.email || `User ${userId}`;
+                } catch (error) {
+                    console.error(`Failed to fetch user ${userId}:`, error);
+                    names[userId] = `User ${userId}`;
+                }
+            })
+        );
+        
+        setUserNames(prev => ({ ...prev, ...names }));
     };
 
     useEffect(() => {
@@ -150,6 +173,12 @@ const VendorsPlane = () => {
                     original_price_ht: typeof p.original_price_ht === 'string' ? Number(p.original_price_ht) : p.original_price_ht,
                 });
                 setVendors(Array.isArray(plansRes?.data) ? plansRes.data.map(normalize) : []);
+                
+                // Fetch user names for all subscriptions
+                const userIds = (merged as any[]).map((s: any) => s.user_id).filter(Boolean);
+                if (userIds.length > 0) {
+                    await fetchUserNames(userIds);
+                }
             } catch (error: any) {
                 toast.error('Failed to load vendors data');
                 console.error('Failed to load vendors data', error);
@@ -188,6 +217,7 @@ const VendorsPlane = () => {
             toast.success('Plan created successfully');
         }
         setIsDialogOpen(false);
+        setSelectedVendor(null);
     };
 
     const handleDeletePlan = (id: number) => {
@@ -197,27 +227,6 @@ const VendorsPlane = () => {
 
         setVendors(prevVendors => prevVendors.filter(vendor => vendor.id !== id));
         toast.success('Plan deleted successfully');
-    };
-
-    const handleOpenDialog = (vendor?: VendorPlan) => {
-        if (vendor) {
-            setSelectedVendor(vendor);
-            setFormData(vendor);
-        } else {
-            setSelectedVendor(null);
-            setFormData({
-                title: '',
-                slug: '',
-                price_ht: 0,
-                original_price_ht: 0,
-                duration_days: 30,
-                description: '',
-                is_recommended: false,
-                display_order: 1,
-                is_active: true
-            });
-        }
-        setIsDialogOpen(true);
     };
 
     const handleInputChange = (field: keyof FormData, value: string | number | boolean) => {
@@ -286,7 +295,10 @@ const VendorsPlane = () => {
                         user_id: Number(manualForm.user_id),
                         plan_id: Number(manualForm.plan_id),
                         status: (activationRes as any)?.data?.subscription?.status || 'active',
+                        created_at: (activationRes as any)?.data?.subscription?.created_at || (activationRes as any)?.data?.created_at || new Date().toISOString(),
+                        updated_at: (activationRes as any)?.data?.subscription?.updated_at || (activationRes as any)?.data?.updated_at || new Date().toISOString(),
                         raw: {
+                            created_at: (activationRes as any)?.data?.subscription?.created_at || (activationRes as any)?.data?.created_at || new Date().toISOString(),
                             add_ons: selectedAddOns.map(item => ({
                                 id: item.addOnId,
                                 quantity: item.quantity
@@ -300,6 +312,8 @@ const VendorsPlane = () => {
                     // Remove from pending (if it exists) since activation succeeded
                     const pendingAfter = readPendingSubs().filter((p: any) => `${p.user_id}-${p.plan_id}` !== `${newSub.user_id}-${newSub.plan_id}`);
                     writePendingSubs(pendingAfter);
+                    // Fetch user name for the new subscription
+                    await fetchUserNames([Number(manualForm.user_id)]);
                 } catch (e: any) {
                     const msg = e?.response?.data?.message || e?.message || 'Unknown error';
                     toast.success('Manual purchase created; activation will complete shortly');
@@ -313,7 +327,10 @@ const VendorsPlane = () => {
                             user_id: Number(manualForm.user_id),
                             plan_id: Number(manualForm.plan_id),
                             status: planActive !== undefined ? (planActive ? 'active' : 'inactive') : 'pending',
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString(),
                             raw: {
+                                created_at: new Date().toISOString(),
                                 add_ons: selectedAddOns.map(item => ({
                                     id: item.addOnId,
                                     quantity: item.quantity
@@ -328,6 +345,8 @@ const VendorsPlane = () => {
                         const existing = readPendingSubs();
                         const updated = [optimistic, ...(Array.isArray(existing) ? existing : [])];
                         writePendingSubs(updated);
+                        // Fetch user name for the optimistic subscription
+                        await fetchUserNames([Number(manualForm.user_id)]);
                     } catch {}
                 }
             } else {
@@ -339,7 +358,10 @@ const VendorsPlane = () => {
                     user_id: Number(manualForm.user_id),
                     plan_id: Number(manualForm.plan_id),
                     status: planActive !== undefined ? (planActive ? 'active' : 'inactive') : 'pending',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
                     raw: {
+                        created_at: new Date().toISOString(),
                         add_ons: selectedAddOns.map(item => ({
                             id: item.addOnId,
                             quantity: item.quantity
@@ -354,6 +376,8 @@ const VendorsPlane = () => {
                 const existing = readPendingSubs();
                 const updated = [newSub, ...(Array.isArray(existing) ? existing : [])];
                 writePendingSubs(updated);
+                // Fetch user name for the new subscription
+                await fetchUserNames([Number(manualForm.user_id)]);
             }
             setIsManualDialogOpen(false);
             await new Promise((r) => setTimeout(r, 600));
@@ -439,6 +463,12 @@ const VendorsPlane = () => {
             console.log('Refresh subscriptions normalized length:', merged.length);
             if (merged[0]) console.log('First normalized subscription:', merged[0]);
             setVendorSubscriptions(merged as any);
+            
+            // Fetch user names for refreshed subscriptions
+            const userIds = (merged as any[]).map((s: any) => s.user_id).filter(Boolean);
+            if (userIds.length > 0) {
+                await fetchUserNames(userIds);
+            }
         } catch (err) {
             console.error('Failed to refresh vendor subscriptions', err);
         }
@@ -538,7 +568,7 @@ const VendorsPlane = () => {
                                         {(Array.isArray(vendors) ? vendors : []).map((vendor) => (
                                             <TableRow key={vendor.id}>
                                                 <TableCell>{vendor.title}</TableCell>
-                                                <TableCell>${vendor.price_ht}</TableCell>
+                                                <TableCell>{vendor.price_ht} DH</TableCell>
                                                 <TableCell>{vendor.duration_days}</TableCell>
                                                 <TableCell>
                                                     {vendor.is_active ? (
@@ -577,7 +607,7 @@ const VendorsPlane = () => {
                                                 <div>
                                                     <h4 className="font-medium">{vendor.title}</h4>
                                                     <p className="text-sm text-gray-500">
-                                                        ${vendor.price_ht} / {vendor.duration_days} days
+                                                        {vendor.price_ht} DH / {vendor.duration_days} days
                                                     </p>
                                                 </div>
                                                 {vendor.is_active ? (
@@ -646,7 +676,7 @@ const VendorsPlane = () => {
                                             <TableHeader>
                                                 <TableRow>
                                                     <TableHead className="min-w-[120px] sm:min-w-auto">Subscription ID</TableHead>
-                                                    <TableHead className="min-w-[80px] sm:min-w-auto">User ID</TableHead>
+                                                    <TableHead className="min-w-[120px] sm:min-w-auto">User Name</TableHead>
                                                     <TableHead className="min-w-[70px] sm:min-w-auto">Plan ID</TableHead>
                                                     <TableHead className="min-w-[80px] sm:min-w-auto">Status</TableHead>
                                                     <TableHead className="min-w-[50px] text-right">Actions</TableHead>
@@ -666,10 +696,11 @@ const VendorsPlane = () => {
                                                             status = planActive ? 'active' : 'inactive';
                                                         }
                                                     }
+                                                    const userName = userNames[userId] || `Loading...`;
                                                     return (
                                                         <TableRow key={String(subId)}>
                                                             <TableCell className="whitespace-nowrap sm:whitespace-normal">{String(subId ?? '')}</TableCell>
-                                                            <TableCell className="whitespace-nowrap sm:whitespace-normal">{String(userId ?? '')}</TableCell>
+                                                            <TableCell className="whitespace-nowrap sm:whitespace-normal">{userName}</TableCell>
                                                             <TableCell className="whitespace-nowrap sm:whitespace-normal">{String(planId ?? '')}</TableCell>
                                                             <TableCell className="whitespace-nowrap sm:whitespace-normal">{renderStatusBadge(status)}</TableCell>
                                                             <TableCell className="text-right">
@@ -840,7 +871,7 @@ const VendorsPlane = () => {
                                 >
                                     <SelectTrigger
                                         id="manual_vendor"
-                                        className="w-full focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none ring-0 outline-none ring-offset-0 focus:ring-offset-0 focus-visible:ring-offset-0 focus:border-transparent focus-visible:border-transparent data-[state=open]:ring-0 text-sm sm:text-base"
+                                        className="w-full text-sm sm:text-base"
                                     >
                                         <SelectValue placeholder="Select vendor" />
                                     </SelectTrigger>
@@ -861,14 +892,14 @@ const VendorsPlane = () => {
                                 >
                                     <SelectTrigger
                                         id="manual_plan"
-                                        className="w-full focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none ring-0 outline-none ring-offset-0 focus:ring-offset-0 focus-visible:ring-offset-0 focus:border-transparent focus-visible:border-transparent data-[state=open]:ring-0 text-sm sm:text-base"
+                                        className="w-full text-sm sm:text-base"
                                     >
                                         <SelectValue placeholder="Select plan" />
                                     </SelectTrigger>
                                     <SelectContent className="w-[90vw] sm:w-auto">
                                         {vendors.map(p => (
                                             <SelectItem key={p.id} value={String(p.id)} className="text-sm sm:text-base">
-                                                {p.title} — ${p.price_ht}
+                                                {p.title} — {p.price_ht} DH
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -886,7 +917,7 @@ const VendorsPlane = () => {
                                         </div>
                                         <div>
                                             <p className="text-blue-600 font-medium">Price</p>
-                                            <p className="text-gray-900">${vendors.find(v => v.id === Number(manualForm.plan_id))?.price_ht}</p>
+                                            <p className="text-gray-900">{vendors.find(v => v.id === Number(manualForm.plan_id))?.price_ht} DH</p>
                                         </div>
                                         <div>
                                             <p className="text-blue-600 font-medium">Duration</p>
@@ -914,7 +945,7 @@ const VendorsPlane = () => {
                                 >
                                     <SelectTrigger
                                         id="manual_addons"
-                                        className="w-full focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none ring-0 outline-none ring-offset-0 focus:ring-offset-0 focus-visible:ring-offset-0 focus:border-transparent focus-visible:border-transparent data-[state=open]:ring-0 text-sm sm:text-base"
+                                        className="w-full text-sm sm:text-base"
                                     >
                                         <SelectValue placeholder="Select add-on to add" />
                                     </SelectTrigger>
@@ -923,7 +954,7 @@ const VendorsPlane = () => {
                                             .filter(addOn => addOn.is_active && !selectedAddOns.find(item => item.addOnId === addOn.id))
                                             .map(addOn => (
                                                 <SelectItem key={addOn.id} value={String(addOn.id)} className="text-sm sm:text-base">
-                                                    {addOn.title} — ${Number(addOn.price_ht).toFixed(2)}
+                                                    {addOn.title} — {Number(addOn.price_ht).toFixed(2)} DH
                                                 </SelectItem>
                                             ))}
                                     </SelectContent>
@@ -941,7 +972,7 @@ const VendorsPlane = () => {
                                                             {addOnData?.title}
                                                         </p>
                                                         <p className="text-xs text-gray-500">
-                                                            ${Number(addOnData?.price_ht || 0).toFixed(2)} each
+                                                            {Number(addOnData?.price_ht || 0).toFixed(2)} DH each
                                                         </p>
                                                     </div>
                                                     <div className="flex items-center gap-1 flex-shrink-0">
@@ -976,7 +1007,7 @@ const VendorsPlane = () => {
                                     value={manualForm.payment_method}
                                     onChange={(e) => handleManualFormChange('payment_method', e.target.value)}
                                     placeholder="Manual payment"
-                                    className="focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none ring-0 outline-none ring-offset-0 focus:ring-offset-0 focus-visible:ring-offset-0 focus:border-transparent focus-visible:border-transparent text-sm sm:text-base"
+                                    className="text-sm sm:text-base"
                                 />
                             </div>
                             <div className="space-y-2">
@@ -985,7 +1016,7 @@ const VendorsPlane = () => {
                                     id="manual_promo"
                                     value={manualForm.promo_code ?? ''}
                                     onChange={(e) => handleManualFormChange('promo_code', e.target.value || null)}
-                                    className="focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none ring-0 outline-none ring-offset-0 focus:ring-offset-0 focus-visible:ring-offset-0 focus:border-transparent focus-visible:border-transparent text-sm sm:text-base"
+                                    className="text-sm sm:text-base"
                                 />
                             </div>
                         </form>
@@ -1038,6 +1069,21 @@ const VendorsPlane = () => {
                                             {renderStatusBadge((selectedSubscription as any).status ?? (selectedSubscription as any).raw?.status)}
                                         </div>
                                     </div>
+                                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                        <p className="text-xs sm:text-sm text-gray-600">Start Date</p>
+                                        <p className="text-sm sm:text-lg font-semibold text-gray-900 mt-1">
+                                            {(() => {
+                                                const createdAt = (selectedSubscription as any).created_at ?? (selectedSubscription as any).raw?.created_at ?? (selectedSubscription as any).raw?.subscription?.created_at;
+                                                if (!createdAt) return 'N/A';
+                                                try {
+                                                    const date = new Date(createdAt);
+                                                    return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '/');
+                                                } catch {
+                                                    return 'N/A';
+                                                }
+                                            })()}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1081,7 +1127,7 @@ const VendorsPlane = () => {
                                             <div>
                                                 <p className="text-xs sm:text-sm text-gray-600">Price</p>
                                                 <p className="text-sm sm:text-base font-semibold text-gray-900 mt-1">
-                                                    ${vendors.find(v => v.id === (selectedSubscription as any).plan_id)?.price_ht ?? 'N/A'}
+                                                    {vendors.find(v => v.id === (selectedSubscription as any).plan_id)?.price_ht ?? 'N/A'} DH
                                                 </p>
                                             </div>
                                             <div>
@@ -1138,7 +1184,7 @@ const VendorsPlane = () => {
                                                                 <div className="text-right sm:flex-shrink-0">
                                                                     <p className="text-xs uppercase tracking-wide text-teal-600 font-semibold">Subtotal</p>
                                                                     <p className="text-base sm:text-lg font-bold text-teal-600 mt-1">
-                                                                        ${itemTotal.toFixed(2)}
+                                                                        {itemTotal.toFixed(2)} DH
                                                                     </p>
                                                                 </div>
                                                             </div>
@@ -1152,13 +1198,13 @@ const VendorsPlane = () => {
                                                                 <div>
                                                                     <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Unit Price</p>
                                                                     <p className="text-sm sm:text-lg font-semibold text-gray-900 mt-1 sm:mt-2">
-                                                                        ${Number(addOnData?.price_ht || 0).toFixed(2)}
+                                                                        {Number(addOnData?.price_ht || 0).toFixed(2)} DH
                                                                     </p>
                                                                 </div>
                                                                 <div>
                                                                     <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Total</p>
                                                                     <p className="text-sm sm:text-lg font-semibold text-teal-600 mt-1 sm:mt-2">
-                                                                        ${itemTotal.toFixed(2)}
+                                                                        {itemTotal.toFixed(2)} DH
                                                                     </p>
                                                                 </div>
                                                             </div>
@@ -1177,7 +1223,7 @@ const VendorsPlane = () => {
                                             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                                                 <p className="text-xs sm:text-sm font-semibold text-teal-900">Total Add-ons Cost:</p>
                                                 <p className="text-lg sm:text-2xl font-bold text-teal-600">
-                                                    ${addOnsToDisplay.reduce((sum: number, addOn: any) => {
+                                                    {addOnsToDisplay.reduce((sum: number, addOn: any) => {
                                                         const addOnData = addOns.find(ao => ao.id === (addOn.id || addOn.addOnId));
                                                         return sum + (Number(addOnData?.price_ht || 0) * (addOn.quantity || 1));
                                                     }, 0).toFixed(2)}
@@ -1244,3 +1290,4 @@ const VendorsPlane = () => {
 };
 
 export default VendorsPlane;
+
