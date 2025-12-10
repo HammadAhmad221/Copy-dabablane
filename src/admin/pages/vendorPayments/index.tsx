@@ -22,11 +22,11 @@ import { Badge } from "@/admin/components/ui/badge";
 import { Label } from "@/admin/components/ui/label";
 import {
   Download,
-  FileText,
   FileSpreadsheet,
   Eye,
   Calendar,
   Loader2,
+  FileText,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "react-hot-toast";
@@ -40,6 +40,7 @@ import {
 } from "@/admin/components/ui/pagination";
 import vendorPaymentApi from "@/admin/lib/api/services/vendorPaymentService";
 import { vendorApi } from "@/admin/lib/api/services/vendorService";
+import { categoryApi } from "@/admin/lib/api/services/categoryService";
 import type { VendorPayment } from "@/admin/lib/api/types/vendorPayment";
 import type { Vendor } from "@/admin/lib/api/types/vendor";
 
@@ -75,6 +76,9 @@ const VendorPaymentsIndex = () => {
   const [payments, setPayments] = useState<VendorPayment[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [isLoadingVendors, setIsLoadingVendors] = useState(false);
+  const [vendorMap, setVendorMap] = useState<Record<number, string>>({});
+  const [categoryMap, setCategoryMap] = useState<Record<number, string>>({});
+  const [allVendorIdsWithPayments, setAllVendorIdsWithPayments] = useState<Set<number>>(new Set());
 
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -86,6 +90,9 @@ const VendorPaymentsIndex = () => {
   // Fetch vendor payments from API
   const fetchPayments = async () => {
     console.log('🚀 fetchPayments called - API Integration Active!');
+    console.log('🚀 Vendor map size:', Object.keys(vendorMap).length);
+    console.log('🚀 Category map size:', Object.keys(categoryMap).length);
+    
     setIsFetching(true);
     try {
       const filters: any = {
@@ -108,8 +115,60 @@ const VendorPaymentsIndex = () => {
 
       console.log('✅ API Response:', response);
       console.log('✅ Total records in database:', response.meta.total);
+      
+      // Log first payment to see structure
+      if (response.data && response.data.length > 0) {
+        console.log('📊 First payment raw data:', response.data[0]);
+        console.log('📊 Payment amounts:', {
+          total_amount: response.data[0].total_amount,
+          commission_amount: response.data[0].commission_amount,
+          commission_vat: response.data[0].commission_vat,
+          net_amount: response.data[0].net_amount,
+        });
+      }
 
-      setPayments(response.data || []);
+      // Map vendor names to payments
+      const paymentsWithNames = (response.data || []).map((payment: any) => {
+        // Try to get vendor name from multiple sources
+        let vendorName = payment.vendor_company;
+        
+        // Check if vendor object exists in the response
+        if (!vendorName || vendorName === 'N/A') {
+          if (payment.vendor && payment.vendor.name) {
+            vendorName = payment.vendor.company_name || payment.vendor.name;
+            console.log(`✅ Got vendor name from nested vendor object: ${vendorName}`);
+          } else if (payment.vendor_id && vendorMap[payment.vendor_id]) {
+            vendorName = vendorMap[payment.vendor_id];
+            console.log(`✅ Mapped vendor ${payment.vendor_id} -> ${vendorName}`);
+          } else {
+            vendorName = 'N/A';
+            console.warn(`⚠️ No vendor name found for vendor_id: ${payment.vendor_id}`);
+          }
+        }
+        
+        return {
+          ...payment,
+          vendor_company: vendorName,
+        };
+      });
+
+      console.log('✅ Payments with mapped names:', paymentsWithNames);
+      if (paymentsWithNames.length > 0) {
+        console.log('📊 First mapped payment:', paymentsWithNames[0]);
+      }
+      setPayments(paymentsWithNames);
+      
+      // Track all unique vendor IDs from payments
+      setAllVendorIdsWithPayments(prev => {
+        const newSet = new Set(prev);
+        paymentsWithNames.forEach(payment => {
+          if (payment.vendor_id) {
+            newSet.add(payment.vendor_id);
+          }
+        });
+        console.log('📊 Total unique vendors with payments:', newSet.size);
+        return newSet;
+      });
       
       setPagination((prev) => ({
         ...prev,
@@ -140,29 +199,55 @@ const VendorPaymentsIndex = () => {
     }
   };
 
-  // Fetch all vendors for dropdown
+  // Fetch all vendors and categories for mapping
   useEffect(() => {
-    const fetchVendors = async () => {
+    const fetchMappingData = async () => {
       setIsLoadingVendors(true);
       try {
-        const response = await vendorApi.getVendors(undefined, 100, 1);
-        setVendors(response.data);
-      } catch (error) {
-        toast.error('Failed to load vendors list');
+        console.log('🚀 Starting to fetch vendors and categories...');
+        
+        // Fetch vendors
+        console.log('📤 Fetching vendors...');
+        const vendorResponse = await vendorApi.getVendors(undefined, 1000, 1);
+        console.log('✅ Vendors fetched:', vendorResponse.data.length);
+        setVendors(vendorResponse.data);
+        
+        // Build vendor map
+        const vMap: Record<number, string> = {};
+        vendorResponse.data.forEach((vendor: Vendor) => {
+          vMap[vendor.id] = vendor.company_name || vendor.name || `Vendor #${vendor.id}`;
+        });
+        setVendorMap(vMap);
+        console.log('✅ Vendor map created with', Object.keys(vMap).length, 'vendors');
+
+        // Fetch categories
+        console.log('📤 Fetching categories...');
+        const categoryResponse = await categoryApi.getCategories({ paginationSize: 1000 });
+        console.log('✅ Categories fetched:', categoryResponse.data.length);
+        
+        // Build category map
+        const cMap: Record<number, string> = {};
+        categoryResponse.data.forEach((category: any) => {
+          cMap[category.id] = category.name;
+        });
+        setCategoryMap(cMap);
+        console.log('✅ Category map created with', Object.keys(cMap).length, 'categories');
+        
+        console.log('✅ All mapping data loaded successfully');
+      } catch (error: any) {
+        console.error('❌ Failed to load vendors/categories:', error);
+        console.error('❌ Error details:', error.response?.data);
+        console.error('❌ Error message:', error.message);
+        // Don't show error toast - let the page work without names if needed
+        // Just log the error for debugging
       } finally {
         setIsLoadingVendors(false);
       }
     };
-    fetchVendors();
+    fetchMappingData();
   }, []);
 
-  // Fetch payments on mount
-  useEffect(() => {
-    fetchPayments();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Fetch payments when filters change
+  // Fetch payments when maps are ready or filters change
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchPayments();
@@ -178,6 +263,8 @@ const VendorPaymentsIndex = () => {
     endDate,
     pagination.currentPage,
     pagination.perPage,
+    vendorMap,
+    categoryMap,
   ]);
 
   const handlePageChange = (page: number) => {
@@ -192,48 +279,52 @@ const VendorPaymentsIndex = () => {
   const handleExportExcel = async () => {
     setIsLoading(true);
     try {
+      console.log('📤 Starting Excel export...');
       const filters: any = {};
       if (selectedVendor && selectedVendor !== "all") filters.vendor_id = Number(selectedVendor);
       if (selectedStatus) filters.transfer_status = selectedStatus;
       if (startDate) filters.start_date = startDate;
       if (endDate) filters.end_date = endDate;
 
+      console.log('📤 Export filters:', filters);
       const blob = await vendorPaymentApi.exportExcel(filters);
+      console.log('✅ Excel blob received:', blob);
+      
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = `vendor-payments-${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
       toast.success('Excel export completed!');
-    } catch (error) {
-      toast.error('Failed to export to Excel');
+    } catch (error: any) {
+      console.error('❌ Excel export error:', error);
+      
+      // Try to read error message from blob if it's JSON
+      if (error.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          console.error('❌ Error blob content:', text);
+          const errorData = JSON.parse(text);
+          const errorMessage = errorData.message || errorData.error || 'Failed to export to Excel';
+          toast.error(errorMessage);
+          return;
+        } catch (e) {
+          console.error('❌ Could not parse error blob:', e);
+        }
+      }
+      
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to export to Excel';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleExportPDF = async () => {
-    setIsLoading(true);
-    try {
-      const filters: any = {};
-      if (selectedVendor && selectedVendor !== "all") filters.vendor_id = Number(selectedVendor);
-      if (selectedStatus) filters.transfer_status = selectedStatus;
-      if (startDate) filters.start_date = startDate;
-      if (endDate) filters.end_date = endDate;
 
-      const blob = await vendorPaymentApi.exportPDF(filters);
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `vendor-payments-${format(new Date(), 'yyyy-MM-dd')}.pdf`;
-      link.click();
-      toast.success('PDF export completed!');
-    } catch (error) {
-      toast.error('Failed to export to PDF');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
@@ -290,17 +381,7 @@ const VendorPaymentsIndex = () => {
             size={isMobile ? "default" : "default"}
           >
             <FileSpreadsheet className="h-4 w-4 mr-2" />
-            {isMobile ? "Excel" : "Export Excel"}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleExportPDF}
-            disabled={isLoading}
-            className="w-full sm:w-auto"
-            size={isMobile ? "default" : "default"}
-          >
-            <FileText className="h-4 w-4 mr-2" />
-            {isMobile ? "PDF" : "Export PDF"}
+            {isMobile ? "Excel" : "Export to Excel"}
           </Button>
           <Button
             onClick={() => navigate("/admin/vendor-payments/report")}
@@ -337,11 +418,37 @@ const VendorPaymentsIndex = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Vendors</SelectItem>
-                {vendors.map((vendor) => (
-                  <SelectItem key={vendor.id} value={String(vendor.id)}>
-                    {vendor.company_name || vendor.name || `Vendor #${vendor.id}`}
-                  </SelectItem>
-                ))}
+                {(() => {
+                  // Extract unique vendors directly from payments data
+                  const vendorMap = new Map<number, { id: number; name: string }>();
+                  
+                  payments.forEach(payment => {
+                    if (payment.vendor_id && !vendorMap.has(payment.vendor_id)) {
+                      const vendorName = payment.vendor_company 
+                        || payment.vendor_name 
+                        || (payment as any).vendor?.company_name 
+                        || (payment as any).vendor?.name 
+                        || `Vendor #${payment.vendor_id}`;
+                      
+                      vendorMap.set(payment.vendor_id, {
+                        id: payment.vendor_id,
+                        name: vendorName
+                      });
+                    }
+                  });
+                  
+                  // Convert to array and sort
+                  const uniqueVendors = Array.from(vendorMap.values());
+                  uniqueVendors.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+                  
+                  console.log('📊 Unique vendors from payments:', uniqueVendors);
+                  
+                  return uniqueVendors.map((vendor) => (
+                    <SelectItem key={vendor.id} value={String(vendor.id)}>
+                      {vendor.name}
+                    </SelectItem>
+                  ));
+                })()}
               </SelectContent>
             </Select>
           </div>
@@ -438,28 +545,20 @@ const VendorPaymentsIndex = () => {
                         </div>
                       </div>
 
-                      {/* Category & Period */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="min-w-0">
-                          <Label className="text-xs text-gray-500">Category</Label>
-                          <p className="text-sm font-medium mt-0.5 truncate">
-                            {payment.category_name || 'N/A'}
-                          </p>
-                        </div>
-                        <div className="min-w-0">
-                          <Label className="text-xs text-gray-500">Type</Label>
-                          <Badge variant="outline" className="mt-0.5">
-                            {payment.payment_type || 'N/A'}
-                          </Badge>
-                        </div>
+                      {/* Type */}
+                      <div>
+                        <Label className="text-xs text-gray-500">Type</Label>
+                        <Badge variant="outline" className="mt-0.5">
+                          {payment.payment_type || 'N/A'}
+                        </Badge>
                       </div>
 
                       {/* Period */}
-                      {payment.week_start && payment.week_end && (
+                      {payment.booking_date && (
                         <div>
-                          <Label className="text-xs text-gray-500">Period</Label>
+                          <Label className="text-xs text-gray-500">Booking Date</Label>
                           <p className="text-xs text-gray-600 mt-0.5">
-                            {payment.week_start} to {payment.week_end}
+                            {format(new Date(payment.booking_date), 'MMMM dd, yyyy')}
                           </p>
                         </div>
                       )}
@@ -469,19 +568,28 @@ const VendorPaymentsIndex = () => {
                         <div className="flex justify-between items-center">
                           <Label className="text-xs text-gray-500">Total Amount</Label>
                           <p className="text-sm font-medium">
-                            MAD {payment.total_amount?.toFixed(2) || '0.00'}
+                            {(() => {
+                              const amount = (payment as any).total_amount_ttc || payment.total_amount || 0;
+                              return Number(amount).toFixed(2);
+                            })()}DH
                           </p>
                         </div>
                         <div className="flex justify-between items-center">
                           <Label className="text-xs text-gray-500">Commission</Label>
                           <p className="text-sm font-medium text-red-600">
-                            MAD {payment.commission?.toFixed(2) || '0.00'}
+                            {(() => {
+                              const amount = (payment as any).commission_amount_incl_vat || (payment as any).commission_amount_ttc || payment.commission_amount || 0;
+                              return Number(amount).toFixed(2);
+                            })()}DH
                           </p>
                         </div>
                         <div className="flex justify-between items-center pt-2 border-t">
                           <Label className="text-sm font-semibold text-gray-700">Net Amount</Label>
                           <p className="text-lg font-bold text-[#00897B]">
-                            MAD {payment.net_amount?.toFixed(2) || '0.00'}
+                            {(() => {
+                              const amount = (payment as any).net_amount_ttc || payment.net_amount || 0;
+                              return Number(amount).toFixed(2);
+                            })()}DH
                           </p>
                         </div>
                       </div>
@@ -508,7 +616,6 @@ const VendorPaymentsIndex = () => {
                       <TableRow>
                         <TableHead className="whitespace-nowrap">ID</TableHead>
                         <TableHead className="whitespace-nowrap">Vendor</TableHead>
-                        <TableHead className="whitespace-nowrap">Category</TableHead>
                         <TableHead className="whitespace-nowrap">Period</TableHead>
                         <TableHead className="text-right whitespace-nowrap">Amount</TableHead>
                         <TableHead className="text-right whitespace-nowrap">Commission</TableHead>
@@ -526,20 +633,28 @@ const VendorPaymentsIndex = () => {
                           <TableCell className="whitespace-nowrap">
                             <div className="font-medium">{payment.vendor_company}</div>
                           </TableCell>
-                          <TableCell className="whitespace-nowrap">{payment.category_name || 'N/A'}</TableCell>
                           <TableCell className="whitespace-nowrap">
-                            {payment.week_start && payment.week_end 
-                              ? `${payment.week_start} to ${payment.week_end}` 
+                            {payment.booking_date 
+                              ? format(new Date(payment.booking_date), 'MMMM dd, yyyy')
                               : 'N/A'}
                           </TableCell>
                           <TableCell className="text-right whitespace-nowrap">
-                            MAD {payment.total_amount?.toFixed(2) || '0.00'}
+                            {(() => {
+                              const amount = (payment as any).total_amount_ttc || payment.total_amount || 0;
+                              return Number(amount).toFixed(2);
+                            })()}DH
                           </TableCell>
                           <TableCell className="text-right whitespace-nowrap">
-                            MAD {payment.commission?.toFixed(2) || '0.00'}
+                            {(() => {
+                              const amount = (payment as any).commission_amount_incl_vat || (payment as any).commission_amount_ttc || payment.commission_amount || 0;
+                              return Number(amount).toFixed(2);
+                            })()}DH
                           </TableCell>
                           <TableCell className="text-right font-semibold whitespace-nowrap">
-                            MAD {payment.net_amount?.toFixed(2) || '0.00'}
+                            {(() => {
+                              const amount = (payment as any).net_amount_ttc || payment.net_amount || 0;
+                              return Number(amount).toFixed(2);
+                            })()}DH
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
                             <Badge variant="outline">

@@ -206,6 +206,10 @@ const adminRoutes: RouteObject[] = [
     path: "mobile-banner",
     element: <MobileBanner />
   },
+  //  {
+  //   path: "dashboard",
+  //   element: <VendorDashboard />
+  // },
   {
     path: "vendors",
     element: <Vendors />

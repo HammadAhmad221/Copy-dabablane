@@ -67,12 +67,21 @@ const VendorPaymentHistory = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {logs.map((log) => (
+            {logs.map((log: any) => (
               <div key={log.id} className="flex justify-between items-center border-b pb-4">
                 <div>
                   <p className="font-medium">Payment #{log.vendor_payment_id}</p>
-                  <p className="text-sm text-gray-500">{log.admin_name} - {log.action}</p>
-                  {log.note && <p className="text-xs text-gray-400 mt-1">{log.note}</p>}
+                  {/* Show vendor and category info if available */}
+                  {log.vendor_payment && (
+                    <div className="text-sm text-gray-600 mt-1">
+                      <p>Vendor: {log.vendor_payment.vendor?.company_name || log.vendor_payment.vendor?.name || 'N/A'}</p>
+                      {log.vendor_payment.category_name && (
+                        <p>Category: {log.vendor_payment.category_name}</p>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-sm text-gray-500 mt-1">{log.admin_name} - {log.action}</p>
+                  {log.note && <p className="text-xs text-gray-400 mt-1">Note: {log.note}</p>}
                   {log.old_values && (
                     <details className="text-xs text-gray-400 mt-1">
                       <summary className="cursor-pointer">View changes</summary>
@@ -90,7 +99,7 @@ const VendorPaymentHistory = () => {
                   )}
                 </div>
                 <div className="text-right">
-                  <Badge>{log.action}</Badge>
+                  <Badge className="bg-red-500 text-white">{log.action}</Badge>
                   <p className="text-xs text-gray-500 mt-1">
                     {format(new Date(log.created_at), "PPpp")}
                   </p>

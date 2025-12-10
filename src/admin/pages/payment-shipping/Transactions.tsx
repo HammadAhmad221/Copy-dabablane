@@ -265,7 +265,7 @@ const Transactions = () => {
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
                   <p className="text-2xl font-bold text-green-600">
-                    ${getInsights().totalRevenue.toFixed(2)}
+                    {getInsights().totalRevenue.toFixed(2)} DH
                   </p>
                 </div>
               </div>
@@ -377,7 +377,7 @@ const Transactions = () => {
                     <TableRow key={transaction.id}>
                       <TableCell>#{transaction.orderId}</TableCell>
                       <TableCell>{transaction.userName}</TableCell>
-                      <TableCell>${transaction.amount.toFixed(2)}</TableCell>
+                      <TableCell>{transaction.amount.toFixed(2)} DH</TableCell>
                       <TableCell>{transaction.paymentMethod}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -469,7 +469,7 @@ const Transactions = () => {
                   </div>
                   <div>
                     <label className="font-semibold">Amount</label>
-                    <p>${selectedTransaction.amount.toFixed(2)}</p>
+                    <p>{selectedTransaction.amount.toFixed(2)} DH</p>
                   </div>
                   <div>
                     <label className="font-semibold">Payment Method</label>

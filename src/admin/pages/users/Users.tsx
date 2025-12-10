@@ -164,7 +164,7 @@ const generateRandomPassword = () => {
   const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const lowercase = 'abcdefghijklmnopqrstuvwxyz';
   const numbers = '0123456789';
-  const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+  const symbols = '!@#DH%^&*()_+-=[]{}|;:,.<>?';
   
   const allChars = uppercase + lowercase + numbers + symbols;
   let password = '';
@@ -324,7 +324,7 @@ const ViewDialog: React.FC<{
 // Add this function at the top level
 const generatePassword = () => {
   const length = 12;
-  const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+  const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#DH%^&*";
   let password = "";
   for (let i = 0; i < length; i++) {
     password += charset.charAt(Math.floor(Math.random() * charset.length));

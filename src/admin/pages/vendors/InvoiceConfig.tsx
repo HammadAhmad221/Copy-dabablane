@@ -176,7 +176,7 @@ export default function InvoiceConfig() {
 
     try {
       // Basic client-side validation for required fields
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+DH/;
       if (!template.billingEmail || !template.contactEmail || !template.contactPhone || !template.companyInfo.legalMentions || !template.prefix) {
         toast({
           title: "Missing required fields",
@@ -467,4 +467,5 @@ export default function InvoiceConfig() {
     </div>
   );
 }
+
 

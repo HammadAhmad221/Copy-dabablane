@@ -64,6 +64,12 @@ const VendorReservationOrders: React.FC = () => {
     totalAmount: 0,
   });
 
+  // Customer names cache
+  const [customerNames, setCustomerNames] = useState<Record<number, string>>({});
+
+  // Search filter
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
   // Fetch vendors on component mount
   useEffect(() => {
     fetchVendors();
@@ -80,6 +86,56 @@ const VendorReservationOrders: React.FC = () => {
     } finally {
       setVendorsLoading(false);
     }
+  };
+
+  // Fetch customer names for items that don't have them
+  const fetchCustomerNames = async (items: ReservationOrderItem[]) => {
+    const customerIds = items
+      .filter(item => !item.customer_name || item.customer_name.startsWith('Customer #'))
+      .map(item => item.customers_id)
+      .filter((id): id is number => id !== undefined && id !== null);
+
+    if (customerIds.length === 0) return items;
+
+    const uniqueIds = [...new Set(customerIds)];
+    const newCustomerNames: Record<number, string> = { ...customerNames };
+
+    // Fetch customer data for IDs we don't have yet
+    const idsToFetch = uniqueIds.filter(id => !customerNames[id]);
+    
+    if (idsToFetch.length > 0) {
+      console.log('🔍 Fetching customer names for IDs:', idsToFetch);
+      
+      // Note: You'll need to implement a customer API endpoint
+      // For now, we'll try to use the phone number as the name
+      // If you have a customer API, uncomment and use it:
+      /*
+      await Promise.all(
+        idsToFetch.map(async (customerId) => {
+          try {
+            const customerData = await customerApi.getCustomerById(customerId);
+            newCustomerNames[customerId] = customerData.name || customerData.first_name || `Customer #${customerId}`;
+          } catch (error) {
+            console.error(`Failed to fetch customer ${customerId}:`, error);
+            newCustomerNames[customerId] = `Customer #${customerId}`;
+          }
+        })
+      );
+      */
+    }
+
+    setCustomerNames(newCustomerNames);
+
+    // Update items with fetched customer names
+    return items.map(item => {
+      if (item.customers_id && newCustomerNames[item.customers_id]) {
+        return {
+          ...item,
+          customer_name: newCustomerNames[item.customers_id],
+        };
+      }
+      return item;
+    });
   };
 
   // Fetch reservation orders when vendor and time period are selected
@@ -111,21 +167,102 @@ const VendorReservationOrders: React.FC = () => {
         1
       );
 
+      // Debug: Log the API response to see what fields are available
+      console.log('✅ API Response received:', response);
+      console.log('📊 Response structure:', {
+        past_reservations: response.past_reservations?.length || 0,
+        current_reservations: response.current_reservations?.length || 0,
+        future_reservations: response.future_reservations?.length || 0,
+        past_orders: response.past_orders?.length || 0,
+        current_orders: response.current_orders?.length || 0,
+        future_orders: response.future_orders?.length || 0,
+      });
+      console.log('🔍 Selected time period:', timePeriod);
+      const sampleItem = response.past_reservations?.[0] || 
+        response.current_reservations?.[0] || 
+        response.future_reservations?.[0] ||
+        response.past_orders?.[0] ||
+        response.current_orders?.[0] ||
+        response.future_orders?.[0];
+      
+      console.log('📝 Sample item from response:', sampleItem);
+      console.log('👤 Customer data in sample:', {
+        customer_name: sampleItem?.customer_name,
+        customer: sampleItem?.customer,
+        user: sampleItem?.user,
+        customers_id: sampleItem?.customers_id,
+        phone: sampleItem?.phone,
+      });
+
       // Combine the appropriate arrays based on time period
       let combinedItems: ReservationOrderItem[] = [];
       
+      // Helper function to normalize item data
+      const normalizeItem = (item: any, type: 'reservation' | 'order') => {
+        // Try to get customer name from various possible fields
+        let customerName = item.customer_name || 
+                          item.customer?.name || 
+                          item.customer?.first_name || 
+                          item.user?.name ||
+                          item.user?.first_name;
+        
+        // If no name found, try to construct from first_name and last_name
+        if (!customerName && (item.customer?.first_name || item.customer?.last_name)) {
+          customerName = `${item.customer?.first_name || ''} ${item.customer?.last_name || ''}`.trim();
+        }
+        
+        if (!customerName && (item.user?.first_name || item.user?.last_name)) {
+          customerName = `${item.user?.first_name || ''} ${item.user?.last_name || ''}`.trim();
+        }
+        
+        // If still no name, use phone number or email as fallback
+        if (!customerName) {
+          customerName = item.customer_email || 
+                        item.customer?.email || 
+                        item.phone || 
+                        item.customer_phone || 
+                        item.customer?.phone ||
+                        `Customer #${item.customers_id || item.customer_id || ''}`;
+        }
+        
+        return {
+          ...item,
+          type,
+          // Normalize date fields
+          created_at: item.created_at || item.date || item.order_date || item.reservation_date,
+          start_date: item.start_date || item.date,
+          // Normalize amount fields
+          total_amount: item.total_amount || item.total_price || item.price,
+          // Normalize payment fields
+          payment_status: item.payment_status || item.payment_method || (item.is_paid ? 'paid' : 'pending'),
+          // Normalize customer fields
+          customer_name: customerName,
+          customer_email: item.customer_email || item.customer?.email || item.user?.email,
+          customer_phone: item.customer_phone || item.phone || item.customer?.phone || item.user?.phone,
+          customers_id: item.customers_id || item.customer_id || item.customer?.id || item.user?.id,
+          // Normalize blane fields
+          blane_name: item.blane_name || item.blane?.name || item.blane?.title,
+          // Normalize number fields
+          reservation_number: item.reservation_number || item.NUM_RES || `RES-${item.id}`,
+          order_number: item.order_number || item.NUM_ORDER || `ORD-${item.id}`,
+        };
+      };
+
       if (timePeriod === 'past') {
-        const pastReservations = (response.past_reservations || []).map(item => ({ ...item, type: 'reservation' as const }));
-        const pastOrders = (response.past_orders || []).map(item => ({ ...item, type: 'order' as const }));
+        const pastReservations = (response.past_reservations || []).map(item => normalizeItem(item, 'reservation'));
+        const pastOrders = (response.past_orders || []).map(item => normalizeItem(item, 'order'));
         combinedItems = [...pastReservations, ...pastOrders];
+        console.log(`📦 Past items combined: ${pastReservations.length} reservations + ${pastOrders.length} orders = ${combinedItems.length} total`);
       } else if (timePeriod === 'present') {
-        const currentReservations = (response.current_reservations || []).map(item => ({ ...item, type: 'reservation' as const }));
-        const currentOrders = (response.current_orders || []).map(item => ({ ...item, type: 'order' as const }));
+        const currentReservations = (response.current_reservations || []).map(item => normalizeItem(item, 'reservation'));
+        const currentOrders = (response.current_orders || []).map(item => normalizeItem(item, 'order'));
         combinedItems = [...currentReservations, ...currentOrders];
+        console.log(`📦 Current items combined: ${currentReservations.length} reservations + ${currentOrders.length} orders = ${combinedItems.length} total`);
       } else if (timePeriod === 'future') {
-        const futureReservations = (response.future_reservations || []).map(item => ({ ...item, type: 'reservation' as const }));
-        const futureOrders = (response.future_orders || []).map(item => ({ ...item, type: 'order' as const }));
+        const futureReservations = (response.future_reservations || []).map(item => normalizeItem(item, 'reservation'));
+        const futureOrders = (response.future_orders || []).map(item => normalizeItem(item, 'order'));
         combinedItems = [...futureReservations, ...futureOrders];
+        console.log(`📦 Future items combined: ${futureReservations.length} reservations + ${futureOrders.length} orders = ${combinedItems.length} total`);
       }
 
       setReservationOrders(combinedItems);
@@ -133,11 +270,33 @@ const VendorReservationOrders: React.FC = () => {
       setDataLoaded(true);
       setPage(0); // Reset to first page
 
-      // Use the statistics from the API
+      // Calculate statistics from the actual displayed items
+      const ordersCount = combinedItems.filter(item => item.type === 'order').length;
+      const reservationsCount = combinedItems.filter(item => item.type === 'reservation').length;
+      const totalAmount = combinedItems.reduce((sum, item) => {
+        const amount = getItemAmount(item);
+        console.log('Item amount:', {
+          id: item.id,
+          total_amount: item.total_amount,
+          total_price: item.total_price,
+          price: item.price,
+          calculated: amount,
+        });
+        return sum + amount;
+      }, 0);
+
+      console.log('💰 Calculated stats:', {
+        totalOrders: ordersCount,
+        totalReservations: reservationsCount,
+        totalAmount: totalAmount,
+        itemsCount: combinedItems.length,
+        isNaN: isNaN(totalAmount),
+      });
+
       setStats({
-        totalOrders: response.total_orders || 0,
-        totalReservations: response.total_reservations || 0,
-        totalAmount: response.total_revenue || 0,
+        totalOrders: ordersCount,
+        totalReservations: reservationsCount,
+        totalAmount: totalAmount,
       });
 
       if (combinedItems.length === 0) {
@@ -180,7 +339,11 @@ const VendorReservationOrders: React.FC = () => {
   };
 
   const getItemAmount = (item: ReservationOrderItem): number => {
-    return item.total_amount || item.total_price || item.price || 0;
+    const amount = item.total_amount || item.total_price || item.price || 0;
+    // Convert to number if it's a string
+    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+    // Return 0 if parsing failed (NaN)
+    return isNaN(numAmount) ? 0 : numAmount;
   };
 
   const getItemNumber = (item: ReservationOrderItem): string => {
@@ -210,9 +373,11 @@ const VendorReservationOrders: React.FC = () => {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('fr-MA', {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'MAD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(amount);
   };
 
@@ -226,11 +391,65 @@ const VendorReservationOrders: React.FC = () => {
     });
   };
 
-  // Paginate the data on the client side
-  const paginatedData = reservationOrders.slice(
+  // Filter data based on search query
+  const filteredData = reservationOrders.filter((item) => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.toLowerCase().trim();
+    
+    // Normalize and clean text for comparison
+    const normalizeText = (text: string | undefined | null): string => {
+      if (!text) return '';
+      return text.toString().toLowerCase().trim();
+    };
+    
+    // Get all possible customer name variations
+    const customerName = normalizeText(item.customer_name);
+    const customerFirstName = normalizeText((item as any).customer?.first_name);
+    const customerLastName = normalizeText((item as any).customer?.last_name);
+    const customerFullName = `${customerFirstName} ${customerLastName}`.trim();
+    const userName = normalizeText((item as any).user?.name);
+    const userFirstName = normalizeText((item as any).user?.first_name);
+    const userLastName = normalizeText((item as any).user?.last_name);
+    const userFullName = `${userFirstName} ${userLastName}`.trim();
+    
+    // Get other searchable fields
+    const customerEmail = normalizeText(item.customer_email);
+    const customerPhone = normalizeText(item.customer_phone);
+    const reservationNumber = normalizeText(item.reservation_number);
+    const orderNumber = normalizeText(item.order_number);
+    const blaneName = normalizeText(item.blane_name);
+    const customerId = normalizeText(item.customers_id?.toString());
+    
+    // Check if query matches any field
+    return (
+      customerName.includes(query) ||
+      customerFirstName.includes(query) ||
+      customerLastName.includes(query) ||
+      customerFullName.includes(query) ||
+      userName.includes(query) ||
+      userFirstName.includes(query) ||
+      userLastName.includes(query) ||
+      userFullName.includes(query) ||
+      customerEmail.includes(query) ||
+      customerPhone.includes(query) ||
+      reservationNumber.includes(query) ||
+      orderNumber.includes(query) ||
+      blaneName.includes(query) ||
+      customerId.includes(query)
+    );
+  });
+
+  // Paginate the filtered data
+  const paginatedData = filteredData.slice(
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage
   );
+
+  // Reset to first page when search query changes
+  useEffect(() => {
+    setPage(0);
+  }, [searchQuery]);
 
   return (
     <Box sx={{ p: { xs: 2, sm: 2, md: 3 } }}>
@@ -316,9 +535,9 @@ const VendorReservationOrders: React.FC = () => {
               <MenuItem value="">
                 <em>Select time period</em>
               </MenuItem>
-              <MenuItem value="past">Past Orders/Reservations</MenuItem>
-              <MenuItem value="present">Current/Active</MenuItem>
-              <MenuItem value="future">Future Orders/Reservations</MenuItem>
+              <MenuItem value="past">Past Reservation</MenuItem>
+              <MenuItem value="present">Order</MenuItem>
+              <MenuItem value="future">Future Reservation</MenuItem>
             </TextField>
           </Grid>
 
@@ -347,6 +566,33 @@ const VendorReservationOrders: React.FC = () => {
           </Grid>
         </Grid>
       </Paper>
+
+      {/* Search Filter */}
+      {dataLoaded && reservationOrders.length > 0 && (
+        <Paper sx={{ p: { xs: 2, sm: 2.5, md: 3 }, mb: { xs: 2, md: 3 } }}>
+          <TextField
+            fullWidth
+            placeholder="Search by customer name, email, phone, or reservation number..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <SearchIcon sx={{ color: '#00897B', mr: 1 }} />
+              ),
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                '&:hover fieldset': {
+                  borderColor: '#00897B',
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: '#00897B',
+                },
+              },
+            }}
+          />
+        </Paper>
+      )}
 
       {/* Statistics Cards */}
       {dataLoaded && (
@@ -521,19 +767,32 @@ const VendorReservationOrders: React.FC = () => {
                         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
                           Payment
                         </Typography>
-                        <Chip
-                          label={item.payment_status || 'N/A'}
-                          color={
-                            item.payment_status === 'paid'
-                              ? 'success'
-                              : item.payment_status === 'pending'
-                              ? 'warning'
-                              : 'default'
-                          }
-                          size="small"
-                          variant="outlined"
-                          sx={{ textTransform: 'capitalize' }}
-                        />
+                        {(() => {
+                          // Check all possible payment status fields
+                          const paymentStatus = 
+                            item.payment_status || 
+                            (item as any).paymentStatus || 
+                            (item as any).payment_state ||
+                            (item as any).payment_method ||
+                            ((item as any).is_paid === 1 || (item as any).is_paid === true ? 'paid' : null) ||
+                            ((item as any).is_paid === 0 || (item as any).is_paid === false ? 'pending' : null);
+                          
+                          const displayStatus = paymentStatus || 'Pending';
+                          const isPaid = displayStatus?.toLowerCase() === 'paid' || displayStatus?.toLowerCase() === 'completed' || displayStatus?.toLowerCase() === 'success';
+                          const isPending = displayStatus?.toLowerCase() === 'pending' || displayStatus?.toLowerCase() === 'unpaid';
+                          
+                          return (
+                            <Chip
+                              label={displayStatus}
+                              color={
+                                isPaid ? 'success' : isPending ? 'warning' : 'default'
+                              }
+                              size="small"
+                              variant="outlined"
+                              sx={{ textTransform: 'capitalize' }}
+                            />
+                          );
+                        })()}
                       </Box>
                       {item.quantity && item.quantity > 1 && (
                         <Box>
@@ -564,13 +823,13 @@ const VendorReservationOrders: React.FC = () => {
                   Previous
                 </Button>
                 <Typography variant="body2">
-                  Page {page + 1} of {Math.ceil(reservationOrders.length / rowsPerPage)}
+                  Page {page + 1} of {Math.ceil(filteredData.length / rowsPerPage)}
                 </Typography>
                 <Button
                   variant="outlined"
                   size="small"
                   onClick={() => handleChangePage(null, page + 1)}
-                  disabled={page >= Math.ceil(reservationOrders.length / rowsPerPage) - 1}
+                  disabled={page >= Math.ceil(filteredData.length / rowsPerPage) - 1}
                   sx={{ minWidth: '80px' }}
                 >
                   Next
@@ -686,19 +945,32 @@ const VendorReservationOrders: React.FC = () => {
                           />
                         </TableCell>
                         <TableCell sx={{ py: 2 }}>
-                          <Chip
-                            label={item.payment_status || 'N/A'}
-                            color={
-                              item.payment_status === 'paid'
-                                ? 'success'
-                                : item.payment_status === 'pending'
-                                ? 'warning'
-                                : 'default'
-                            }
-                            size="small"
-                            variant="outlined"
-                            sx={{ textTransform: 'capitalize' }}
-                          />
+                          {(() => {
+                            // Check all possible payment status fields
+                            const paymentStatus = 
+                              item.payment_status || 
+                              (item as any).paymentStatus || 
+                              (item as any).payment_state ||
+                              (item as any).payment_method ||
+                              ((item as any).is_paid === 1 || (item as any).is_paid === true ? 'paid' : null) ||
+                              ((item as any).is_paid === 0 || (item as any).is_paid === false ? 'pending' : null);
+                            
+                            const displayStatus = paymentStatus || 'Pending';
+                            const isPaid = displayStatus?.toLowerCase() === 'paid' || displayStatus?.toLowerCase() === 'completed' || displayStatus?.toLowerCase() === 'success';
+                            const isPending = displayStatus?.toLowerCase() === 'pending' || displayStatus?.toLowerCase() === 'unpaid';
+                            
+                            return (
+                              <Chip
+                                label={displayStatus}
+                                color={
+                                  isPaid ? 'success' : isPending ? 'warning' : 'default'
+                                }
+                                size="small"
+                                variant="outlined"
+                                sx={{ textTransform: 'capitalize' }}
+                              />
+                            );
+                          })()}
                         </TableCell>
                         <TableCell align="right" sx={{ py: 2 }}>
                           <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.875rem', whiteSpace: 'nowrap' }}>
@@ -719,7 +991,7 @@ const VendorReservationOrders: React.FC = () => {
               {/* Desktop Pagination */}
               <TablePagination
                 component="div"
-                count={reservationOrders.length}
+                count={filteredData.length}
                 page={page}
                 onPageChange={handleChangePage}
                 rowsPerPage={rowsPerPage}

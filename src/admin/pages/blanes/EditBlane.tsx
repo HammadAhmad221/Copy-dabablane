@@ -318,22 +318,22 @@ const EditBlane: React.FC = () => {
     if (!timeString) return null;
     
     // Remove any trailing 'Z' or timezone information
-    timeString = timeString.replace(/Z$/, '');
+    timeString = timeString.replace(/ZDH/, '');
     
     // Handle cases where time might be in different formats
     try {
         // If time is already in HH:MM format
-        if (/^\d{2}:\d{2}$/.test(timeString)) {
+        if (/^\d{2}:\d{2}DH/.test(timeString)) {
             return timeString;
         }
         
         // If time is in HH:MM:SS format
-        if (/^\d{2}:\d{2}:\d{2}$/.test(timeString)) {
+        if (/^\d{2}:\d{2}:\d{2}DH/.test(timeString)) {
             return timeString.slice(0, 5);
         }
         
         // If time is in ISO format (e.g., "15:30:00.000Z")
-        if (/^\d{2}:\d{2}:\d{2}\.\d{3}Z?$/.test(timeString)) {
+        if (/^\d{2}:\d{2}:\d{2}\.\d{3}Z?DH/.test(timeString)) {
             return timeString.slice(0, 5);
         }
         

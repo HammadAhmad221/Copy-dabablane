@@ -17,9 +17,30 @@ const VendorPaymentReport = () => {
   const [weekStart, setWeekStart] = useState<string>("");
   const [weekEnd, setWeekEnd] = useState<string>("");
 
-  const fetchReportData = async () => {
-    // Don't fetch if dates are not set
-    if (!weekStart || !weekEnd) {
+
+
+  // Auto-fetch on mount with default dates
+  useEffect(() => {
+    // Set default dates to previous week (where data exists)
+    const today = new Date();
+    // Go back 7 days to get to previous week
+    const previousWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const firstDayOfWeek = new Date(previousWeek.setDate(previousWeek.getDate() - previousWeek.getDay()));
+    const lastDayOfWeek = new Date(previousWeek.setDate(previousWeek.getDate() - previousWeek.getDay() + 6));
+    
+    const startDate = format(firstDayOfWeek, "yyyy-MM-dd");
+    const endDate = format(lastDayOfWeek, "yyyy-MM-dd");
+    
+    setWeekStart(startDate);
+    setWeekEnd(endDate);
+    
+    // Auto-fetch report data with default dates
+    console.log('Auto-fetching report with default dates (previous week):', { startDate, endDate });
+    fetchReportDataWithDates(startDate, endDate);
+  }, []);
+
+  const fetchReportDataWithDates = async (start: string, end: string) => {
+    if (!start || !end) {
       setIsLoading(false);
       toast.error("Please select both week start and end dates");
       return;
@@ -27,8 +48,8 @@ const VendorPaymentReport = () => {
 
     setIsLoading(true);
     try {
-      console.log('Fetching banking report with dates:', { weekStart, weekEnd });
-      const data = await vendorPaymentApi.getBankingReport(weekStart, weekEnd);
+      console.log('Fetching banking report with dates:', { weekStart: start, weekEnd: end });
+      const data = await vendorPaymentApi.getBankingReport(start, end);
       console.log('Banking report data received:', data);
       
       setItems(data);
@@ -48,19 +69,8 @@ const VendorPaymentReport = () => {
     }
   };
 
-  // Don't auto-fetch on mount, wait for user to select dates
-  useEffect(() => {
-    // Set default dates to current week
-    const today = new Date();
-    const firstDayOfWeek = new Date(today.setDate(today.getDate() - today.getDay()));
-    const lastDayOfWeek = new Date(today.setDate(today.getDate() - today.getDay() + 6));
-    
-    setWeekStart(format(firstDayOfWeek, "yyyy-MM-dd"));
-    setWeekEnd(format(lastDayOfWeek, "yyyy-MM-dd"));
-  }, []);
-
   const handleGenerateReport = () => {
-    fetchReportData();
+    fetchReportDataWithDates(weekStart, weekEnd);
   };
 
   return (
@@ -136,26 +146,26 @@ const VendorPaymentReport = () => {
             {items.map((item) => (
               <div key={item.vendor_id} className="flex justify-between border-b pb-2">
                 <div>
-                  <p className="font-medium">{item.vendor_company}</p>
-                  <p className="text-xs text-gray-500">{item.vendor_name}</p>
+                  <p className="font-medium">{item.vendor_company || 'N/A'}</p>
+                  <p className="text-xs text-gray-500">{item.vendor_name || 'N/A'}</p>
                   {item.bank_name && (
                     <p className="text-xs text-gray-400">Bank: {item.bank_name}</p>
                   )}
                   {item.rib && (
                     <code className="text-xs text-gray-400">RIB: {item.rib}</code>
                   )}
-                  <p className="text-xs text-gray-500">Payments: {item.payments_count}</p>
+                  <p className="text-xs text-gray-500">Payments: {item.payments_count || 0}</p>
                 </div>
-                <p className="font-semibold">${item.total_amount.toFixed(2)}</p>
+                <p className="font-semibold">{(item.total_amount || 0).toFixed(2)} DH</p>
               </div>
             ))}
             <div className="flex justify-between font-bold text-lg pt-4">
               <span>Total:</span>
-              <span>${items.reduce((sum, i) => sum + i.total_amount, 0).toFixed(2)}</span>
+              <span>{items.reduce((sum, i) => sum + (i.total_amount || 0), 0).toFixed(2)} DH</span>
             </div>
             <div className="text-sm text-gray-500 mt-2">
               <p>Total Vendors: {items.length}</p>
-              <p>Total Payments: {items.reduce((sum, i) => sum + i.payments_count, 0)}</p>
+              <p>Total Payments: {items.reduce((sum, i) => sum + (i.payments_count || 0), 0)}</p>
             </div>
           </div>
         )}
