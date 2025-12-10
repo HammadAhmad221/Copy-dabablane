@@ -47,18 +47,17 @@ const CommissionManagement = () => {
   const [vendorFilter, setVendorFilter] = useState<string>("");
   const [vendorMap, setVendorMap] = useState<Record<number, string>>({});
   const [categoryMap, setCategoryMap] = useState<Record<number, string>>({});
+  const [allCommissions, setAllCommissions] = useState<Commission[]>([]);
 
   const fetchCommissions = async () => {
     setIsLoading(true);
     try {
       console.log('🚀 Fetching commissions...');
-      const response = await commissionApi.getAll(
-        categoryFilter ? Number(categoryFilter) : undefined,
-        vendorFilter ? Number(vendorFilter) : undefined
-      );
+      const response = await commissionApi.getAll();
       console.log('✅ Commissions loaded:', response.data);
       console.log('✅ Commissions count:', response.data.length);
       console.log('✅ Meta total:', response.meta.total);
+      setAllCommissions(response.data);
       setCommissions(response.data);
       
       // Extract vendor IDs and category IDs from commissions
@@ -258,10 +257,28 @@ const CommissionManagement = () => {
   const isMountedRef = useRef<boolean>(false);
   const prevPathRef = useRef<string>(location.pathname);
 
-  // Initial fetch and fetch when filters change
+  // Initial fetch
   useEffect(() => {
     fetchCommissions();
-  }, [categoryFilter, vendorFilter]);
+  }, []);
+
+  // Filter commissions when search terms change
+  useEffect(() => {
+    if (!categoryFilter && !vendorFilter) {
+      setCommissions(allCommissions);
+      return;
+    }
+
+    const filtered = allCommissions.filter((commission) => {
+      const categoryName = getCategoryName(commission.category_id).toLowerCase();
+      const vendorName = getVendorName(commission.vendor_id).toLowerCase();
+      const categoryMatch = !categoryFilter || categoryName.includes(categoryFilter.toLowerCase());
+      const vendorMatch = !vendorFilter || vendorName.includes(vendorFilter.toLowerCase());
+      return categoryMatch && vendorMatch;
+    });
+
+    setCommissions(filtered);
+  }, [categoryFilter, vendorFilter, allCommissions, categoryMap, vendorMap]);
 
   // Refresh commissions when navigating back to this page (e.g., after creating/editing)
   useEffect(() => {
@@ -369,18 +386,18 @@ const CommissionManagement = () => {
       <Card className="p-3 sm:p-4 w-full">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div className="space-y-2">
-            <Label className="text-sm">Category ID</Label>
+            <Label className="text-sm">Category Name</Label>
             <Input
-              placeholder="Filter by category"
+              placeholder="Search by category name"
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
               className="h-10 w-full"
             />
           </div>
           <div className="space-y-2">
-            <Label className="text-sm">Vendor ID</Label>
+            <Label className="text-sm">Vendor Name</Label>
             <Input
-              placeholder="Filter by vendor"
+              placeholder="Search by vendor name"
               value={vendorFilter}
               onChange={(e) => setVendorFilter(e.target.value)}
               className="h-10 w-full"

@@ -90,11 +90,11 @@ const Merchants = () => {
   });
 
   const validateEmail = (email: string) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+DH/.test(email);
   };
 
   const validatePhone = (phone: string) => {
-    return /^\+?[\d\s-]{10,}$/.test(phone);
+    return /^\+?[\d\s-]{10,}DH/.test(phone);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -514,3 +514,4 @@ const Merchants = () => {
 };
 
 export default Merchants;
+

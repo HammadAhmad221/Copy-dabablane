@@ -15,7 +15,7 @@ const TimePicker = ({ value, onChange, minTime, maxTime, step, placeholder }: Ti
 
   // Add validation for time parameters
   const isValidTime = (time: string) => {
-    return /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time);
+    return /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]DH/.test(time);
   };
 
   const generateTimeOptions = () => {

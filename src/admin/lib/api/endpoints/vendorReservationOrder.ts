@@ -14,7 +14,7 @@ export const vendorReservationOrderEndpoints = {
 
     params.append('paginationSize', limit.toString());
     params.append('page', page.toString());
-    params.append('include', 'blaneImage');
+    params.append('include', 'blaneImage,customer');
 
     if (filters?.commerce_name) {
       params.append('commerce_name', filters.commerce_name);
@@ -24,12 +24,13 @@ export const vendorReservationOrderEndpoints = {
       // Map time periods to API parameters
       if (filters.time_period === 'past') {
         params.append('include_expired', '1');
-        params.append('only_past', '1');
+        params.append('time_filter', 'past');
       } else if (filters.time_period === 'present') {
         params.append('include_expired', '0');
-        params.append('only_current', '1');
+        params.append('time_filter', 'current');
       } else if (filters.time_period === 'future') {
-        params.append('only_future', '1');
+        params.append('include_expired', '0');
+        params.append('time_filter', 'future');
       }
     } else {
       // Default: include all
@@ -48,7 +49,11 @@ export const vendorReservationOrderEndpoints = {
       params.append('search', filters.search);
     }
 
-    return adminApiClient.get(`/back/v1/getVendorReservationsAndOrders?${params.toString()}`);
+    const url = `/back/v1/getVendorReservationsAndOrders?${params.toString()}`;
+    console.log('🔍 API Request URL:', url);
+    console.log('📋 Request Parameters:', Object.fromEntries(params.entries()));
+
+    return adminApiClient.get(url);
   },
 };
 

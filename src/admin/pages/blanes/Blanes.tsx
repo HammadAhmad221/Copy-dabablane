@@ -499,6 +499,7 @@ const Blanes: React.FC = () => {
   // Handle pagination size change
   const handlePaginationSizeChange = useCallback((value: string) => {
     const newPaginationSize = parseInt(value, 10);
+    setPaginationSize(newPaginationSize);
     setPagination(prev => ({
       ...prev,
       perPage: newPaginationSize,

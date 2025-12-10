@@ -524,8 +524,9 @@ const PromoCodeManagement = () => {
                   value={promoForm.discountPercentage}
                   onChange={(e) => setPromoForm({ ...promoForm, discountPercentage: parseInt(e.target.value) })}
                   placeholder="20"
+                  className="pr-10"
                 />
-                <Percent className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Percent className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
               </div>
             </div>
 
