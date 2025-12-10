@@ -94,7 +94,7 @@ const reservationSchema = z.object({
   date: z.string().min(1, "Date is required"),
   time: z.string().min(1, "Time is required").refine(
     (time) => {
-      const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+      const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]DH/;
       return timeRegex.test(time);
     },
     "Time must be in 24-hour format (HH:mm)"

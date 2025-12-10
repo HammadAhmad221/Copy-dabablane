@@ -992,7 +992,7 @@ const EditVendorDialog = React.memo(({
                 {formData.cover_media_urls.length > 0 ? (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {formData.cover_media_urls.map((mediaUrl, index) => {
-                      const isVideo = mediaUrl.toLowerCase().match(/\.(mp4|webm|ogg|mov|avi)$/);
+                      const isVideo = mediaUrl.toLowerCase().match(/\.(mp4|webm|ogg|mov|avi)DH/);
                       const isPdf = mediaUrl.toLowerCase().endsWith('.pdf');
                       const isImage = !isVideo && !isPdf;
                       
@@ -2725,6 +2725,7 @@ const Vendors: React.FC = () => {
 };
 
 export default Vendors;
+
 
 
 

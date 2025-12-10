@@ -247,11 +247,11 @@ const Shipping = () => {
         </Card>
         <Card className="p-4">
           <div className="text-sm font-medium text-muted-foreground">Total Shipping Fees</div>
-          <div className="text-2xl font-bold">${getMetrics().totalFees.toFixed(2)}</div>
+          <div className="text-2xl font-bold">{getMetrics().totalFees.toFixed(2)} DH</div>
         </Card>
         <Card className="p-4">
           <div className="text-sm font-medium text-muted-foreground">Average Shipping Fee</div>
-          <div className="text-2xl font-bold">${getMetrics().avgFee.toFixed(2)}</div>
+          <div className="text-2xl font-bold">{getMetrics().avgFee.toFixed(2)} DH</div>
         </Card>
       </div>
 
@@ -319,7 +319,7 @@ const Shipping = () => {
                   <TableRow key={detail.id}>
                     <TableCell>#{detail.orderId}</TableCell>
                     <TableCell>{detail.address}</TableCell>
-                    <TableCell>${detail.shippingFee.toFixed(2)}</TableCell>
+                    <TableCell>{detail.shippingFee.toFixed(2)} DH</TableCell>
                     <TableCell>{format(detail.createdAt, "PP")}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -411,7 +411,7 @@ const Shipping = () => {
               </div>
               <div>
                 <label className="font-semibold">Shipping Fee</label>
-                <p>${selectedDetail.shippingFee.toFixed(2)}</p>
+                <p>{selectedDetail.shippingFee.toFixed(2)} DH</p>
               </div>
               <div>
                 <label className="font-semibold">Created At</label>

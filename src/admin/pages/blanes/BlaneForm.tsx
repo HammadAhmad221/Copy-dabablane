@@ -277,7 +277,7 @@ const convertFileToBase64 = (file: File): Promise<string> => {
 
 // Add this validation function near the other utility functions
 // const isValidPhoneNumber = (phone: string): boolean => {
-//   return /^212[5-7]\d{8}$/.test(phone);
+//   return /^212[5-7]\d{8}DH/.test(phone);
 // };
 
 // Define the validation schema
@@ -338,7 +338,7 @@ const validateForm = (formData: BlaneFormData, activeTab: "reservation" | "order
 // Add this utility function at the top of the file
 const isNumeric = (value: string | number): boolean => {
   if (typeof value === 'number') return true;
-  return /^\d*$/.test(value);
+  return /^\d*DH/.test(value);
 };
 
 // Add this function to normalize date range objects

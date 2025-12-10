@@ -31,10 +31,31 @@ const ManualTransfer = () => {
       });
       console.log('Pending payments response:', response);
       
-      setPayments(response.data);
+      // Map vendor names from nested vendor object
+      const paymentsWithNames = (response.data || []).map((payment: any) => {
+        let vendorName = payment.vendor_company;
+        
+        // Check if vendor object exists in the response
+        if (!vendorName || vendorName === 'N/A') {
+          if (payment.vendor && payment.vendor.name) {
+            vendorName = payment.vendor.company_name || payment.vendor.name;
+            console.log(`✅ Got vendor name from nested vendor object: ${vendorName}`);
+          } else {
+            vendorName = 'N/A';
+            console.warn(`⚠️ No vendor name found for vendor_id: ${payment.vendor_id}`);
+          }
+        }
+        
+        return {
+          ...payment,
+          vendor_company: vendorName,
+        };
+      });
       
-      if (response.data.length > 0) {
-        toast.success(`Found ${response.data.length} pending payment(s)`);
+      setPayments(paymentsWithNames);
+      
+      if (paymentsWithNames.length > 0) {
+        toast.success(`Found ${paymentsWithNames.length} pending payment(s)`);
       } else {
         toast("No pending payments found", { icon: 'ℹ️' });
       }
@@ -65,11 +86,18 @@ const ManualTransfer = () => {
 
     setIsProcessing(true);
     try {
+      console.log('📤 Processing payments:', {
+        payment_ids: Array.from(selected),
+        transfer_date: transferDate,
+        note: note || undefined,
+      });
+      
       await vendorPaymentApi.markProcessed({
         payment_ids: Array.from(selected),
         transfer_date: transferDate,
         note: note || undefined,
       });
+      
       toast.success(`Successfully processed ${selected.size} payment(s)`);
       setSelected(new Set());
       setNote("");
@@ -77,8 +105,48 @@ const ManualTransfer = () => {
       // Refresh the payments list
       await fetchPendingPayments();
     } catch (error: any) {
-      console.error('Error processing payments:', error);
-      toast.error(error.response?.data?.message || 'Failed to process payments');
+      console.error('❌ Error processing payments:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error response errors:', error.response?.data?.errors);
+      
+      // Try to extract detailed error message
+      let errorMessage = 'Failed to mark payments as processed';
+      
+      if (error.response?.data) {
+        // First try to get the main message
+        if (error.response.data.message) {
+          errorMessage = error.response.data.message;
+        }
+        
+        // Then append detailed errors if available
+        if (error.response.data.errors) {
+          const errors = error.response.data.errors;
+          console.log('📋 Errors array:', errors);
+          
+          if (Array.isArray(errors) && errors.length > 0) {
+            // Check if it's a database error
+            const firstError = errors[0];
+            if (typeof firstError === 'string' && firstError.includes('SQLSTATE')) {
+              // Database error - show user-friendly message
+              errorMessage = 'Database error: Please contact the administrator. The payment log table needs to be updated.';
+            } else {
+              // Join all error messages
+              const errorDetails = errors.join(', ');
+              errorMessage = `${errorMessage}: ${errorDetails}`;
+            }
+          } else if (typeof errors === 'object') {
+            const errorDetails = Object.values(errors).flat().join(', ');
+            if (errorDetails) {
+              errorMessage = `${errorMessage}: ${errorDetails}`;
+            }
+          }
+        } else if (error.response.data.error) {
+          errorMessage = error.response.data.error;
+        }
+      }
+      
+      console.log('📋 Final error message:', errorMessage);
+      toast.error(errorMessage, { duration: 5000 });
     } finally {
       setIsProcessing(false);
     }
@@ -86,7 +154,8 @@ const ManualTransfer = () => {
 
   const totalSelected = Array.from(selected).reduce((sum, id) => {
     const payment = payments.find(p => p.id === id);
-    return sum + (payment?.net_amount || 0);
+    const netAmount = payment?.net_amount ? parseFloat(payment.net_amount as any) : 0;
+    return sum + netAmount;
   }, 0);
 
   return (
@@ -109,7 +178,7 @@ const ManualTransfer = () => {
                 <CheckCircle className="h-5 w-5 text-blue-600" />
                 <div>
                   <p className="font-semibold">{selected.size} payment(s) selected</p>
-                  <p className="text-sm text-gray-600">Total: ${totalSelected.toFixed(2)}</p>
+                  <p className="text-sm text-gray-600">Total: {totalSelected.toFixed(2)} DH</p>
                 </div>
               </div>
             </div>
@@ -168,10 +237,10 @@ const ManualTransfer = () => {
                     }}
                   />
                   <div>
-                    <p className="font-medium">{payment.vendor_company}</p>
+                    <p className="font-medium">{payment.vendor_company || 'N/A'}</p>
                     <p className="text-sm text-gray-500">Payment ID: {payment.id}</p>
                     <p className="text-xs text-gray-400">
-                      Booking: {format(new Date(payment.booking_date), "PP")} | {payment.total_bookings} bookings
+                      Booking: {payment.booking_date ? format(new Date(payment.booking_date), "PP") : 'N/A'}
                     </p>
                     {payment.category_name && (
                       <p className="text-xs text-gray-400">Category: {payment.category_name}</p>
@@ -179,8 +248,12 @@ const ManualTransfer = () => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-green-600">${payment.net_amount.toFixed(2)}</p>
-                  <p className="text-xs text-gray-500">Total: ${payment.total_amount.toFixed(2)}</p>
+                  <p className="font-semibold text-green-600">
+                    {payment.net_amount ? parseFloat(payment.net_amount as any).toFixed(2) : '0.00'} DH
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Total: {payment.total_amount ? parseFloat(payment.total_amount as any).toFixed(2) : '0.00'} DH
+                  </p>
                   <Badge className="bg-yellow-500 mt-1">{payment.transfer_status}</Badge>
                   <p className="text-xs text-gray-500 mt-1">{payment.payment_type}</p>
                 </div>

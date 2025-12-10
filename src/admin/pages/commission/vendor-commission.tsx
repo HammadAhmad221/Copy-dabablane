@@ -144,8 +144,9 @@ const VendorCommission = () => {
   const fetchCommissions = async () => {
     setIsLoading(true);
     try {
-      // Use the general commissions endpoint to get vendor-category combinations
-      const response = await commissionApi.getAllVendorCategoryCommissions();
+      // Fetch category default commissions (not vendor-specific rates)
+      // This page shows category-level commission rates that apply to all vendors
+      const response = await commissionApi.getCategoryDefaults(true);
       
       // Build category map from categories already loaded
       const categoryNameMap: Record<number, string> = {};
@@ -252,7 +253,7 @@ const VendorCommission = () => {
       setCommissions([...commissions, newCommission]);
       setFormData({ category: "", categoryId: "", percentage: undefined, partialPercentage: undefined, isActive: true });
       setIsCreateDialogOpen(false);
-      toast.success("Vendor commission created successfully");
+      toast.success("Category commission created successfully");
     } catch (error: any) {
       console.error("Error creating commission:", error);
       const errorMessage = error.response?.data?.message || error.response?.data?.error || "Failed to create commission";
@@ -304,10 +305,14 @@ const VendorCommission = () => {
       console.log("📤 Selected commission:", selectedCommission);
       console.log("📤 Form data:", formData);
 
-      // Use vendor rate update API instead of category default
-      const response = await commissionApi.updateVendorRate(selectedCommission.vendorId, {
-        custom_commission_rate: parseFloat(String(formData.percentage)),
+      // Use category default update API (not vendor rate API)
+      // This is for category-level commissions, not vendor-specific rates
+      const response = await commissionApi.updateCategoryDefault({
+        id: selectedCommission.id,
+        category_id: categoryId,
+        commission_rate: parseFloat(String(formData.percentage)),
         partial_commission_rate: parseFloat(String(formData.partialPercentage)),
+        is_active: formData.isActive,
       });
 
       console.log("🔥 DEBUG: Update API call completed successfully");
@@ -327,13 +332,13 @@ const VendorCommission = () => {
       });
 
       // Show success message
-      toast.success("Vendor commission updated successfully");
+      toast.success("Category commission updated successfully");
       
       // Force immediate refresh from server - don't trust local state
       console.log("🔄 Forcing immediate data refresh from server...");
       
       // Wait a bit for the server to process the update
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       // Force refresh
       await fetchCommissions();
@@ -348,10 +353,6 @@ const VendorCommission = () => {
         const validationErrors = error.response.data.errors;
         if (Array.isArray(validationErrors) && validationErrors.length > 0) {
           const errorMsg = validationErrors[0];
-
-          // For vendor rate updates, we don't need to create - just show the error
-          console.log("⚠️ Vendor rate update failed:", errorMsg);
-
           toast.error(errorMsg || "Validation error occurred");
           return;
         }
@@ -380,7 +381,7 @@ const VendorCommission = () => {
       
       setIsDeleteDialogOpen(false);
       setSelectedCommission(null);
-      toast.success("Vendor commission reset successfully");
+      toast.success("Category commission reset successfully");
     } catch (error: any) {
       console.error("Error resetting commission:", error);
       const errorMessage = error.response?.data?.message || error.response?.data?.error || "Failed to reset commission";
@@ -408,7 +409,7 @@ const VendorCommission = () => {
         <Card>
           <div className="text-center p-8 sm:p-12">
             <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin mx-auto mb-4 text-[#00897B]" />
-            <p className="text-gray-500 text-sm sm:text-base">Loading vendor commissions...</p>
+            <p className="text-gray-500 text-sm sm:text-base">Loading category commissions...</p>
           </div>
         </Card>
       </div>
@@ -422,10 +423,10 @@ const VendorCommission = () => {
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl sm:text-3xl font-bold text-[#00897B] break-words">
-              Vendor Commission
+              Category Commission
             </h1>
             <p className="text-gray-500 mt-1 text-sm sm:text-base">
-              Global commission chart for all vendors
+              Default commission rates for each category
             </p>
           </div>
           {isAdmin && (
@@ -471,27 +472,21 @@ const VendorCommission = () => {
                     )}
                   </div>
 
-                  {/* Category, Vendor & Rates */}
+                  {/* Category & Rates */}
                   <div className="space-y-2">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-xs text-gray-500">Category</Label>
-                        <p className="text-sm font-medium mt-0.5">{commission.category}</p>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-gray-500">Vendor</Label>
-                        <p className="text-sm font-medium mt-0.5">{commission.vendor}</p>
-                      </div>
+                    <div>
+                      <Label className="text-xs text-gray-500">Category</Label>
+                      <p className="text-sm font-medium mt-0.5">{commission.category}</p>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-3 pt-2">
                       <div>
-                        <Label className="text-xs text-gray-500">Percentage</Label>
+                        <Label className="text-xs text-gray-500">Commission Rate</Label>
                         <p className="text-lg font-bold text-[#00897B] mt-0.5">
                           {commission.percentage}%
                         </p>
                       </div>
                       <div>
-                        <Label className="text-xs text-gray-500">Partial Percentage</Label>
+                        <Label className="text-xs text-gray-500">Partial Rate</Label>
                         <p className="text-base font-semibold text-gray-700 mt-0.5">
                           {commission.partialPercentage}%
                         </p>
@@ -510,12 +505,11 @@ const VendorCommission = () => {
                 <TableHeader>
                   <TableRow className="bg-[#00897B] border-b border-gray-200 hover:bg-[#00897B]">
                     <TableHead className="whitespace-nowrap min-w-[60px] font-semibold text-white hover:bg-[#00897B]">ID</TableHead>
-                    <TableHead className="whitespace-nowrap min-w-[200px] font-semibold text-white hover:bg-[#00897B]">Category</TableHead>
-                    <TableHead className="whitespace-nowrap min-w-[200px] font-semibold text-white hover:bg-[#00897B]">Vendor</TableHead>
-                    <TableHead className="text-right whitespace-nowrap min-w-[120px] font-semibold text-white hover:bg-[#00897B]">
+                    <TableHead className="whitespace-nowrap min-w-[250px] font-semibold text-white hover:bg-[#00897B]">Category</TableHead>
+                    <TableHead className="text-right whitespace-nowrap min-w-[150px] font-semibold text-white hover:bg-[#00897B]">
                       Commission Rate
                     </TableHead>
-                    <TableHead className="text-right whitespace-nowrap min-w-[120px] font-semibold text-white hover:bg-[#00897B]">
+                    <TableHead className="text-right whitespace-nowrap min-w-[150px] font-semibold text-white hover:bg-[#00897B]">
                       Partial Rate
                     </TableHead>
                     {isAdmin && (
@@ -530,7 +524,6 @@ const VendorCommission = () => {
                         #{commission.id}
                       </TableCell>
                       <TableCell className="whitespace-nowrap">{commission.category}</TableCell>
-                      <TableCell className="whitespace-nowrap">{commission.vendor}</TableCell>
                       <TableCell className="text-right font-semibold whitespace-nowrap text-[#00897B]">
                         {commission.percentage}%
                       </TableCell>
@@ -560,7 +553,7 @@ const VendorCommission = () => {
       ) : (
         <Card>
           <div className="text-center p-8 sm:p-12">
-            <p className="text-gray-500 text-sm sm:text-base">No vendor commissions found</p>
+            <p className="text-gray-500 text-sm sm:text-base">No category commissions found</p>
             {isAdmin && (
               <Button
                 onClick={() => {
@@ -582,9 +575,9 @@ const VendorCommission = () => {
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle className="text-[#00897B]">Add Vendor Commission</DialogTitle>
+            <DialogTitle className="text-[#00897B]">Add Category Commission</DialogTitle>
             <DialogDescription>
-              Add a new commission rate to the global chart for all vendors
+              Add a default commission rate for a category
             </DialogDescription>
           </DialogHeader>
 
@@ -747,9 +740,9 @@ const VendorCommission = () => {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle className="text-[#00897B]">Edit Vendor Commission</DialogTitle>
+            <DialogTitle className="text-[#00897B]">Edit Category Commission</DialogTitle>
             <DialogDescription>
-              Update the commission rate for this category
+              Update the default commission rate for this category
             </DialogDescription>
           </DialogHeader>
 
@@ -912,7 +905,7 @@ const VendorCommission = () => {
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Vendor Commission?</AlertDialogTitle>
+            <AlertDialogTitle>Delete Category Commission?</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete the commission for "{selectedCommission?.category}"?
               This action cannot be undone.
