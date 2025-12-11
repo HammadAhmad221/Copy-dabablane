@@ -227,57 +227,73 @@ const Orders: React.FC = () => {
     try {
       setIsLoading(true);
       
-      // Fetch all orders if filtering by customer (we'll filter client-side)
+      // Fetch all orders if filtering by customer or searching (we'll filter client-side)
+      const needsClientSideFiltering = currentFilters.customerId || currentFilters.search;
       const response = await orderApi.getOrders({
-        page: currentFilters.customerId ? 1 : currentFilters.page,
-        paginationSize: currentFilters.customerId ? 9999 : currentFilters.paginationSize,
-        search: currentFilters.search,
+        page: needsClientSideFiltering ? 1 : currentFilters.page,
+        paginationSize: needsClientSideFiltering ? 9999 : currentFilters.paginationSize,
+        search: '', // Don't send search to API, we'll filter client-side
         sortBy: currentFilters.sortBy,
         sortOrder: currentFilters.sortOrder,
       });
       
-      // Filter by customer if customer filter is set
+      // Filter by customer and/or search term
       let filteredOrders = response.data;
+      
+      // Filter by customer if customer filter is set
       if (currentFilters.customerId) {
-        filteredOrders = response.data.filter(order => 
+        filteredOrders = filteredOrders.filter(order => 
           order.customers_id === currentFilters.customerId
         );
-        
-        // Apply client-side pagination after filtering
-        const startIndex = (currentFilters.page - 1) * currentFilters.paginationSize;
-        const endIndex = startIndex + currentFilters.paginationSize;
-        filteredOrders = filteredOrders.slice(startIndex, endIndex);
       }
       
-      setOrders(filteredOrders);
+      // Filter by search term (search in customer name, email, blane name, city, address)
+      if (currentFilters.search && currentFilters.search.trim()) {
+        const searchLower = currentFilters.search.toLowerCase().trim();
+        filteredOrders = filteredOrders.filter(order => {
+          const customerName = findCustomerName(order.customers_id).toLowerCase();
+          const customerEmail = findCustomerEmail(order.customers_id).toLowerCase();
+          const blaneName = findBlaneName(order.blane_id).toLowerCase();
+          const customerCity = findCustomerCity(order.customers_id).toLowerCase();
+          const address = (order.delivery_address || '').toLowerCase();
+          
+          return customerName.includes(searchLower) ||
+                 customerEmail.includes(searchLower) ||
+                 blaneName.includes(searchLower) ||
+                 customerCity.includes(searchLower) ||
+                 address.includes(searchLower);
+        });
+      }
       
-      // Update pagination metadata
-      if (currentFilters.customerId) {
-        const totalFiltered = response.data.filter(order => 
-          order.customers_id === currentFilters.customerId
-        ).length;
-        setPagination(prev => ({
-          ...prev,
+      // Apply client-side pagination if needed
+      if (needsClientSideFiltering) {
+        const totalFiltered = filteredOrders.length;
+        const startIndex = (currentFilters.page - 1) * currentFilters.paginationSize;
+        const endIndex = startIndex + currentFilters.paginationSize;
+        const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+        
+        setOrders(paginatedOrders);
+        setPagination({
           currentPage: currentFilters.page,
           perPage: currentFilters.paginationSize,
           total: totalFiltered,
           lastPage: Math.max(1, Math.ceil(totalFiltered / currentFilters.paginationSize)),
-        }));
+        });
       } else {
-        setPagination(prev => ({
-          ...prev,
+        setOrders(filteredOrders);
+        setPagination({
           currentPage: response.meta.current_page,
-          perPage: response.meta.per_page,
+          perPage: currentFilters.paginationSize, // Use requested size, not API response
           total: response.meta.total,
           lastPage: response.meta.last_page,
-        }));
+        });
       }
     } catch (error) {
       toast.error('Failed to fetch orders');
     } finally {
       setIsLoading(false);
     }
-  }, [filters]);
+  }, [filters, customers, blanes]);
 
   useEffect(() => {
     fetchOrders();
@@ -658,7 +674,6 @@ const Orders: React.FC = () => {
       paginationSize: newPerPage
     };
     setFilters(newFilters);
-    setPagination(prev => ({ ...prev, perPage: newPerPage, currentPage: 1 }));
     fetchOrders(newFilters);
   }, [filters, fetchOrders]);
 
@@ -733,15 +748,15 @@ const Orders: React.FC = () => {
                 setSearchTerm(e.target.value);
                 handleSearch(e.target.value);
               }}
-              className="pl-10 w-full text-xs md:text-xs lg:text-base h-9 md:h-9 lg:h-10"
+              className="pl-10 w-full text-sm md:text-sm lg:text-base h-10 md:h-10 lg:h-11"
             />
             <Icon 
               icon="lucide:search" 
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" 
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4 md:h-5 md:w-5" 
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 gap-2 sm:gap-3 md:gap-3 lg:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
             <Select
               value={filters.customerId ? filters.customerId.toString() : "all"}
               onValueChange={(value) => {
@@ -754,7 +769,7 @@ const Orders: React.FC = () => {
                 fetchOrders(newFilters);
               }}
             >
-              <SelectTrigger className="h-9 md:h-9 lg:h-10 w-full bg-white text-xs md:text-xs lg:text-base">
+              <SelectTrigger className="h-10 md:h-10 lg:h-11 w-full bg-white text-sm md:text-sm lg:text-base">
                 <SelectValue placeholder="All Customers" />
               </SelectTrigger>
               <SelectContent>
@@ -768,10 +783,10 @@ const Orders: React.FC = () => {
             </Select>
 
             <Select
-              value={pagination.perPage.toString()}
+              value={filters.paginationSize.toString()}
               onValueChange={handlePaginationChange}
             >
-              <SelectTrigger className="h-9 md:h-9 lg:h-10 w-full bg-white text-xs md:text-xs lg:text-base">
+              <SelectTrigger className="h-10 md:h-10 lg:h-11 w-full bg-white text-sm md:text-sm lg:text-base">
                 <SelectValue placeholder="Éléments par page" />
               </SelectTrigger>
               <SelectContent>
@@ -786,22 +801,20 @@ const Orders: React.FC = () => {
         </div>
       </motion.div>
 
-      <div className="w-full overflow-x-auto -mx-0 sm:mx-0">
+      <div className="w-full overflow-x-auto">
         {/* Desktop/Tablet Table View */}
         <div className="hidden md:block">
-          <div className="overflow-x-auto">
-            <Table className="w-full md:min-w-[680px] lg:min-w-0">
-              <TableHeader>
-                <TableRow className="bg-gray-50">
-                  <TableHead className="w-[20%] md:w-[20%] lg:w-[15%] md:min-w-[130px] lg:min-w-[150px] text-xs md:text-xs lg:text-base px-1 md:px-2">Client</TableHead>
-                  <TableHead className="w-[30%] md:w-[30%] lg:w-[25%] md:min-w-[180px] lg:min-w-[200px] text-xs md:text-xs lg:text-base px-1 md:px-2">Détails</TableHead>
-                  <TableHead className="w-[15%] hidden lg:table-cell text-sm md:text-base">Blane</TableHead>
-                  <TableHead className="w-[15%] hidden lg:table-cell text-sm md:text-base">Prix-Qté</TableHead>
-                  <TableHead className="w-[15%] hidden lg:table-cell text-sm md:text-base">Localisation</TableHead>
-                  <TableHead className="w-[20%] md:w-[20%] lg:w-[10%] md:min-w-[100px] lg:w-[120px] text-xs md:text-xs lg:text-base px-1 md:px-2">Statut</TableHead>
-                  <TableHead className="w-[30%] md:w-[30%] lg:w-[5%] md:min-w-[120px] lg:w-[120px] text-right text-xs md:text-xs lg:text-base px-1 md:px-2">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
+          <Table className="w-full table-fixed">
+            <TableHeader>
+              <TableRow className="bg-gray-50">
+                <TableHead className="text-xs md:text-sm lg:text-base px-2 md:px-3 lg:px-4 w-[18%]">Client</TableHead>
+                <TableHead className="text-xs md:text-sm lg:text-base px-2 md:px-3 lg:px-4 w-[14%]">Blane</TableHead>
+                <TableHead className="text-xs md:text-sm lg:text-base px-2 md:px-3 lg:px-4 w-[14%]">Prix-Qté</TableHead>
+                <TableHead className="text-xs md:text-sm lg:text-base px-2 md:px-3 lg:px-4 w-[18%]">Localisation</TableHead>
+                <TableHead className="text-xs md:text-sm lg:text-base px-2 md:px-3 lg:px-4 w-[14%]">Statut</TableHead>
+                <TableHead className="text-right text-xs md:text-sm lg:text-base px-2 md:px-3 lg:px-4 w-[22%]">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
@@ -831,57 +844,46 @@ const Orders: React.FC = () => {
                 ) : (
                   orders.map((order) => (
                     <TableRow key={order.id} className="group hover:bg-gray-50">
-                      <TableCell className="p-1.5 md:p-2 lg:p-4">
-                        <div className="flex flex-col space-y-0.5 md:space-y-1">
-                          <div className="font-medium text-xs leading-tight truncate">
+                      <TableCell className="p-2 md:p-2.5 lg:p-3">
+                        <div className="flex flex-col space-y-0.5">
+                          <div className="font-medium text-xs md:text-sm lg:text-base truncate">
                             {findCustomerName(order.customers_id)}
                           </div>
-                          <div className="text-[10px] md:text-[10px] lg:text-xs text-gray-600 truncate leading-tight">
+                          <div className="text-[10px] md:text-xs lg:text-sm text-gray-600 truncate">
                             {findCustomerEmail(order.customers_id)}
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="p-1.5 md:p-2 lg:p-4">
-                        <div className="flex flex-col space-y-0.5 md:space-y-1">
-                          <div className="font-medium text-xs leading-tight truncate">
-                            {findBlaneName(order.blane_id)}
-                          </div>
-                          <div className="text-[10px] md:text-[10px] lg:text-xs text-gray-600 leading-tight">
-                            {order.quantity} × {blanes.find(b => b.id === order.blane_id)?.price_current || 0} DH
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell p-2 md:p-3 lg:p-4">
-                        <div className="text-xs md:text-sm lg:text-base">
+                      <TableCell className="p-2 md:p-2.5 lg:p-3">
+                        <div className="text-xs md:text-sm lg:text-base font-medium truncate">
                           {findBlaneName(order.blane_id)}
                         </div>
                       </TableCell>
-                      <TableCell className="hidden lg:table-cell p-2 md:p-3 lg:p-4">
-                        <div className="text-xs md:text-sm lg:text-base">
-                          {order.quantity} × {blanes.find(b => b.id === order.blane_id)?.price_current || 0} DH
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Total: {(blanes.find(b => b.id === order.blane_id)?.price_current || 0) * order.quantity} DH
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell p-2 md:p-3 lg:p-4">
-                        <div className="flex flex-col">
-                          <span className="font-medium text-xs md:text-sm">{findCustomerCity(order.customers_id)}</span>
-                          <span className="text-xs text-gray-500 truncate">{order.delivery_address}</span>
+                      <TableCell className="p-2 md:p-2.5 lg:p-3">
+                        <div className="flex flex-col space-y-0.5">
+                          <div className="text-xs md:text-sm lg:text-base truncate">
+                            {order.quantity} × {blanes.find(b => b.id === order.blane_id)?.price_current || 0} DH
+                          </div>
+                          <div className="text-[10px] md:text-xs lg:text-sm text-gray-500 font-medium truncate">
+                            Total: {(blanes.find(b => b.id === order.blane_id)?.price_current || 0) * order.quantity} DH
+                          </div>
                         </div>
                       </TableCell>
-                      <TableCell className="p-1.5 md:p-2 lg:p-4">
+                      <TableCell className="p-2 md:p-2.5 lg:p-3">
+                        <div className="flex flex-col space-y-0.5">
+                          <span className="font-medium text-xs md:text-sm lg:text-base truncate">{findCustomerCity(order.customers_id)}</span>
+                          <span className="text-[10px] md:text-xs lg:text-sm text-gray-500 truncate">{order.delivery_address}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="p-2 md:p-2.5 lg:p-3">
                         <Select
                           value={order.status}
                           onValueChange={(value: OrderType["status"]) => handleStatusChange(order.id, value)}
                         >
-                          <SelectTrigger className={cn(
-                            "w-full md:w-[100px] lg:w-[120px] h-6 md:h-7 text-[10px] md:text-[10px]",
-                            order.status === "confirmed" || order.status === "paid" ? "md:w-[110px] lg:w-[130px]" : "md:w-[90px] lg:w-[110px]"
-                          )}>
+                          <SelectTrigger className="w-full h-7 md:h-8 lg:h-9 text-[10px] md:text-xs lg:text-sm">
                             <SelectValue>
                               <Badge variant="secondary" className={cn(
-                                "text-[10px] md:text-[10px] px-1 py-0.5",
+                                "text-[10px] md:text-xs lg:text-sm px-1.5 md:px-2 py-0.5",
                                 getStatusStyle(order.status)
                               )}>
                                 {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
@@ -890,59 +892,59 @@ const Orders: React.FC = () => {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="pending">
-                              <Badge variant="secondary" className={cn("text-[10px] px-1 py-0.5", getStatusStyle("pending"))}>
+                              <Badge variant="secondary" className={cn("text-xs px-2 py-0.5", getStatusStyle("pending"))}>
                                 En attente
                               </Badge>
                             </SelectItem>
                             <SelectItem value="confirmed">
-                              <Badge variant="secondary" className={cn("text-[10px] px-1 py-0.5", getStatusStyle("confirmed"))}>
+                              <Badge variant="secondary" className={cn("text-xs px-2 py-0.5", getStatusStyle("confirmed"))}>
                                 Confirmé
                               </Badge>
                             </SelectItem>
                             <SelectItem value="shipped">
-                              <Badge variant="secondary" className={cn("text-[10px] px-1 py-0.5", getStatusStyle("shipped"))}>
+                              <Badge variant="secondary" className={cn("text-xs px-2 py-0.5", getStatusStyle("shipped"))}>
                                 Expédié
                               </Badge>
                             </SelectItem>
                             <SelectItem value="paid">
-                              <Badge variant="secondary" className={cn("text-[10px] px-1 py-0.5", getStatusStyle("paid"))}>
+                              <Badge variant="secondary" className={cn("text-xs px-2 py-0.5", getStatusStyle("paid"))}>
                                 Payé
                               </Badge>
                             </SelectItem>
                             <SelectItem value="cancelled">
-                              <Badge variant="secondary" className={cn("text-[10px] px-1 py-0.5", getStatusStyle("cancelled"))}>
+                              <Badge variant="secondary" className={cn("text-xs px-2 py-0.5", getStatusStyle("cancelled"))}>
                                 Annulé
                               </Badge>
                             </SelectItem>
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell className="text-right p-1.5 md:p-2 lg:p-4">
-                        <div className="flex items-center justify-end gap-0.5 md:gap-1">
+                      <TableCell className="text-right p-2 md:p-2.5 lg:p-3">
+                        <div className="flex items-center justify-end gap-1 md:gap-1.5 lg:gap-2">
                           <Button
                             variant="outline"
                             size="icon"
-                            className="h-6 w-6 md:h-7 md:w-7"
+                            className="h-7 w-7 md:h-8 md:w-8 lg:h-9 lg:w-9"
                             onClick={() => handleViewClick(order)}
                           >
-                            <EyeIcon className="h-3 w-3 md:h-3.5 md:w-3.5" />
+                            <EyeIcon className="h-3 w-3 md:h-3.5 md:w-3.5 lg:h-4 lg:w-4" />
                           </Button>
                           <Button
                             variant="outline"
                             size="icon"
-                            className="h-6 w-6 md:h-7 md:w-7"
+                            className="h-7 w-7 md:h-8 md:w-8 lg:h-9 lg:w-9"
                             onClick={() => handleEditOrder(order)}
                           >
-                            <PencilIcon className="h-3 w-3 md:h-3.5 md:w-3.5" />
+                            <PencilIcon className="h-3 w-3 md:h-3.5 md:w-3.5 lg:h-4 lg:w-4" />
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button 
                                 variant="destructive" 
                                 size="icon"
-                                className="h-6 w-6 md:h-7 md:w-7"
+                                className="h-7 w-7 md:h-8 md:w-8 lg:h-9 lg:w-9"
                               >
-                                <Trash2Icon className="h-3 w-3 md:h-3.5 md:w-3.5" />
+                                <Trash2Icon className="h-3 w-3 md:h-3.5 md:w-3.5 lg:h-4 lg:w-4" />
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent className="sm:max-w-[425px]">
@@ -969,7 +971,6 @@ const Orders: React.FC = () => {
                 )}
               </TableBody>
             </Table>
-          </div>
         </div>
 
         {/* Mobile Card View */}

@@ -1564,24 +1564,55 @@ const Reservations: React.FC = () => {
                       {errors.date && <p className="text-sm text-red-500">{errors.date}</p>}
                     </div>
 
-                    {/* Heure */}
+                    {/* Hour */}
                     <div className="space-y-2">
-                      <Label className="text-gray-700">Heure</Label>
-                      <Input
-                        type="time"
-                        value={formData.time}
-                        onChange={(e) => {
-                          const timeValue = e.target.value;
-                          // Assurez-vous que l'heure est au format HH:mm
-                          const formattedTime = timeValue.split(':')
-                            .map(part => part.padStart(2, '0'))
-                            .slice(0, 2)
-                            .join(':');
-                          setFormData({ ...formData, time: formattedTime });
-                        }}
-                        step="60" // Restreint aux heures et minutes uniquement
-                      />
+                      <Label className="text-gray-700">Hour</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Select
+                          value={formData.time.split(':')[0] || '00'}
+                          onValueChange={(value) => {
+                            const minutes = formData.time.split(':')[1] || '00';
+                            setFormData({ ...formData, time: `${value}:${minutes}` });
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Hour" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-[200px]">
+                            {Array.from({ length: 24 }, (_, i) => {
+                              const hour = i.toString().padStart(2, '0');
+                              return (
+                                <SelectItem key={hour} value={hour}>
+                                  {hour}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={formData.time.split(':')[1] || '00'}
+                          onValueChange={(value) => {
+                            const hours = formData.time.split(':')[0] || '00';
+                            setFormData({ ...formData, time: `${hours}:${value}` });
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Min" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-[200px]">
+                            {Array.from({ length: 60 }, (_, i) => {
+                              const minute = i.toString().padStart(2, '0');
+                              return (
+                                <SelectItem key={minute} value={minute}>
+                                  {minute}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
                       {errors.time && <p className="text-sm text-red-500">{errors.time}</p>}
+                      <p className="text-xs text-gray-500">Selected: {formData.time || '00:00'} (24-hour format)</p>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-gray-700">Quantité</Label>

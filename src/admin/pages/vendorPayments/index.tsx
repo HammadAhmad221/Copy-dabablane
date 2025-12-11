@@ -349,12 +349,12 @@ const VendorPaymentsIndex = () => {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 w-full max-w-full overflow-x-hidden">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-5 lg:p-6 xl:p-8 w-full max-w-full overflow-x-hidden">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:gap-4">
+      <div className="flex flex-col gap-3 sm:gap-4 lg:gap-5">
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-[#00897B] break-words">Vendor Payments</h1>
-          <p className="text-gray-500 mt-1 text-sm sm:text-base">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[#00897B] break-words">Vendor Payments</h1>
+          <p className="text-gray-500 mt-1 text-sm sm:text-base lg:text-lg">
             Manage and track vendor payment transactions
           </p>
           {(selectedVendor || selectedStatus || selectedPaymentType || startDate || endDate) && (
@@ -372,12 +372,12 @@ const VendorPaymentsIndex = () => {
         </div>
         
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row gap-2 lg:gap-3 w-full sm:w-auto">
           <Button
             variant="outline"
             onClick={handleExportExcel}
             disabled={isLoading}
-            className="w-full sm:w-auto"
+            className="w-full sm:w-auto lg:min-w-[140px] xl:min-w-[160px]"
             size={isMobile ? "default" : "default"}
           >
             <FileSpreadsheet className="h-4 w-4 mr-2" />
@@ -385,7 +385,7 @@ const VendorPaymentsIndex = () => {
           </Button>
           <Button
             onClick={() => navigate("/admin/vendor-payments/report")}
-            className="bg-[#00897B] hover:bg-[#00796B] w-full sm:w-auto"
+            className="bg-[#00897B] hover:bg-[#00796B] w-full sm:w-auto lg:min-w-[140px] xl:min-w-[160px]"
             size={isMobile ? "default" : "default"}
           >
             <Calendar className="h-4 w-4 mr-2" />
@@ -393,7 +393,7 @@ const VendorPaymentsIndex = () => {
           </Button>
           <Button
             onClick={() => navigate("/admin/vendor-payments/manual-transfer")}
-            className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
+            className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto lg:min-w-[140px] xl:min-w-[160px]"
             size={isMobile ? "default" : "default"}
           >
             <Download className="h-4 w-4 mr-2" />
@@ -403,10 +403,10 @@ const VendorPaymentsIndex = () => {
       </div>
 
       {/* Filters */}
-      <Card className="p-3 sm:p-4 w-full">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+      <Card className="p-3 sm:p-4 lg:p-5 w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
           <div className="space-y-2">
-            <Label className="text-sm">Select Vendor</Label>
+            <Label className="text-sm lg:text-base">Select Vendor</Label>
             <Select
               value={selectedVendor || "all"}
               onValueChange={(value) => {
@@ -453,7 +453,7 @@ const VendorPaymentsIndex = () => {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label className="text-sm">Start Date</Label>
+            <Label className="text-sm lg:text-base">Start Date</Label>
             <Input
               type="date"
               value={startDate}
@@ -462,7 +462,7 @@ const VendorPaymentsIndex = () => {
             />
           </div>
           <div className="space-y-2">
-            <Label className="text-sm">End Date</Label>
+            <Label className="text-sm lg:text-base">End Date</Label>
             <Input
               type="date"
               value={endDate}
@@ -471,7 +471,7 @@ const VendorPaymentsIndex = () => {
             />
           </div>
           <div className="space-y-2">
-            <Label className="text-sm">Payment Type</Label>
+            <Label className="text-sm lg:text-base">Payment Type</Label>
             <Select
               value={selectedPaymentType || "all-types"}
               onValueChange={(value) => setSelectedPaymentType(value === "all-types" ? null : value)}
@@ -487,7 +487,7 @@ const VendorPaymentsIndex = () => {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label className="text-sm">Status</Label>
+            <Label className="text-sm lg:text-base">Status</Label>
             <Select
               value={selectedStatus || "all-status"}
               onValueChange={(value) => setSelectedStatus(value === "all-status" ? null : value)}
@@ -611,62 +611,63 @@ const VendorPaymentsIndex = () => {
               /* Desktop Table View */
               <Card className="w-full overflow-hidden">
                 <div className="overflow-x-auto w-full">
+                  <div className="min-w-[900px]">
                   <Table className="w-full">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="whitespace-nowrap">ID</TableHead>
-                        <TableHead className="whitespace-nowrap">Vendor</TableHead>
-                        <TableHead className="whitespace-nowrap">Period</TableHead>
-                        <TableHead className="text-right whitespace-nowrap">Amount</TableHead>
-                        <TableHead className="text-right whitespace-nowrap">Commission</TableHead>
-                        <TableHead className="text-right whitespace-nowrap">Net Amount</TableHead>
-                        <TableHead className="whitespace-nowrap">Type</TableHead>
-                        <TableHead className="whitespace-nowrap">Status</TableHead>
-                        <TableHead className="whitespace-nowrap">Date</TableHead>
-                        <TableHead className="whitespace-nowrap">Actions</TableHead>
+                        <TableHead className="whitespace-nowrap text-xs lg:text-sm">ID</TableHead>
+                        <TableHead className="whitespace-nowrap text-xs lg:text-sm">Vendor</TableHead>
+                        <TableHead className="whitespace-nowrap text-xs lg:text-sm">Period</TableHead>
+                        <TableHead className="text-right whitespace-nowrap text-xs lg:text-sm">Amount</TableHead>
+                        <TableHead className="text-right whitespace-nowrap text-xs lg:text-sm">Commission</TableHead>
+                        <TableHead className="text-right whitespace-nowrap text-xs lg:text-sm">Net Amount</TableHead>
+                        <TableHead className="whitespace-nowrap text-xs lg:text-sm">Type</TableHead>
+                        <TableHead className="whitespace-nowrap text-xs lg:text-sm">Status</TableHead>
+                        <TableHead className="whitespace-nowrap text-xs lg:text-sm">Date</TableHead>
+                        <TableHead className="whitespace-nowrap text-xs lg:text-sm">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {payments.map((payment) => (
                         <TableRow key={payment.id}>
-                          <TableCell className="font-mono text-sm whitespace-nowrap">#{payment.id}</TableCell>
+                          <TableCell className="font-mono text-xs lg:text-sm whitespace-nowrap">#{payment.id}</TableCell>
                           <TableCell className="whitespace-nowrap">
-                            <div className="font-medium">{payment.vendor_company}</div>
+                            <div className="font-medium text-xs lg:text-sm">{payment.vendor_company}</div>
                           </TableCell>
-                          <TableCell className="whitespace-nowrap">
+                          <TableCell className="whitespace-nowrap text-xs lg:text-sm">
                             {payment.booking_date 
-                              ? format(new Date(payment.booking_date), 'MMMM dd, yyyy')
+                              ? format(new Date(payment.booking_date), 'MMM dd, yyyy')
                               : 'N/A'}
                           </TableCell>
-                          <TableCell className="text-right whitespace-nowrap">
+                          <TableCell className="text-right whitespace-nowrap text-xs lg:text-sm">
                             {(() => {
                               const amount = (payment as any).total_amount_ttc || payment.total_amount || 0;
                               return Number(amount).toFixed(2);
                             })()}DH
                           </TableCell>
-                          <TableCell className="text-right whitespace-nowrap">
+                          <TableCell className="text-right whitespace-nowrap text-xs lg:text-sm">
                             {(() => {
                               const amount = (payment as any).commission_amount_incl_vat || (payment as any).commission_amount_ttc || payment.commission_amount || 0;
                               return Number(amount).toFixed(2);
                             })()}DH
                           </TableCell>
-                          <TableCell className="text-right font-semibold whitespace-nowrap">
+                          <TableCell className="text-right font-semibold whitespace-nowrap text-xs lg:text-sm">
                             {(() => {
                               const amount = (payment as any).net_amount_ttc || payment.net_amount || 0;
                               return Number(amount).toFixed(2);
                             })()}DH
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
-                            <Badge variant="outline">
+                            <Badge variant="outline" className="text-xs">
                               {payment.payment_type || 'N/A'}
                             </Badge>
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
-                            <Badge className={getStatusBadgeColor(payment.transfer_status)}>
+                            <Badge className={`${getStatusBadgeColor(payment.transfer_status)} text-xs`}>
                               {payment.transfer_status}
                             </Badge>
                           </TableCell>
-                          <TableCell className="whitespace-nowrap">
+                          <TableCell className="whitespace-nowrap text-xs lg:text-sm">
                             {payment.transfer_date 
                               ? format(new Date(payment.transfer_date), 'MMM dd, yyyy') 
                               : 'Pending'}
@@ -684,6 +685,7 @@ const VendorPaymentsIndex = () => {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 </div>
 
                 {/* Pagination */}

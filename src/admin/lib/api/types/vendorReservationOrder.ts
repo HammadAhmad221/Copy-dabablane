@@ -106,6 +106,7 @@ export interface VendorReservationOrderResponse {
   past_orders?: ReservationOrderItem[];
   current_orders?: ReservationOrderItem[];
   future_orders?: ReservationOrderItem[];
+  orders?: ReservationOrderItem[]; // All orders in a single array (not split by time period)
   all_items?: ReservationOrderItem[];
 }
 
