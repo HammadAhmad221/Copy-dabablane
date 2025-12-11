@@ -45,10 +45,8 @@ export function BlaneViewDialog({
   };
 
   const formatCurrency = (amount: number): string => {
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(amount);
+    // Format as number with 2 decimals and append DH
+    return `${amount.toFixed(2)}DH`;
   };
 
   const copyToClipboard = () => {
@@ -118,10 +116,6 @@ export function BlaneViewDialog({
               </Badge>
             </div>
           </DialogHeader>
-          <DialogClose className="h-8 w-8 rounded-full bg-gray-100 opacity-70 hover:opacity-100 flex items-center justify-center transition-all hover:bg-gray-200 ml-2">
-            <Icon icon="lucide:x" className="h-4 w-4 text-gray-600" />
-            <span className="sr-only">Close</span>
-          </DialogClose>
         </div>
 
         {/* Content Section - Scrollable with min-h-0 */}

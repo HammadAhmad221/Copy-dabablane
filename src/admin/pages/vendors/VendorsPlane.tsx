@@ -20,6 +20,7 @@ import {
 import { vendorPlanActivationService } from '@/admin/lib/api/vendor-plan-activation';
 import type { VendorListItem, VendorSubscriptionItem } from '@/admin/lib/api/vendor-plan-activation';
 import { userApi } from '@/admin/lib/api/services/userService';
+import { promoCodeApi, type PromoCodeApiItem } from '@/admin/lib/api/services/promoCodeService';
 
 interface FormData extends Omit<VendorPlan, 'id' | 'created_at' | 'updated_at'> {}
 
@@ -56,6 +57,7 @@ const VendorsPlane = () => {
     const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
     const [selectedSubscription, setSelectedSubscription] = useState<VendorSubscriptionItem | null>(null);
     const [selectedAddOns, setSelectedAddOns] = useState<{ addOnId: number; quantity: number }[]>([]);
+    const [promoCodes, setPromoCodes] = useState<PromoCodeApiItem[]>([]);
     const [manualForm, setManualForm] = useState<{ user_id: number | '';
         plan_id: number | '';
         add_ons: { id: number; quantity: number }[];
@@ -66,6 +68,8 @@ const VendorsPlane = () => {
 
     // Pending optimistic subscriptions persisted across refresh
     const PENDING_KEY = 'pending_vendor_subscriptions';
+    const PROMO_CODES_KEY = 'vendor_subscription_promo_codes';
+    
     const readPendingSubs = (): VendorSubscriptionItem[] => {
         try {
             const raw = localStorage.getItem(PENDING_KEY);
@@ -78,6 +82,28 @@ const VendorsPlane = () => {
     };
     const writePendingSubs = (items: VendorSubscriptionItem[]) => {
         try { localStorage.setItem(PENDING_KEY, JSON.stringify(items || [])); } catch {}
+    };
+    
+    // Promo codes storage: { subscriptionId: promoCode }
+    const readPromoCodes = (): Record<number, string> => {
+        try {
+            const raw = localStorage.getItem(PROMO_CODES_KEY);
+            if (!raw) return {};
+            return JSON.parse(raw);
+        } catch {
+            return {};
+        }
+    };
+    const savePromoCode = (subscriptionId: number, promoCode: string | null) => {
+        try {
+            const codes = readPromoCodes();
+            if (promoCode) {
+                codes[subscriptionId] = promoCode;
+            } else {
+                delete codes[subscriptionId];
+            }
+            localStorage.setItem(PROMO_CODES_KEY, JSON.stringify(codes));
+        } catch {}
     };
 
     // Fetch user names for given user IDs
@@ -105,6 +131,17 @@ const VendorsPlane = () => {
         const loadVendorsData = async () => {
             try {
                 setLoading(true);
+                
+                // Fetch promo codes separately with error handling
+                let promoCodesRes: any = { data: [] };
+                try {
+                    console.log('🎫 Fetching promo codes...');
+                    promoCodesRes = await promoCodeApi.getAll();
+                    console.log('🎫 Promo codes response:', promoCodesRes);
+                } catch (promoError) {
+                    console.error('❌ Failed to fetch promo codes:', promoError);
+                }
+                
                 const [vendorsRes, subsRes, plansRes] = await Promise.all([
                     vendorPlanActivationService.getAllVendors(),
                     vendorPlanActivationService.getAllVendorsSubscription(),
@@ -173,6 +210,13 @@ const VendorsPlane = () => {
                     original_price_ht: typeof p.original_price_ht === 'string' ? Number(p.original_price_ht) : p.original_price_ht,
                 });
                 setVendors(Array.isArray(plansRes?.data) ? plansRes.data.map(normalize) : []);
+                
+                // Set promo codes - filter only active ones
+                const promoCodesData = (promoCodesRes as any)?.data || [];
+                const activePromoCodes = Array.isArray(promoCodesData) 
+                    ? promoCodesData.filter((pc: PromoCodeApiItem) => pc.is_active === true || pc.is_active === 1)
+                    : [];
+                setPromoCodes(activePromoCodes);
                 
                 // Fetch user names for all subscriptions
                 const userIds = (merged as any[]).map((s: any) => s.user_id).filter(Boolean);
@@ -297,8 +341,10 @@ const VendorsPlane = () => {
                         status: (activationRes as any)?.data?.subscription?.status || 'active',
                         created_at: (activationRes as any)?.data?.subscription?.created_at || (activationRes as any)?.data?.created_at || new Date().toISOString(),
                         updated_at: (activationRes as any)?.data?.subscription?.updated_at || (activationRes as any)?.data?.updated_at || new Date().toISOString(),
+                        promo_code: manualForm.promo_code,
                         raw: {
                             created_at: (activationRes as any)?.data?.subscription?.created_at || (activationRes as any)?.data?.created_at || new Date().toISOString(),
+                            promo_code: manualForm.promo_code,
                             add_ons: selectedAddOns.map(item => ({
                                 id: item.addOnId,
                                 quantity: item.quantity
@@ -309,6 +355,16 @@ const VendorsPlane = () => {
                         const base = Array.isArray(prev) ? prev : [];
                         return [newSub, ...base];
                     });
+                    // Save promo code to localStorage
+                    console.log('💾 Saving promo code:', {
+                        subscriptionId: newSub.id,
+                        promoCode: manualForm.promo_code,
+                        willSave: !!(manualForm.promo_code && newSub.id)
+                    });
+                    if (manualForm.promo_code && newSub.id) {
+                        savePromoCode(newSub.id, manualForm.promo_code);
+                        console.log('💾 Promo code saved! Verify:', readPromoCodes());
+                    }
                     // Remove from pending (if it exists) since activation succeeded
                     const pendingAfter = readPendingSubs().filter((p: any) => `${p.user_id}-${p.plan_id}` !== `${newSub.user_id}-${newSub.plan_id}`);
                     writePendingSubs(pendingAfter);
@@ -329,8 +385,10 @@ const VendorsPlane = () => {
                             status: planActive !== undefined ? (planActive ? 'active' : 'inactive') : 'pending',
                             created_at: new Date().toISOString(),
                             updated_at: new Date().toISOString(),
+                            promo_code: manualForm.promo_code,
                             raw: {
                                 created_at: new Date().toISOString(),
+                                promo_code: manualForm.promo_code,
                                 add_ons: selectedAddOns.map(item => ({
                                     id: item.addOnId,
                                     quantity: item.quantity
@@ -342,6 +400,15 @@ const VendorsPlane = () => {
                             const base = Array.isArray(prev) ? prev : [];
                             return [optimistic, ...base];
                         });
+                        // Save promo code to localStorage
+                        console.log('💾 Saving promo code (optimistic path):', {
+                            subscriptionId: optimistic.id,
+                            promoCode: manualForm.promo_code
+                        });
+                        if (manualForm.promo_code && optimistic.id) {
+                            savePromoCode(optimistic.id, manualForm.promo_code);
+                            console.log('💾 Promo code saved! Verify:', readPromoCodes());
+                        }
                         const existing = readPendingSubs();
                         const updated = [optimistic, ...(Array.isArray(existing) ? existing : [])];
                         writePendingSubs(updated);
@@ -360,8 +427,10 @@ const VendorsPlane = () => {
                     status: planActive !== undefined ? (planActive ? 'active' : 'inactive') : 'pending',
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString(),
+                    promo_code: manualForm.promo_code,
                     raw: {
                         created_at: new Date().toISOString(),
+                        promo_code: manualForm.promo_code,
                         add_ons: selectedAddOns.map(item => ({
                             id: item.addOnId,
                             quantity: item.quantity
@@ -372,6 +441,15 @@ const VendorsPlane = () => {
                     const base = Array.isArray(prev) ? prev : [];
                     return [newSub, ...base];
                 });
+                // Save promo code to localStorage
+                console.log('💾 Saving promo code (no purchase ID path):', {
+                    subscriptionId: newSub.id,
+                    promoCode: manualForm.promo_code
+                });
+                if (manualForm.promo_code && newSub.id) {
+                    savePromoCode(newSub.id, manualForm.promo_code);
+                    console.log('💾 Promo code saved! Verify:', readPromoCodes());
+                }
                 // Persist optimistic item so it stays after refresh until server returns it
                 const existing = readPendingSubs();
                 const updated = [newSub, ...(Array.isArray(existing) ? existing : [])];
@@ -494,18 +572,36 @@ const VendorsPlane = () => {
 
     const addAddOn = (addOnId: number) => {
         if (!selectedAddOns.find(item => item.addOnId === addOnId)) {
-            setSelectedAddOns([...selectedAddOns, { addOnId, quantity: 1 }]);
+            const newAddOns = [...selectedAddOns, { addOnId, quantity: 1 }];
+            setSelectedAddOns(newAddOns);
+            // Sync to manualForm
+            setManualForm(prev => ({
+                ...prev,
+                add_ons: newAddOns.map(ao => ({ id: ao.addOnId, quantity: ao.quantity }))
+            }));
         }
     };
 
     const removeAddOn = (addOnId: number) => {
-        setSelectedAddOns(selectedAddOns.filter(item => item.addOnId !== addOnId));
+        const newAddOns = selectedAddOns.filter(item => item.addOnId !== addOnId);
+        setSelectedAddOns(newAddOns);
+        // Sync to manualForm
+        setManualForm(prev => ({
+            ...prev,
+            add_ons: newAddOns.map(ao => ({ id: ao.addOnId, quantity: ao.quantity }))
+        }));
     };
 
     const updateAddOnQuantity = (addOnId: number, quantity: number) => {
-        setSelectedAddOns(selectedAddOns.map(item =>
+        const newAddOns = selectedAddOns.map(item =>
             item.addOnId === addOnId ? { ...item, quantity: Math.max(1, quantity) } : item
-        ));
+        );
+        setSelectedAddOns(newAddOns);
+        // Sync to manualForm
+        setManualForm(prev => ({
+            ...prev,
+            add_ons: newAddOns.map(ao => ({ id: ao.addOnId, quantity: ao.quantity }))
+        }));
     };
 
     const renderStatusBadge = (rawVal: any) => {
@@ -536,12 +632,13 @@ const VendorsPlane = () => {
                     </div>
                 </div>
                 
-                <div className="p-4 sm:p-6">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-lg font-semibold">Manage Plans</h3>
+                <div className="p-3 sm:p-4 md:p-6">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                        <h3 className="text-base sm:text-lg font-semibold">Manage Plans</h3>
                         <Button 
                             onClick={() => openManualActivation()}
-                            className="bg-[#00897B] hover:bg-[#00796B]"
+                            className="bg-[#00897B] hover:bg-[#00796B] w-full sm:w-auto"
+                            size="default"
                         >
                             <Plus className="mr-2 h-4 w-4" /> Manual Activation
                         </Button>
@@ -553,7 +650,7 @@ const VendorsPlane = () => {
 
                     <>
                             {/* Desktop Table */}
-                            <div className="hidden md:block rounded-md border overflow-x-auto">
+                            <div className="hidden lg:block rounded-md border overflow-x-auto">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
@@ -598,8 +695,8 @@ const VendorsPlane = () => {
                                 </Table>
                             </div>
 
-                            {/* Mobile Cards */}
-                            <div className="md:hidden space-y-3">
+                            {/* Mobile & Tablet Cards */}
+                            <div className="lg:hidden space-y-3">
                                 {vendors.map((vendor) => (
                                     <Card key={vendor.id} className="p-4">
                                         <div className="space-y-3">
@@ -635,43 +732,15 @@ const VendorsPlane = () => {
                                 ))}
                             </div>
 
-                            <div className="mt-6 sm:mt-8 grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                                <Card className="p-3 sm:p-4">
-                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 mb-3 sm:mb-4">
-                                        <h4 className="font-semibold text-sm sm:text-base">Vendors</h4>
-                                        <span className="text-xs text-gray-500">Total: {safeVendorList.length}</span>
-                                    </div>
-                                    <div className="rounded-md border overflow-x-auto">
-                                        <Table className="text-xs sm:text-sm">
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead className="min-w-[150px] sm:min-w-auto">Name</TableHead>
-                                                    <TableHead className="min-w-[200px] sm:min-w-auto">Email</TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {(safeVendorList).map((v) => (
-                                                    <TableRow key={v.id}>
-                                                        <TableCell className="whitespace-nowrap sm:whitespace-normal">{(v as any).name ?? '-'}</TableCell>
-                                                        <TableCell className="whitespace-nowrap sm:whitespace-normal">{(v as any).email ?? '-'}</TableCell>
-                                                    </TableRow>
-                                                ))}
-                                                {safeVendorList.length === 0 ? (
-                                                    <TableRow>
-                                                        <TableCell colSpan={2} className="text-center text-xs sm:text-sm text-gray-500 py-3 sm:py-4">No vendors found</TableCell>
-                                                    </TableRow>
-                                                ) : null}
-                                            </TableBody>
-                                        </Table>
-                                    </div>
-                                </Card>
-
+                            <div className="mt-6 sm:mt-8">
                                 <Card className="p-3 sm:p-4">
                                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 mb-3 sm:mb-4">
                                         <h4 className="font-semibold text-sm sm:text-base">Vendor Subscriptions</h4>
                                         <span className="text-xs text-gray-500">Total: {safeVendorSubscriptions.length}</span>
                                     </div>
-                                    <div className="rounded-md border overflow-x-auto">
+                                    
+                                    {/* Desktop Table */}
+                                    <div className="hidden lg:block rounded-md border overflow-x-auto">
                                         <Table className="text-xs sm:text-sm">
                                             <TableHeader>
                                                 <TableRow>
@@ -727,6 +796,70 @@ const VendorsPlane = () => {
                                                 ) : null}
                                             </TableBody>
                                         </Table>
+                                    </div>
+                                    
+                                    {/* Mobile & Tablet Cards */}
+                                    <div className="lg:hidden space-y-3">
+                                        {safeVendorSubscriptions.length === 0 ? (
+                                            <div className="text-center text-xs sm:text-sm text-gray-500 py-6">
+                                                No subscriptions found
+                                            </div>
+                                        ) : (
+                                            safeVendorSubscriptions.map((s) => {
+                                                const sr = s as any;
+                                                const subId = sr.id ?? sr.raw?.subscription?.id ?? sr.raw?.id ?? sr.raw?.subscription_id;
+                                                const userId = sr.user_id ?? sr.raw?.user_id ?? sr.raw?.user?.id ?? sr.raw?.vendor_id ?? sr.raw?.vendorId;
+                                                const planId = sr.plan_id ?? sr.raw?.plan_id ?? sr.raw?.plan?.id;
+                                                let status = sr.status ?? sr.raw?.status ?? sr.raw?.subscription?.status;
+                                                if (!status || status === '-' || status === '0' || status === 0) {
+                                                    const planObj = Array.isArray(vendors) ? vendors.find(p => Number(p.id) === Number(planId)) : undefined;
+                                                    const planActive = planObj ? normalizeBool((planObj as any).is_active) : undefined;
+                                                    if (planActive !== undefined) {
+                                                        status = planActive ? 'active' : 'inactive';
+                                                    }
+                                                }
+                                                const userName = userNames[userId] || `Loading...`;
+                                                
+                                                return (
+                                                    <Card key={String(subId)} className="p-3 border-l-4 border-l-[#00897B]">
+                                                        <div className="space-y-2">
+                                                            <div className="flex justify-between items-start gap-2">
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-xs text-gray-500">Subscription ID</p>
+                                                                    <p className="text-sm font-semibold truncate">{String(subId ?? '')}</p>
+                                                                </div>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() => {
+                                                                        setSelectedSubscription(s);
+                                                                        setIsViewDialogOpen(true);
+                                                                    }}
+                                                                    className="h-8 w-8 p-0 flex-shrink-0"
+                                                                    title="View details"
+                                                                >
+                                                                    <Eye className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-xs text-gray-500">User Name</p>
+                                                                <p className="text-sm font-medium">{userName}</p>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                <div>
+                                                                    <p className="text-xs text-gray-500">Plan ID</p>
+                                                                    <p className="text-sm">{String(planId ?? '')}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-xs text-gray-500">Status</p>
+                                                                    <div className="mt-1">{renderStatusBadge(status)}</div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </Card>
+                                                );
+                                            })
+                                        )}
                                     </div>
                                 </Card>
                             </div>
@@ -1012,13 +1145,105 @@ const VendorsPlane = () => {
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="manual_promo" className="text-sm sm:text-base">Promo Code</Label>
-                                <Input
-                                    id="manual_promo"
-                                    value={manualForm.promo_code ?? ''}
-                                    onChange={(e) => handleManualFormChange('promo_code', e.target.value || null)}
-                                    className="text-sm sm:text-base"
-                                />
+                                <Select
+                                    value={manualForm.promo_code ?? 'none'}
+                                    onValueChange={(value) => handleManualFormChange('promo_code', value === 'none' ? null : value)}
+                                >
+                                    <SelectTrigger className="text-sm sm:text-base">
+                                        <SelectValue placeholder="Select promo code (optional)" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">None</SelectItem>
+                                        {promoCodes.map((promo) => (
+                                            <SelectItem key={promo.id} value={promo.code}>
+                                                {promo.code} ({promo.discount_percentage}% off)
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
+                            
+                            {/* Price Summary */}
+                            {manualForm.plan_id && (
+                                <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+                                    <h4 className="font-semibold text-sm sm:text-base mb-3">Price Summary</h4>
+                                    {(() => {
+                                        const selectedPlan = vendors.find(v => v.id === manualForm.plan_id);
+                                        const planPrice = Number(selectedPlan?.price_ht || 0);
+                                        
+                                        console.log('💰 Price calculation:', {
+                                            planPrice,
+                                            addOnsInForm: manualForm.add_ons,
+                                            availableAddOns: addOns
+                                        });
+                                        
+                                        // Calculate add-ons with details
+                                        const addOnDetails = manualForm.add_ons.map(ao => {
+                                            const addOn = addOns.find(a => a.id === ao.id);
+                                            const addOnPrice = Number((addOn as any)?.price || (addOn as any)?.price_ht || 0);
+                                            const total = addOnPrice * ao.quantity;
+                                            console.log('💰 Add-on:', {
+                                                id: ao.id,
+                                                name: (addOn as any)?.name,
+                                                price: addOnPrice,
+                                                quantity: ao.quantity,
+                                                total
+                                            });
+                                            return {
+                                                name: (addOn as any)?.name || `Add-on #${ao.id}`,
+                                                price: addOnPrice,
+                                                quantity: ao.quantity,
+                                                total
+                                            };
+                                        });
+                                        
+                                        const addOnsTotal = addOnDetails.reduce((sum, ao) => sum + ao.total, 0);
+                                        const subtotal = planPrice + addOnsTotal;
+                                        
+                                        const selectedPromo = promoCodes.find(pc => pc.code === manualForm.promo_code);
+                                        const discountPercent = selectedPromo?.discount_percentage || 0;
+                                        const discountAmount = (subtotal * discountPercent) / 100;
+                                        const finalPrice = subtotal - discountAmount;
+                                        
+                                        return (
+                                            <>
+                                                <div className="flex justify-between text-sm">
+                                                    <span className="text-gray-600">Plan:</span>
+                                                    <span className="font-medium">{planPrice.toFixed(2)} DH</span>
+                                                </div>
+                                                {addOnDetails.length > 0 && addOnDetails.map((ao, idx) => (
+                                                    <div key={idx} className="flex justify-between text-sm pl-4">
+                                                        <span className="text-gray-600">
+                                                            {ao.name} (x{ao.quantity}):
+                                                        </span>
+                                                        <span className="font-medium">{ao.total.toFixed(2)} DH</span>
+                                                    </div>
+                                                ))}
+                                                {addOnsTotal > 0 && (
+                                                    <div className="flex justify-between text-sm font-medium">
+                                                        <span className="text-gray-700">Add-ons Total:</span>
+                                                        <span>{addOnsTotal.toFixed(2)} DH</span>
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-between text-sm pt-2 border-t">
+                                                    <span className="text-gray-600">Subtotal:</span>
+                                                    <span className="font-medium">{subtotal.toFixed(2)} DH</span>
+                                                </div>
+                                                {discountPercent > 0 && (
+                                                    <div className="flex justify-between text-sm text-green-600">
+                                                        <span>Discount ({discountPercent}%):</span>
+                                                        <span className="font-medium">-{discountAmount.toFixed(2)} DH</span>
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-between text-base font-bold pt-2 border-t">
+                                                    <span>Total:</span>
+                                                    <span className="text-[#00897B]">{finalPrice.toFixed(2)} DH</span>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            )}
                         </form>
                     </div>
                     <DialogFooter className="p-4 sm:p-6 border-t bg-gray-50 flex-shrink-0 gap-2 sm:gap-3 flex-col-reverse sm:flex-row">
@@ -1226,10 +1451,97 @@ const VendorsPlane = () => {
                                                     {addOnsToDisplay.reduce((sum: number, addOn: any) => {
                                                         const addOnData = addOns.find(ao => ao.id === (addOn.id || addOn.addOnId));
                                                         return sum + (Number(addOnData?.price_ht || 0) * (addOn.quantity || 1));
-                                                    }, 0).toFixed(2)}
+                                                    }, 0).toFixed(2)} DH
                                                 </p>
                                             </div>
                                         </div>
+                                        
+                                        {/* Price Summary */}
+                                        {(() => {
+                                            const planData = vendors.find(v => v.id === selectedSubscription?.plan_id);
+                                            const planPrice = Number(planData?.price_ht || 0);
+                                            const addOnsTotal = addOnsToDisplay.reduce((sum: number, addOn: any) => {
+                                                const addOnData = addOns.find(ao => ao.id === (addOn.id || addOn.addOnId));
+                                                return sum + (Number(addOnData?.price_ht || 0) * (addOn.quantity || 1));
+                                            }, 0);
+                                            const subtotal = planPrice + addOnsTotal;
+                                            
+                                            // Check if there's a promo code applied
+                                            const savedPromoCodes = readPromoCodes();
+                                            console.log('🎫 All saved promo codes:', savedPromoCodes);
+                                            console.log('🎫 Subscription ID:', selectedSubscription?.id);
+                                            const promoCodeFromStorage = selectedSubscription?.id ? savedPromoCodes[selectedSubscription.id] : null;
+                                            const promoCodeFromRaw = (selectedSubscription as any)?.raw?.promo_code;
+                                            const promoCodeDirect = (selectedSubscription as any)?.promo_code;
+                                            console.log('🎫 Promo code sources:', {
+                                                fromRaw: promoCodeFromRaw,
+                                                fromDirect: promoCodeDirect,
+                                                fromStorage: promoCodeFromStorage
+                                            });
+                                            const promoCode = promoCodeFromRaw || promoCodeDirect || promoCodeFromStorage;
+                                            console.log('🎫 Final promo code:', promoCode);
+                                            const selectedPromo = promoCode ? promoCodes.find(pc => pc.code === promoCode) : null;
+                                            console.log('🎫 Matched promo:', selectedPromo);
+                                            const discountPercent = selectedPromo?.discount_percentage || 0;
+                                            const discountAmount = (subtotal * discountPercent) / 100;
+                                            const finalPrice = subtotal - discountAmount;
+                                            
+                                            return (
+                                                <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-3 sm:p-4 mt-3 sm:mt-4 space-y-2">
+                                                    <h4 className="font-semibold text-sm sm:text-base mb-3 text-gray-900">Price Summary</h4>
+                                                    <div className="flex justify-between text-sm">
+                                                        <span className="text-gray-600">Plan Price:</span>
+                                                        <span className="font-medium">{planPrice.toFixed(2)} DH</span>
+                                                    </div>
+                                                    {addOnsTotal > 0 && (
+                                                        <div className="flex justify-between text-sm">
+                                                            <span className="text-gray-600">Add-ons Total:</span>
+                                                            <span className="font-medium">{addOnsTotal.toFixed(2)} DH</span>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex justify-between text-sm pt-2 border-t">
+                                                        <span className="text-gray-600">Subtotal:</span>
+                                                        <span className="font-medium">{subtotal.toFixed(2)} DH</span>
+                                                    </div>
+                                                    
+                                                    {/* Promo Code Section */}
+                                                    {promoCode ? (
+                                                        <div className="bg-green-50 border border-green-200 rounded-lg p-2 sm:p-3 mt-2">
+                                                            <div className="flex items-center justify-between mb-2">
+                                                                <span className="text-xs sm:text-sm font-semibold text-green-800">Promo Code Applied</span>
+                                                                <span className="text-xs sm:text-sm font-bold text-green-600 bg-green-100 px-2 py-1 rounded">
+                                                                    {promoCode}
+                                                                </span>
+                                                            </div>
+                                                            {selectedPromo && (
+                                                                <>
+                                                                    <div className="flex justify-between text-xs sm:text-sm text-green-700 mt-1">
+                                                                        <span>Discount:</span>
+                                                                        <span className="font-medium">{discountPercent}% off</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between text-xs sm:text-sm text-green-700 font-semibold mt-1">
+                                                                        <span>Discount Amount:</span>
+                                                                        <span>-{discountAmount.toFixed(2)} DH</span>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="bg-gray-100 border border-gray-200 rounded-lg p-2 sm:p-3 mt-2">
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="text-xs sm:text-sm text-gray-600">Promo Code:</span>
+                                                                <span className="text-xs sm:text-sm text-gray-500 italic">Not Applied</span>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    
+                                                    <div className="flex justify-between text-base font-bold pt-2 border-t mt-2">
+                                                        <span>Total Price:</span>
+                                                        <span className="text-[#00897B]">{finalPrice.toFixed(2)} DH</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 ) : (
                                     <div className="border-t pt-4 sm:pt-5">

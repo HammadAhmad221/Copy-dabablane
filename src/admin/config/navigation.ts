@@ -177,7 +177,7 @@ export const adminNavItems = [
       },
       {
         id: "vendor-commission",
-        title: "Vendor Commission",
+        title: "Category Commission",
         path: "/admin/commission/vendor-commission",
       },
       {
