@@ -204,6 +204,17 @@ const VendorDashboard = () => {
       const data = await getVendorAnalytics(params);
       console.log("Vendor Analytics Data:", data);
       console.log("Vendor Analytics Params:", params);
+      console.log("📊 FULL API RESPONSE - Check all analytics items:");
+      data.forEach((item, index) => {
+        console.log(`  [${index}] ${item.name}:`, {
+          value: item.value,
+          valueType: typeof item.value,
+          change: item.change,
+          icon: item.icon,
+          details: item.details,
+          fullItem: item
+        });
+      });
       
       // Log change values for debugging
       if (Array.isArray(data) && data.length > 0) {
@@ -214,6 +225,22 @@ const VendorDashboard = () => {
           isNull: item.change === null,
           isUndefined: item.change === undefined
         })));
+        
+        // Log Total Revenue specifically
+        const revenueItem = data.find(item => item.name === "Total Revenue");
+        if (revenueItem) {
+          console.log("📊 Total Revenue from API:", {
+            rawValue: revenueItem.value,
+            valueType: typeof revenueItem.value,
+            parsedValue: typeof revenueItem.value === 'string' 
+              ? parseFloat(revenueItem.value.replace(/[^0-9.-]/g, '')) 
+              : revenueItem.value,
+            fullObject: revenueItem
+          });
+          console.warn("⚠️ BACKEND ISSUE: API is returning 0 for Total Revenue. Expected value: 48");
+          console.warn("⚠️ Please check the backend API endpoint: /back/v1/analytics/vendor");
+          console.warn("⚠️ The revenue calculation on the server needs to be fixed.");
+        }
       }
       
       setAnalyticsData(Array.isArray(data) ? data : []);
@@ -324,7 +351,7 @@ const VendorDashboard = () => {
   }, [analyticsData]);
 
   return (
-    <div className="space-y-6 max-w-[350px] lg:max-w-full w-full">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full px-2 sm:px-0">
       <Card className="overflow-hidden">
         {/* Header Section */}
         <div className="p-3 sm:p-4 md:p-6 bg-gradient-to-r from-[#00897B] to-[#00796B]">
@@ -339,7 +366,7 @@ const VendorDashboard = () => {
         {/* Filters Section */}
         <div className="p-3 sm:p-4 md:p-6 bg-gray-50 border-t">
           <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">Company Name *</label>
                 <Select value={companyName} onValueChange={handleCompanyNameChange} disabled={vendorsLoading}>
@@ -424,12 +451,12 @@ const VendorDashboard = () => {
 
         {/* KPI Cards Section */}
         {analyticsData.length > 0 && (
-          <div className="p-3 sm:p-4 md:p-6 grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
+          <div className="p-3 sm:p-4 md:p-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
             {analyticsData.slice(0, 8).map((kpi) => {
               const Icon = getIcon(kpi.icon);
 
               return (
-                <Card key={kpi.name} className="p-3 sm:p-4">
+                <Card key={kpi.name} className="p-2 sm:p-3 md:p-4">
                   <div className="flex items-center justify-between">
                     {kpi.name !== "Total Revenue" ? (
                       <div className="text-[#00897B]">
@@ -440,20 +467,41 @@ const VendorDashboard = () => {
                     )}
                   </div>
                   <div className="mt-2">
-                    <div className="text-lg sm:text-2xl font-bold">
+                    <div className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold break-words">
                       {(() => {
                         if (kpi.name === "Total Revenue") {
-                          const revenueValue = typeof kpi.value === 'string' 
-                            ? parseFloat(kpi.value.replace(/[^0-9.-]/g, '')) || 0 
-                            : kpi.value as number;
-                          return `${revenueValue.toLocaleString(undefined, {minimumFractionDigits: 2})} DH`;
+                          // Log the raw value for debugging
+                          console.log('💰 Total Revenue KPI:', {
+                            rawValue: kpi.value,
+                            valueType: typeof kpi.value,
+                            fullKPI: kpi
+                          });
+                          
+                          // Parse the revenue value from API
+                          let revenueValue = 0;
+                          if (typeof kpi.value === 'string') {
+                            // Remove any non-numeric characters except decimal point and minus
+                            const cleaned = kpi.value.replace(/[^0-9.-]/g, '');
+                            revenueValue = parseFloat(cleaned) || 0;
+                            console.log('💰 String parsing:', { original: kpi.value, cleaned, parsed: revenueValue });
+                          } else if (typeof kpi.value === 'number') {
+                            revenueValue = kpi.value;
+                            console.log('💰 Number value:', revenueValue);
+                          } else {
+                            console.warn('💰 Unexpected value type:', typeof kpi.value, kpi.value);
+                          }
+                          
+                          console.log('💰 Final revenue value:', revenueValue);
+                          
+                          // Format with 2 decimal places and add DH suffix
+                          return `${revenueValue.toFixed(2)}DH`;
                         }
                         return typeof kpi.value === 'number' 
                           ? kpi.value.toLocaleString()
                           : kpi.value;
                       })()}
                     </div>
-                    <div className="text-xs sm:text-sm text-muted-foreground">{kpi.name}</div>
+                    <div className="text-xs sm:text-sm text-muted-foreground truncate" title={kpi.name}>{kpi.name}</div>
                     {kpi.details && (
                       <div className="mt-2 text-xs text-muted-foreground">
                         {kpi.details.percentage_active && (
@@ -482,33 +530,33 @@ const VendorDashboard = () => {
           <div className="p-3 sm:p-4 md:p-6 border-t">
             <Tabs defaultValue="line">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 mb-4">
-                <TabsList className="w-full sm:w-auto h-auto flex flex-wrap gap-1 sm:gap-0">
-                  <TabsTrigger value="line" className="h-9 px-2 sm:px-4 data-[state=active]:bg-[#00897B] data-[state=active]:text-white">
-                    <LineChartIcon className="h-4 w-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Graphique en ligne</span>
+                <TabsList className="w-full md:w-auto h-auto flex flex-wrap gap-1 sm:gap-0">
+                  <TabsTrigger value="line" className="h-9 px-2 sm:px-3 md:px-4 data-[state=active]:bg-[#00897B] data-[state=active]:text-white text-xs sm:text-sm">
+                    <LineChartIcon className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">Graphique en ligne</span>
                   </TabsTrigger>
-                  <TabsTrigger value="bar" className="h-9 px-2 sm:px-4 data-[state=active]:bg-[#00897B] data-[state=active]:text-white">
-                    <BarChartIcon className="h-4 w-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Graphique en barres</span>
+                  <TabsTrigger value="bar" className="h-9 px-2 sm:px-3 md:px-4 data-[state=active]:bg-[#00897B] data-[state=active]:text-white text-xs sm:text-sm">
+                    <BarChartIcon className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">Graphique en barres</span>
                   </TabsTrigger>
-                  <TabsTrigger value="pie" className="h-9 px-2 sm:px-4 data-[state=active]:bg-[#00897B] data-[state=active]:text-white">
-                    <PieChartIcon className="h-4 w-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Graphique en camembert</span>
+                  <TabsTrigger value="pie" className="h-9 px-2 sm:px-3 md:px-4 data-[state=active]:bg-[#00897B] data-[state=active]:text-white text-xs sm:text-sm">
+                    <PieChartIcon className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">Graphique en camembert</span>
                   </TabsTrigger>
                 </TabsList>
-                <div className="flex justify-end w-full sm:w-auto">
+                <div className="flex justify-end w-full md:w-auto">
                   <Button 
                     variant="outline" 
                     onClick={handleExport}
-                    className="h-9 px-2 sm:px-4 hover:bg-[#00897B]/10"
+                    className="h-9 px-2 sm:px-3 md:px-4 hover:bg-[#00897B]/10 text-xs sm:text-sm"
                   >
-                    <DownloadIcon className="h-4 w-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Exporter</span>
+                    <DownloadIcon className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">Exporter</span>
                   </Button>
                 </div>
               </div>
 
-              <TabsContent value="line" className="h-[300px] sm:h-[400px]">
+              <TabsContent value="line" className="h-[250px] sm:h-[300px] md:h-[350px] lg:h-[400px]">
                 {lineChartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={lineChartData}>
@@ -532,7 +580,7 @@ const VendorDashboard = () => {
                 )}
               </TabsContent>
 
-              <TabsContent value="bar" className="h-[300px] sm:h-[400px]">
+              <TabsContent value="bar" className="h-[250px] sm:h-[300px] md:h-[350px] lg:h-[400px]">
                 {barChartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={barChartData}>
@@ -558,7 +606,7 @@ const VendorDashboard = () => {
                 )}
               </TabsContent>
 
-              <TabsContent value="pie" className="h-[300px] sm:h-[400px]">
+              <TabsContent value="pie" className="h-[250px] sm:h-[300px] md:h-[350px] lg:h-[400px]">
                 {pieChartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
