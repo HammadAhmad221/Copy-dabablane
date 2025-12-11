@@ -176,7 +176,9 @@ const VendorReservationOrders: React.FC = () => {
         past_orders: response.past_orders?.length || 0,
         current_orders: response.current_orders?.length || 0,
         future_orders: response.future_orders?.length || 0,
+        all_items: response.all_items?.length || 0,
       });
+      console.log('🔍 All response keys:', Object.keys(response));
       console.log('🔍 Selected time period:', timePeriod);
       const sampleItem = response.past_reservations?.[0] || 
         response.current_reservations?.[0] || 
@@ -248,20 +250,116 @@ const VendorReservationOrders: React.FC = () => {
         };
       };
 
-      if (timePeriod === 'past') {
+      // Check if API returns all_items field (some APIs return all items in one array)
+      if (response.all_items && response.all_items.length > 0) {
+        console.log('📦 Using all_items field from API');
+        combinedItems = response.all_items.map(item => {
+          // Determine type based on item properties
+          const type = item.type || (item.reservation_id || item.NUM_RES ? 'reservation' : 'order');
+          return normalizeItem(item, type);
+        });
+      } 
+      // Check if API returns orders in a single 'orders' array (not split by time period)
+      else if ((response as any).orders && Array.isArray((response as any).orders)) {
+        console.log('📦 Found orders in single "orders" array');
+        const allOrders = ((response as any).orders || []).map((item: any) => normalizeItem(item, 'order'));
+        console.log(`✅ Extracted ${allOrders.length} orders from orders array`);
+        
+        // Get reservations based on time period
+        let reservations: ReservationOrderItem[] = [];
+        if (timePeriod === 'past') {
+          reservations = (response.past_reservations || []).map(item => normalizeItem(item, 'reservation'));
+        } else if (timePeriod === 'present') {
+          reservations = (response.current_reservations || []).map(item => normalizeItem(item, 'reservation'));
+        } else if (timePeriod === 'future') {
+          reservations = (response.future_reservations || []).map(item => normalizeItem(item, 'reservation'));
+        }
+        
+        combinedItems = [...reservations, ...allOrders];
+        console.log(`📦 Combined ${reservations.length} reservations + ${allOrders.length} orders = ${combinedItems.length} total for ${timePeriod} period`);
+      } 
+      else if (timePeriod === 'past') {
         const pastReservations = (response.past_reservations || []).map(item => normalizeItem(item, 'reservation'));
         const pastOrders = (response.past_orders || []).map(item => normalizeItem(item, 'order'));
-        combinedItems = [...pastReservations, ...pastOrders];
+        
+        // If past_orders is empty but we have total_orders, try to find orders in other fields
+        if (pastOrders.length === 0 && response.total_orders > 0) {
+          console.log('⚠️ No past_orders found but total_orders > 0. Checking for orders in other fields...');
+          // Check if orders might be mixed in with reservations or in a different field
+          const allReservations = response.past_reservations || [];
+          const ordersFromReservations = allReservations.filter(item => 
+            item.NUM_ORDER || item.order_number || item.order_id || 
+            (item.type && item.type === 'order')
+          ).map(item => normalizeItem(item, 'order'));
+          
+          if (ordersFromReservations.length > 0) {
+            console.log(`✅ Found ${ordersFromReservations.length} orders mixed in reservations array`);
+            pastOrders.push(...ordersFromReservations);
+            // Remove these from reservations
+            const actualReservations = allReservations.filter(item => 
+              !item.NUM_ORDER && !item.order_number && !item.order_id && 
+              (!item.type || item.type === 'reservation')
+            ).map(item => normalizeItem(item, 'reservation'));
+            combinedItems = [...actualReservations, ...pastOrders];
+          } else {
+            combinedItems = [...pastReservations, ...pastOrders];
+          }
+        } else {
+          combinedItems = [...pastReservations, ...pastOrders];
+        }
         console.log(`📦 Past items combined: ${pastReservations.length} reservations + ${pastOrders.length} orders = ${combinedItems.length} total`);
       } else if (timePeriod === 'present') {
+        // Show current/active reservations and orders
         const currentReservations = (response.current_reservations || []).map(item => normalizeItem(item, 'reservation'));
         const currentOrders = (response.current_orders || []).map(item => normalizeItem(item, 'order'));
-        combinedItems = [...currentReservations, ...currentOrders];
+        
+        // Check for mixed items
+        if (currentOrders.length === 0 && response.total_orders > 0) {
+          const allReservations = response.current_reservations || [];
+          const ordersFromReservations = allReservations.filter(item => 
+            item.NUM_ORDER || item.order_number || item.order_id || 
+            (item.type && item.type === 'order')
+          ).map(item => normalizeItem(item, 'order'));
+          
+          if (ordersFromReservations.length > 0) {
+            currentOrders.push(...ordersFromReservations);
+            const actualReservations = allReservations.filter(item => 
+              !item.NUM_ORDER && !item.order_number && !item.order_id && 
+              (!item.type || item.type === 'reservation')
+            ).map(item => normalizeItem(item, 'reservation'));
+            combinedItems = [...actualReservations, ...currentOrders];
+          } else {
+            combinedItems = [...currentReservations, ...currentOrders];
+          }
+        } else {
+          combinedItems = [...currentReservations, ...currentOrders];
+        }
         console.log(`📦 Current items combined: ${currentReservations.length} reservations + ${currentOrders.length} orders = ${combinedItems.length} total`);
       } else if (timePeriod === 'future') {
         const futureReservations = (response.future_reservations || []).map(item => normalizeItem(item, 'reservation'));
         const futureOrders = (response.future_orders || []).map(item => normalizeItem(item, 'order'));
-        combinedItems = [...futureReservations, ...futureOrders];
+        
+        // Check for mixed items
+        if (futureOrders.length === 0 && response.total_orders > 0) {
+          const allReservations = response.future_reservations || [];
+          const ordersFromReservations = allReservations.filter(item => 
+            item.NUM_ORDER || item.order_number || item.order_id || 
+            (item.type && item.type === 'order')
+          ).map(item => normalizeItem(item, 'order'));
+          
+          if (ordersFromReservations.length > 0) {
+            futureOrders.push(...ordersFromReservations);
+            const actualReservations = allReservations.filter(item => 
+              !item.NUM_ORDER && !item.order_number && !item.order_id && 
+              (!item.type || item.type === 'reservation')
+            ).map(item => normalizeItem(item, 'reservation'));
+            combinedItems = [...actualReservations, ...futureOrders];
+          } else {
+            combinedItems = [...futureReservations, ...futureOrders];
+          }
+        } else {
+          combinedItems = [...futureReservations, ...futureOrders];
+        }
         console.log(`📦 Future items combined: ${futureReservations.length} reservations + ${futureOrders.length} orders = ${combinedItems.length} total`);
       }
 
@@ -373,22 +471,53 @@ const VendorReservationOrders: React.FC = () => {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'MAD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
+    // Format as number with 2 decimals and append DH
+    return Number(amount).toFixed(2) + 'DH';
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('fr-FR', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  const formatDate = (dateString: string, timeString?: string | null) => {
+    if (!dateString) return 'N/A';
+    
+    try {
+      // If we have a separate time string, combine it with the date
+      let dateToFormat = dateString;
+      if (timeString && timeString !== '00:00:00' && timeString !== null) {
+        // Combine date and time
+        dateToFormat = `${dateString} ${timeString}`;
+      }
+      
+      const date = new Date(dateToFormat);
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        return dateString; // Return original string if parsing fails
+      }
+      
+      // Format the date
+      const formatted = date.toLocaleDateString('fr-FR', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+      
+      // Only add time if it's not midnight (00:00) or if we have a specific time
+      const hours = date.getHours();
+      const minutes = date.getMinutes();
+      
+      if (timeString && timeString !== '00:00:00' && timeString !== null) {
+        // If we have an explicit time, always show it
+        return `${formatted}, ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+      } else if (hours !== 0 || minutes !== 0) {
+        // Only show time if it's not midnight
+        return `${formatted}, ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+      }
+      
+      // Return just the date if time is midnight or not available
+      return formatted;
+    } catch (error) {
+      console.error('Error formatting date:', error, dateString);
+      return dateString;
+    }
   };
 
   // Filter data based on search query
@@ -536,7 +665,7 @@ const VendorReservationOrders: React.FC = () => {
                 <em>Select time period</em>
               </MenuItem>
               <MenuItem value="past">Past Reservation</MenuItem>
-              <MenuItem value="present">Order</MenuItem>
+              <MenuItem value="present">Orders</MenuItem>
               <MenuItem value="future">Future Reservation</MenuItem>
             </TextField>
           </Grid>
@@ -567,32 +696,7 @@ const VendorReservationOrders: React.FC = () => {
         </Grid>
       </Paper>
 
-      {/* Search Filter */}
-      {dataLoaded && reservationOrders.length > 0 && (
-        <Paper sx={{ p: { xs: 2, sm: 2.5, md: 3 }, mb: { xs: 2, md: 3 } }}>
-          <TextField
-            fullWidth
-            placeholder="Search by customer name, email, phone, or reservation number..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <SearchIcon sx={{ color: '#00897B', mr: 1 }} />
-              ),
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                '&:hover fieldset': {
-                  borderColor: '#00897B',
-                },
-                '&.Mui-focused fieldset': {
-                  borderColor: '#00897B',
-                },
-              },
-            }}
-          />
-        </Paper>
-      )}
+
 
       {/* Statistics Cards */}
       {dataLoaded && (
@@ -741,11 +845,11 @@ const VendorReservationOrders: React.FC = () => {
                     <Box sx={{ mb: 1.5 }}>
                       <Typography variant="caption" color="text.secondary">Date</Typography>
                       <Typography variant="body2">
-                        {formatDate(item.created_at)}
+                        {formatDate(item.created_at, item.time)}
                       </Typography>
                       {item.start_date && (
                         <Typography variant="caption" color="text.secondary">
-                          Start: {formatDate(item.start_date)}
+                          Start: {formatDate(item.start_date, item.time)}
                         </Typography>
                       )}
                     </Box>
@@ -928,11 +1032,11 @@ const VendorReservationOrders: React.FC = () => {
                         </TableCell>
                         <TableCell sx={{ py: 2 }}>
                           <Typography variant="body2" sx={{ fontSize: '0.875rem', whiteSpace: 'nowrap' }}>
-                            {formatDate(item.created_at)}
+                            {formatDate(item.created_at, item.time)}
                           </Typography>
                           {item.start_date && (
                             <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
-                              Start: {formatDate(item.start_date)}
+                              Start: {formatDate(item.start_date, item.time)}
                             </Typography>
                           )}
                         </TableCell>
