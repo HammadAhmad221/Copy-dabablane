@@ -140,14 +140,6 @@ const CommissionEdit = () => {
         updateData.partial_commission_rate = formData.partial_commission_rate;
       }
 
-      // Try to update category_id and vendor_id if they changed
-      if (formData.category_id && commission && formData.category_id !== commission.category_id) {
-        updateData.category_id = formData.category_id;
-      }
-      if (commission && formData.vendor_id !== commission.vendor_id) {
-        updateData.vendor_id = formData.vendor_id ?? null;
-      }
-
       console.log('📤 Updating commission:', id, updateData);
       await commissionApi.update(Number(id), updateData);
       toast.success('Commission updated successfully');
@@ -215,6 +207,7 @@ const CommissionEdit = () => {
               {categories.length > 0 ? (
                 <Select
                   value={formData.category_id ? String(formData.category_id) : ""}
+                  disabled
                   onValueChange={(value) => {
                     setFormData({ 
                       ...formData, 
@@ -238,6 +231,7 @@ const CommissionEdit = () => {
                   id="category_id"
                   type="number"
                   min="1"
+                  disabled
                   value={formData.category_id || ""}
                   onChange={(e) => {
                     const value = e.target.value;
@@ -268,6 +262,7 @@ const CommissionEdit = () => {
               </Label>
               <Select
                 value={formData.vendor_id ? String(formData.vendor_id) : "none"}
+                disabled
                 onValueChange={(value) => {
                   setFormData({
                     ...formData,

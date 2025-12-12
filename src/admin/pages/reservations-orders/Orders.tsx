@@ -176,15 +176,19 @@ const Orders: React.FC = () => {
     customerId: undefined as number | undefined
   });
 
+  const customersById = useMemo(() => {
+    const map = new Map<number, Customer>();
+    customers.forEach((c) => {
+      map.set(Number(c.id), c);
+    });
+    return map;
+  }, [customers]);
+
   const fetchCustomers = async () => {
     try {
-      const response = await CustomerService.getAll({ paginationSize: 9999 });
-      // Remove duplicate customers by email - keep only the first occurrence of each email
-      const uniqueCustomers = response.data.filter((customer, index, self) => 
-        index === self.findIndex((c) => c.email?.toLowerCase().trim() === customer.email?.toLowerCase().trim())
-      );
-      setCustomers(uniqueCustomers);
-      console.log(`✅ Loaded ${uniqueCustomers.length} unique customers (removed ${response.data.length - uniqueCustomers.length} duplicates)`);
+      const response = await CustomerService.getAll();
+      setCustomers(response.data);
+      console.log(`✅ Loaded ${response.data.length} customers`);
     } catch (error) {
       toast.error("Failed to fetch customers");
     }
@@ -203,13 +207,9 @@ const Orders: React.FC = () => {
         setBlanes(blanesResponse || []);
 
         // Fetch customers after other data is loaded
-        const customersResponse = await CustomerService.getAll({ paginationSize: 9999 });
-        // Remove duplicate customers by email - keep only the first occurrence of each email
-        const uniqueCustomers = customersResponse.data.filter((customer, index, self) => 
-          index === self.findIndex((c) => c.email?.toLowerCase().trim() === customer.email?.toLowerCase().trim())
-        );
-        setCustomers(uniqueCustomers);
-        console.log(`✅ Loaded ${uniqueCustomers.length} unique customers (removed ${customersResponse.data.length - uniqueCustomers.length} duplicates)`);
+        const customersResponse = await CustomerService.getAll();
+        setCustomers(customersResponse.data);
+        console.log(`✅ Loaded ${customersResponse.data.length} customers`);
       } catch (error) {
         toast.error("Failed to fetch necessary data");
       }
@@ -251,14 +251,18 @@ const Orders: React.FC = () => {
       if (currentFilters.search && currentFilters.search.trim()) {
         const searchLower = currentFilters.search.toLowerCase().trim();
         filteredOrders = filteredOrders.filter(order => {
-          const customerName = findCustomerName(order.customers_id).toLowerCase();
-          const customerEmail = findCustomerEmail(order.customers_id).toLowerCase();
+          const customerName = (findCustomerName(order.customers_id) || '').toLowerCase();
+          const customerEmail = (findCustomerEmail(order.customers_id) || '').toLowerCase();
+          const orderName = (order.name || '').toLowerCase();
+          const orderEmail = (order.email || '').toLowerCase();
           const blaneName = findBlaneName(order.blane_id).toLowerCase();
           const customerCity = findCustomerCity(order.customers_id).toLowerCase();
           const address = (order.delivery_address || '').toLowerCase();
           
           return customerName.includes(searchLower) ||
                  customerEmail.includes(searchLower) ||
+                 orderName.includes(searchLower) ||
+                 orderEmail.includes(searchLower) ||
                  blaneName.includes(searchLower) ||
                  customerCity.includes(searchLower) ||
                  address.includes(searchLower);
@@ -524,7 +528,7 @@ const Orders: React.FC = () => {
         return {
           ID: order.id,
           Blane: findBlaneName(order.blane_id),
-          Customer: findCustomerName(order.customers_id),
+          Customer: getOrderCustomerName(order),
           Quantity: order.quantity,
           "Unit Price": `${price} DH`,
           "TVA": `${blane?.tva || 0}%`,
@@ -599,7 +603,7 @@ const Orders: React.FC = () => {
     }
 
     // Find the customer data
-    const customer = customers.find(c => c.id === order.customers_id);
+    const customer = customersById.get(Number(order.customers_id));
     
     // Set form data
     setFormData({
@@ -630,21 +634,38 @@ const Orders: React.FC = () => {
   };
 
   const findCustomerName = (customerId: number) => {
-    if (!customers || customers.length === 0) return `Customer ${customerId}`;
-    const customer = customers.find(c => String(c.id) === String(customerId));
-    return customer ? customer.name : `Customer ${customerId}`;
+    const customer = customersById.get(Number(customerId));
+    const name = customer?.name?.trim();
+    return name ? name : `Customer ${customerId}`;
   };
 
   const findCustomerEmail = (customerId: number) => {
-    if (!customers || customers.length === 0) return '';
-    const customer = customers.find(c => String(c.id) === String(customerId));
-    return customer ? customer.email : '';
+    const customer = customersById.get(Number(customerId));
+    return customer?.email || '';
   };
 
   const findCustomerCity = (customerId: number) => {
-    if (!customers || customers.length === 0) return '';
-    const customer = customers.find(c => String(c.id) === String(customerId));
-    return customer ? customer.city : '';
+    const customer = customersById.get(Number(customerId));
+    return customer?.city || '';
+  };
+
+  const getOrderCustomerName = (order: OrderType) => {
+    const fromCustomer = findCustomerName(order.customers_id);
+    if (fromCustomer && !fromCustomer.startsWith('Customer ')) return fromCustomer;
+    const fromOrder = order.name?.trim();
+    return fromOrder ? fromOrder : fromCustomer;
+  };
+
+  const getOrderCustomerEmail = (order: OrderType) => {
+    const fromCustomer = findCustomerEmail(order.customers_id);
+    if (fromCustomer) return fromCustomer;
+    return order.email?.trim() || '';
+  };
+
+  const getOrderCustomerCity = (order: OrderType) => {
+    const fromCustomer = findCustomerCity(order.customers_id);
+    if (fromCustomer) return fromCustomer;
+    return order.city?.trim() || '';
   };
 
   const getStatusStyle = (status: OrderType["status"]) => {
@@ -847,10 +868,10 @@ const Orders: React.FC = () => {
                       <TableCell className="p-2 md:p-2.5 lg:p-3">
                         <div className="flex flex-col space-y-0.5">
                           <div className="font-medium text-xs md:text-sm lg:text-base truncate">
-                            {findCustomerName(order.customers_id)}
+                            {getOrderCustomerName(order)}
                           </div>
                           <div className="text-[10px] md:text-xs lg:text-sm text-gray-600 truncate">
-                            {findCustomerEmail(order.customers_id)}
+                            {getOrderCustomerEmail(order)}
                           </div>
                         </div>
                       </TableCell>
@@ -871,7 +892,7 @@ const Orders: React.FC = () => {
                       </TableCell>
                       <TableCell className="p-2 md:p-2.5 lg:p-3">
                         <div className="flex flex-col space-y-0.5">
-                          <span className="font-medium text-xs md:text-sm lg:text-base truncate">{findCustomerCity(order.customers_id)}</span>
+                          <span className="font-medium text-xs md:text-sm lg:text-base truncate">{getOrderCustomerCity(order)}</span>
                           <span className="text-[10px] md:text-xs lg:text-sm text-gray-500 truncate">{order.delivery_address}</span>
                         </div>
                       </TableCell>
@@ -997,8 +1018,8 @@ const Orders: React.FC = () => {
               <Card key={order.id} className="p-4 space-y-3">
                 {/* Customer Info */}
                 <div className="space-y-1 pb-3 border-b">
-                  <div className="font-semibold text-base">{findCustomerName(order.customers_id)}</div>
-                  <div className="text-sm text-gray-600 truncate">{findCustomerEmail(order.customers_id)}</div>
+                  <div className="font-semibold text-base">{getOrderCustomerName(order)}</div>
+                  <div className="text-sm text-gray-600 truncate">{getOrderCustomerEmail(order)}</div>
                 </div>
 
                 {/* Order Details */}
@@ -1012,7 +1033,7 @@ const Orders: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2 text-sm text-gray-500">
                     <Icon icon="lucide:map-pin" className="h-4 w-4" />
-                    <span className="break-words">{findCustomerCity(order.customers_id)} - {order.delivery_address}</span>
+                    <span className="break-words">{getOrderCustomerCity(order)} - {order.delivery_address}</span>
                   </div>
                   <div className="text-sm font-medium text-gray-700">
                     Total: {(blanes.find(b => b.id === order.blane_id)?.price_current || 0) * order.quantity} DH
