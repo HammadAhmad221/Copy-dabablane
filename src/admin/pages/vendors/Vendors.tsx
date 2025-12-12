@@ -1137,7 +1137,7 @@ const VendorRow = React.memo(({
     <TableRow key={vendor.id} className="hover:bg-gray-50">
       <TableCell className="font-medium w-[180px] min-w-[140px]">
         <div className="flex flex-col">
-          <span className="font-medium text-gray-900">{vendor.name}</span>
+          <span className="font-medium text-gray-900">{vendor.company_name || vendor.name}</span>
         </div>
       </TableCell>
       <TableCell className="w-[180px] min-w-[140px]">{vendor.email}</TableCell>
@@ -1194,11 +1194,11 @@ const VendorRow = React.memo(({
                   <DialogTitle className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
                       <span className="text-lg font-semibold text-gray-600">
-                        {vendor.name.charAt(0).toUpperCase()}
+                        {(vendor.company_name || vendor.name || '').charAt(0).toUpperCase()}
                       </span>
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold">{vendor.name}</h2>
+                      <h2 className="text-xl font-bold">{vendor.company_name || vendor.name}</h2>
                       <div className="flex items-center gap-2 mt-1">
                         <Badge
                           className={cn(
@@ -1714,8 +1714,8 @@ const Vendors: React.FC = () => {
 
       switch (sortBy) {
         case 'name':
-          aValue = a.name.toLowerCase();
-          bValue = b.name.toLowerCase();
+          aValue = (a.company_name || a.name || '').toLowerCase();
+          bValue = (b.company_name || b.name || '').toLowerCase();
           break;
         case 'email':
           aValue = a.email.toLowerCase();
@@ -1726,8 +1726,8 @@ const Vendors: React.FC = () => {
           bValue = b.city?.toLowerCase() || '';
           break;
         default:
-          aValue = a.name.toLowerCase();
-          bValue = b.name.toLowerCase();
+          aValue = (a.company_name || a.name || '').toLowerCase();
+          bValue = (b.company_name || b.name || '').toLowerCase();
       }
 
       if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
@@ -1735,23 +1735,9 @@ const Vendors: React.FC = () => {
       return 0;
     });
   }, [filteredVendors, sortBy, sortOrder]);
-  // Client-side pagination
-  const paginatedVendors = useMemo(() => {
-    const startIndex = (pagination.currentPage - 1) * pagination.perPage;
-    const endIndex = startIndex + pagination.perPage;
-    return sortedVendors.slice(startIndex, endIndex);
-  }, [sortedVendors, pagination.currentPage, pagination.perPage]);
-  // Update total count for client-side filtering
-  const clientSidePagination = useMemo(() => {
-    const total = filteredVendors.length || 0;
-    const perPage = pagination.perPage || 10;
-    const lastPage = total > 0 ? Math.max(1, Math.ceil(total / perPage)) : 1;
-    return {
-      ...pagination,
-      total,
-      lastPage,
-    };
-  }, [pagination, filteredVendors.length]);
+  // Server-side pagination:
+  // The API already returns paginated results + meta (currentPage/lastPage/total/perPage).
+  // We still keep client-side sorting/filtering for the currently loaded page.
   // Debounced search with proper implementation
   const debouncedSearch = useCallback(
     debounce(async () => {
@@ -1960,34 +1946,45 @@ const Vendors: React.FC = () => {
     [sortBy, sortOrder, loading, isPaginationLoading]
   );
 
-  // Handle pagination (client-side)
-  const handlePageChange = useCallback((page: number) => {
-    if (page !== pagination.currentPage && page >= 1 && page <= clientSidePagination.lastPage && !isPaginationLoading && !loading) {
-      setIsPaginationLoading(true);
-      setPagination({ currentPage: page });
+  const activeFilters = useMemo(() => {
+    return {
+      ...(statusFilter !== 'all' && { status: statusFilter as VendorStatus }),
+      ...(searchTerm && { search: searchTerm }),
+      ...(sortBy && { sortBy }),
+      ...(sortOrder && { sortOrder }),
+    };
+  }, [statusFilter, searchTerm, sortBy, sortOrder]);
+
+  // Handle pagination (server-side)
+  const handlePageChange = useCallback(async (page: number) => {
+    if (page === pagination.currentPage) return;
+    if (page < 1 || page > pagination.lastPage) return;
+    if (isPaginationLoading || loading) return;
+
+    setIsPaginationLoading(true);
+    try {
+      await fetchVendors(activeFilters, page, pagination.perPage);
       // Smooth scroll to top
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      setTimeout(() => {
-        setIsPaginationLoading(false);
-      }, 150);
+    } finally {
+      setIsPaginationLoading(false);
     }
-  }, [pagination.currentPage, clientSidePagination.lastPage, isPaginationLoading, loading, setPagination]);
+  }, [activeFilters, fetchVendors, pagination.currentPage, pagination.lastPage, pagination.perPage, isPaginationLoading, loading]);
 
   // Handle page size change
   const handlePageSizeChange = useCallback(async (newPageSize: number) => {
     if (newPageSize !== pagination.perPage && !loading && !isPaginationLoading) {
       setIsPaginationLoading(true);
       try {
-        // For client-side, we just update the perPage value
-        // You might need to modify your useVendors hook to handle this
-        await fetchVendors({}, 1, newPageSize);
+        // Reset to first page when page size changes
+        await fetchVendors(activeFilters, 1, newPageSize);
       } catch (error) {
         console.error('Page size change error:', error);
       } finally {
         setIsPaginationLoading(false);
       }
     }
-  }, [fetchVendors, pagination.perPage, loading, isPaginationLoading]);
+  }, [activeFilters, fetchVendors, pagination.perPage, loading, isPaginationLoading]);
 
   // Memoized status change handler
   const handleStatusChangeMemo = useCallback(async (vendor: Vendor, newStatus: VendorStatus, comment?: string) => {
@@ -2023,8 +2020,8 @@ const Vendors: React.FC = () => {
     setLightboxCurrentIndex(index);
   };
 
-  // Use client-side paginated vendors for display
-  const displayVendors = paginatedVendors;
+  // Display the currently fetched page (already paginated by the backend)
+  const displayVendors = sortedVendors;
 
   return (
     <TooltipProvider>
@@ -2195,7 +2192,7 @@ const Vendors: React.FC = () => {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1 sm:gap-3 mb-1">
                             <div className="flex-1 min-w-0">
-                              <h3 className="font-semibold text-sm sm:text-lg text-gray-900 truncate">{vendor.name}</h3>
+                              <h3 className="font-semibold text-sm sm:text-lg text-gray-900 truncate">{vendor.company_name || vendor.name}</h3>
                               <p className="text-xs sm:text-sm text-gray-500 truncate">{vendor.city}</p>
                             </div>
                           </div>
@@ -2244,224 +2241,33 @@ const Vendors: React.FC = () => {
                           />
                           <Dialog>
                             <DialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={actionLoading.has(vendor.id)}
-                              className="h-7 sm:h-9 px-1 sm:px-3 text-xs sm:text-sm"
-                            >
-                              {actionLoading.has(vendor.id) ? (
-                                <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-gray-600"></div>
-                              ) : (
-                                <>
-                                  <EyeIcon className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 sm:mr-2" />
-                                  <span className="hidden sm:inline">Détails</span>
-                                  <span className="sm:hidden text-xs">Voir</span>
-                                </>
-                              )}
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-[95vw] md:max-w-4xl max-h-[90vh] overflow-y-auto p-4 md:p-6">
-                            <DialogHeader>
-                              <DialogTitle className="flex items-center gap-3">
-                                <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-                                  <span className="text-lg font-semibold text-gray-600">
-                                    {vendor.name.charAt(0).toUpperCase()}
-                                  </span>
-                                </div>
-                                <div>
-                                  <h2 className="text-xl font-bold">{vendor.name}</h2>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <Badge
-                                      className={cn(
-                                        "text-white font-medium shadow-sm",
-                                        vendor.status === "active" ? "bg-green-500" :
-                                          vendor.status === "pending" ? "bg-blue-500" :
-                                            vendor.status === "inActive" ? "bg-gray-500" :
-                                              vendor.status === "suspended" ? "bg-orange-500" :
-                                                vendor.status === "waiting" ? "bg-yellow-500" : "bg-gray-500"
-                                      )}
-                                    >
-                                      {getVendorStatusLabel(vendor.status)}
-                                    </Badge>
-                                  </div>
-                                </div>
-                              </DialogTitle>
-                            </DialogHeader>
-
-                            <div className="space-y-6">
-                              {/* Contact Information */}
-                              <div className="space-y-4">
-                                <h3 className="text-lg font-semibold text-gray-900">Informations de Contact</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <div className="flex items-center gap-3">
-                                    <Icon icon="lucide:mail" className="h-5 w-5 text-gray-400" />
-                                    <div>
-                                      <p className="text-sm text-gray-500">Email</p>
-                                      <p className="font-medium">{vendor.email}</p>
-                                    </div>
-                                  </div>
-
-                                  <div className="flex items-center gap-3">
-                                    <Icon icon="lucide:phone" className="h-5 w-5 text-gray-400" />
-                                    <div>
-                                      <p className="text-sm text-gray-500">Téléphone</p>
-                                      <p className="font-medium">{vendor.phone}</p>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Address Information */}
-                              <div className="space-y-4">
-                                <h3 className="text-lg font-semibold text-gray-900">Adresse</h3>
-                                <div className="flex items-start gap-3">
-                                  <Icon icon="lucide:map-pin" className="h-5 w-5 text-gray-400 mt-1" />
-                                  <div>
-                                    <p className="font-medium">{vendor.address}</p>
-                                    <p className="text-gray-600">{vendor.city}</p>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                            </DialogContent>
-                          </Dialog>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </motion.div>
-
-          {/* Tablet View */}
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={animationVariants.fadeIn}
-            className="hidden lg:block xl:hidden"
-          >
-            <div className="overflow-x-auto">
-              <Table className="min-w-[600px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[160px] min-w-[120px] font-semibold">Vendeur</TableHead>
-                    <TableHead className="w-[160px] min-w-[120px] font-semibold">Contact</TableHead>
-                    <TableHead className="w-[120px] min-w-[100px] font-semibold">Statut</TableHead>
-                    <TableHead className="w-[80px] min-w-[60px] text-right font-semibold">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading || (isInitialLoading && retryCountRef.current < maxRetries) ? (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8">
-                        <div className="flex items-center justify-center">
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#00897B]"></div>
-                          <span className="ml-2">Chargement...</span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : error ? (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8">
-                        <div className="flex flex-col items-center gap-2">
-                          <Icon icon="lucide:alert-circle" className="h-8 w-8 text-red-500" />
-                          <p className="text-red-600 font-medium">Erreur de chargement</p>
-                          <p className="text-gray-500 text-sm">{error}</p>
-                          <Button
-                            onClick={() => {
-                              retryCountRef.current = 0; // Reset retry count on manual retry
-                              const filters = {
-                                ...(statusFilter !== 'all' && { status: statusFilter as VendorStatus }),
-                                ...(searchTerm && { search: searchTerm }),
-                              };
-                              fetchVendors(filters, 1);
-                            }}
-                            variant="outline"
-                            size="sm"
-                            className="mt-2"
-                          >
-                            <Icon icon="lucide:refresh-cw" className="h-4 w-4 mr-2" />
-                            Réessayer
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : displayVendors.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8 text-gray-500">
-                        {searchTerm || statusFilter !== 'all' ? 'Aucun vendeur trouvé avec les critères sélectionnés' : 'Aucun vendeur trouvé'}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    displayVendors.map((vendor) => (
-                      <TableRow key={vendor.id} className="hover:bg-gray-50">
-                        <TableCell className="w-[160px] min-w-[120px]">
-                          <div className="flex flex-col">
-                            <span className="font-semibold text-gray-900">{vendor.name}</span>
-                            <span className="text-sm text-gray-500">{vendor.city}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="w-[160px] min-w-[120px]">
-                          <div className="flex flex-col">
-                            <span className="text-sm font-medium">{vendor.email}</span>
-                            <span className="text-sm text-gray-500">{vendor.phone}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="w-[120px] min-w-[100px]">
-                          <div className="flex flex-col gap-2">
-                            <StatusChangeDialog
-                              vendor={vendor}
-                              onStatusChange={handleStatusChangeMemo}
-                              actionLoading={actionLoading}
-                            />
-                            <Badge
-                              className={cn(
-                                "text-white text-xs w-fit",
-                                vendor.status === "active" ? "bg-green-500" :
-                                  vendor.status === "pending" ? "bg-blue-500" :
-                                    vendor.status === "inActive" ? "bg-gray-500" :
-                                      vendor.status === "suspended" ? "bg-orange-500" :
-                                        vendor.status === "waiting" ? "bg-yellow-500" : "bg-gray-500"
-                              )}
-                            >
-                              {getVendorStatusLabel(vendor.status)}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right w-[120px] min-w-[100px]">
-                          <div className="flex items-center justify-end gap-2">
-                            <EditVendorDialog
-                              vendor={vendor}
-                              onSave={handleEditVendor}
-                              actionLoading={actionLoading}
-                            />
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  disabled={actionLoading.has(vendor.id)}
-                                  className="h-8 w-8"
-                                >
-                                  {actionLoading.has(vendor.id) ? (
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
-                                  ) : (
-                                    <EyeIcon className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              </DialogTrigger>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={actionLoading.has(vendor.id)}
+                                className="h-7 sm:h-9 px-1 sm:px-3 text-xs sm:text-sm"
+                              >
+                                {actionLoading.has(vendor.id) ? (
+                                  <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-gray-600"></div>
+                                ) : (
+                                  <>
+                                    <EyeIcon className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 sm:mr-2" />
+                                    <span className="hidden sm:inline">Détails</span>
+                                    <span className="sm:hidden text-xs">Voir</span>
+                                  </>
+                                )}
+                              </Button>
+                            </DialogTrigger>
                             <DialogContent className="max-w-[95vw] md:max-w-4xl max-h-[90vh] overflow-y-auto p-4 md:p-6">
                               <DialogHeader>
                                 <DialogTitle className="flex items-center gap-3">
                                   <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
                                     <span className="text-lg font-semibold text-gray-600">
-                                      {vendor.name.charAt(0).toUpperCase()}
+                                      {(vendor.company_name || vendor.name || '').charAt(0).toUpperCase()}
                                     </span>
                                   </div>
                                   <div>
-                                    <h2 className="text-xl font-bold">{vendor.name}</h2>
+                                    <h2 className="text-xl font-bold">{vendor.company_name || vendor.name}</h2>
                                     <div className="flex items-center gap-2 mt-1">
                                       <Badge
                                         className={cn(
@@ -2479,6 +2285,7 @@ const Vendors: React.FC = () => {
                                   </div>
                                 </DialogTitle>
                               </DialogHeader>
+
                               <div className="space-y-6">
                                 <div className="space-y-4">
                                   <h3 className="text-lg font-semibold text-gray-900">Informations de Contact</h3>
@@ -2512,14 +2319,13 @@ const Vendors: React.FC = () => {
                               </div>
                             </DialogContent>
                           </Dialog>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
           </motion.div>
 
           {/* Desktop Table View */}
@@ -2647,9 +2453,9 @@ const Vendors: React.FC = () => {
                   {isPaginationLoading && (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
                   )}
-                  {clientSidePagination.total > 0 ? (
+                  {pagination.total > 0 ? (
                     <>
-                      Affichage de {((clientSidePagination.currentPage - 1) * clientSidePagination.perPage) + 1} à {Math.min(clientSidePagination.currentPage * clientSidePagination.perPage, clientSidePagination.total)} sur {clientSidePagination.total} vendeur{clientSidePagination.total > 1 ? 's' : ''}
+                      Affichage de {((pagination.currentPage - 1) * pagination.perPage) + 1} à {Math.min(pagination.currentPage * pagination.perPage, pagination.total)} sur {pagination.total} vendeur{pagination.total > 1 ? 's' : ''}
                     </>
                   ) : (
                     <span>Aucun vendeur trouvé</span>
@@ -2657,21 +2463,21 @@ const Vendors: React.FC = () => {
                 </div>
 
                 {/* Pagination Controls */}
-                {clientSidePagination.total > 0 && clientSidePagination.lastPage > 1 && (
+                {pagination.total > 0 && pagination.lastPage > 1 && (
                   <Pagination>
                     <PaginationContent>
                       <PaginationItem>
                         <PaginationPrevious
-                          onClick={() => !loading && !isPaginationLoading && handlePageChange(clientSidePagination.currentPage - 1)}
-                          className={clientSidePagination.currentPage <= 1 || loading || isPaginationLoading ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                          onClick={() => !loading && !isPaginationLoading && handlePageChange(pagination.currentPage - 1)}
+                          className={pagination.currentPage <= 1 || loading || isPaginationLoading ? "pointer-events-none opacity-50" : "cursor-pointer"}
                         />
                       </PaginationItem>
 
-                      {Array.from({ length: clientSidePagination.lastPage }, (_, i) => i + 1)
+                      {Array.from({ length: pagination.lastPage }, (_, i) => i + 1)
                         .filter((page) => {
-                          if (clientSidePagination.lastPage <= 7) return true;
-                          if (page === 1 || page === clientSidePagination.lastPage) return true;
-                          if (Math.abs(page - clientSidePagination.currentPage) <= 2) return true;
+                          if (pagination.lastPage <= 7) return true;
+                          if (page === 1 || page === pagination.lastPage) return true;
+                          if (Math.abs(page - pagination.currentPage) <= 2) return true;
                           return false;
                         })
                         .map((page, i, array) => {
@@ -2685,7 +2491,7 @@ const Vendors: React.FC = () => {
                           return (
                             <PaginationItem key={page}>
                               <PaginationLink
-                                isActive={page === clientSidePagination.currentPage}
+                                isActive={page === pagination.currentPage}
                                 onClick={() => !loading && !isPaginationLoading && handlePageChange(page)}
                                 className={loading || isPaginationLoading ? "pointer-events-none opacity-50" : "cursor-pointer"}
                               >
@@ -2697,8 +2503,8 @@ const Vendors: React.FC = () => {
 
                       <PaginationItem>
                         <PaginationNext
-                          onClick={() => !loading && !isPaginationLoading && handlePageChange(clientSidePagination.currentPage + 1)}
-                          className={clientSidePagination.currentPage >= clientSidePagination.lastPage || loading || isPaginationLoading ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                          onClick={() => !loading && !isPaginationLoading && handlePageChange(pagination.currentPage + 1)}
+                          className={pagination.currentPage >= pagination.lastPage || loading || isPaginationLoading ? "pointer-events-none opacity-50" : "cursor-pointer"}
                         />
                       </PaginationItem>
                     </PaginationContent>
