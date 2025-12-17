@@ -7,7 +7,7 @@ import { Input } from "@/admin/components/ui/input";
 import { Label } from "@/admin/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/admin/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle } from "@/admin/components/ui/dialog";
-import { Plus, Trash2, Eye, X } from "lucide-react";
+import { Plus, Trash2, Eye, X, Download } from "lucide-react";
 import { useAddOns } from '@/admin/lib/add-ons/useAddOns';
 import {
     Table,
@@ -53,6 +53,7 @@ const VendorsPlane = () => {
     const [vendorSubscriptions, setVendorSubscriptions] = useState<VendorSubscriptionItem[]>([]);
     const [loading, setLoading] = useState<boolean>(false);
     const [userNames, setUserNames] = useState<Record<number, string>>({});
+    const [userIceIds, setUserIceIds] = useState<Record<number, string>>({});
     const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
     const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
     const [selectedSubscription, setSelectedSubscription] = useState<VendorSubscriptionItem | null>(null);
@@ -62,8 +63,10 @@ const VendorsPlane = () => {
         plan_id: number | '';
         add_ons: { id: number; quantity: number }[];
         promo_code: string | null;
+        start_date: string | null;
+        end_date: string | null;
         payment_method: 'online' | 'cash' | 'card' | string; }>(
-        { user_id: '', plan_id: '', add_ons: [], promo_code: null, payment_method: 'cash' }
+        { user_id: '', plan_id: '', add_ons: [], promo_code: null, start_date: null, end_date: null, payment_method: 'cash' }
     );
 
     // Pending optimistic subscriptions persisted across refresh
@@ -110,6 +113,7 @@ const VendorsPlane = () => {
     const fetchUserNames = async (userIds: number[]) => {
         const uniqueIds = [...new Set(userIds)].filter(id => id && id > 0);
         const names: Record<number, string> = {};
+        const ices: Record<number, string> = {};
         
         await Promise.all(
             uniqueIds.map(async (userId) => {
@@ -117,6 +121,10 @@ const VendorsPlane = () => {
                     const userData = await userApi.getUserById(String(userId));
                     const user = userData?.data || userData;
                     names[userId] = user?.name || user?.username || user?.email || `User ${userId}`;
+                    const ice = user?.ice_id || user?.iceId || user?.ice || user?.ICE || user?.tax_id || user?.taxId;
+                    if (ice !== undefined && ice !== null && String(ice).trim() !== '') {
+                        ices[userId] = String(ice);
+                    }
                 } catch (error) {
                     console.error(`Failed to fetch user ${userId}:`, error);
                     names[userId] = `User ${userId}`;
@@ -125,6 +133,9 @@ const VendorsPlane = () => {
         );
         
         setUserNames(prev => ({ ...prev, ...names }));
+        if (Object.keys(ices).length) {
+            setUserIceIds(prev => ({ ...prev, ...ices }));
+        }
     };
 
     useEffect(() => {
@@ -283,14 +294,32 @@ const VendorsPlane = () => {
             plan_id: typeof planId === 'number' ? planId : (selectedVendor ? selectedVendor.id : ''),
             add_ons: [],
             promo_code: null,
+            start_date: null,
+            end_date: null,
             payment_method: 'cash',
         });
         setSelectedAddOns([]);
         setIsManualDialogOpen(true);
     };
 
-    const handleManualFormChange = (field: 'user_id' | 'plan_id' | 'promo_code' | 'payment_method', value: any) => {
+    const handleManualFormChange = (field: 'user_id' | 'plan_id' | 'promo_code' | 'payment_method' | 'start_date' | 'end_date', value: any) => {
         setManualForm(prev => ({ ...prev, [field]: value }));
+    };
+
+    const computeEndDateFromPlan = (startDate: string | null, planId: number | '') => {
+        if (!startDate || !planId) return null;
+        const plan = Array.isArray(vendors) ? vendors.find(p => Number(p.id) === Number(planId)) : undefined;
+        const daysRaw: any = (plan as any)?.duration_days;
+        const days = typeof daysRaw === 'string' ? Number(daysRaw) : daysRaw;
+        if (!Number.isFinite(days) || !days) return null;
+        try {
+            const dt = new Date(startDate);
+            if (Number.isNaN(dt.getTime())) return null;
+            dt.setDate(dt.getDate() + Number(days));
+            return dt.toISOString().slice(0, 10);
+        } catch {
+            return null;
+        }
     };
 
     const submitManualActivation = async () => {
@@ -300,6 +329,7 @@ const VendorsPlane = () => {
         }
         try {
             setLoading(true);
+            const computedEndDate = computeEndDateFromPlan(manualForm.start_date, manualForm.plan_id);
             const manualRes = await vendorPlanActivationService.manualPurchase({
                 user_id: Number(manualForm.user_id),
                 plan_id: Number(manualForm.plan_id),
@@ -308,6 +338,8 @@ const VendorsPlane = () => {
                     quantity: item.quantity
                 })),
                 promo_code: manualForm.promo_code,
+                start_date: manualForm.start_date,
+                end_date: computedEndDate,
                 payment_method: manualForm.payment_method,
             } as any);
             console.log('Manual purchase response:', manualRes);
@@ -324,6 +356,8 @@ const VendorsPlane = () => {
                     let activationRes = await vendorPlanActivationService.activatePurchase(Number(purchaseId), {
                         payment_method: manualForm.payment_method,
                         promo_code: manualForm.promo_code ?? null,
+                        start_date: manualForm.start_date,
+                        end_date: computedEndDate,
                     } as any);
                     // If server returns shape not expected or validation fails, retry with empty payload
                     if (!(activationRes as any)?.data && (activationRes as any)?.status === false) {
@@ -341,9 +375,13 @@ const VendorsPlane = () => {
                         status: (activationRes as any)?.data?.subscription?.status || 'active',
                         created_at: (activationRes as any)?.data?.subscription?.created_at || (activationRes as any)?.data?.created_at || new Date().toISOString(),
                         updated_at: (activationRes as any)?.data?.subscription?.updated_at || (activationRes as any)?.data?.updated_at || new Date().toISOString(),
+                        start_date: (activationRes as any)?.data?.subscription?.start_date || (activationRes as any)?.data?.subscription?.starts_at || manualForm.start_date,
+                        end_date: (activationRes as any)?.data?.subscription?.end_date || (activationRes as any)?.data?.subscription?.ends_at || computedEndDate,
                         promo_code: manualForm.promo_code,
                         raw: {
                             created_at: (activationRes as any)?.data?.subscription?.created_at || (activationRes as any)?.data?.created_at || new Date().toISOString(),
+                            start_date: (activationRes as any)?.data?.subscription?.start_date || (activationRes as any)?.data?.subscription?.starts_at || manualForm.start_date,
+                            end_date: (activationRes as any)?.data?.subscription?.end_date || (activationRes as any)?.data?.subscription?.ends_at || computedEndDate,
                             promo_code: manualForm.promo_code,
                             add_ons: selectedAddOns.map(item => ({
                                 id: item.addOnId,
@@ -385,9 +423,13 @@ const VendorsPlane = () => {
                             status: planActive !== undefined ? (planActive ? 'active' : 'inactive') : 'pending',
                             created_at: new Date().toISOString(),
                             updated_at: new Date().toISOString(),
+                            start_date: manualForm.start_date,
+                            end_date: computedEndDate,
                             promo_code: manualForm.promo_code,
                             raw: {
                                 created_at: new Date().toISOString(),
+                                start_date: manualForm.start_date,
+                                end_date: computedEndDate,
                                 promo_code: manualForm.promo_code,
                                 add_ons: selectedAddOns.map(item => ({
                                     id: item.addOnId,
@@ -427,9 +469,13 @@ const VendorsPlane = () => {
                     status: planActive !== undefined ? (planActive ? 'active' : 'inactive') : 'pending',
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString(),
+                    start_date: manualForm.start_date,
+                    end_date: computedEndDate,
                     promo_code: manualForm.promo_code,
                     raw: {
                         created_at: new Date().toISOString(),
+                        start_date: manualForm.start_date,
+                        end_date: computedEndDate,
                         promo_code: manualForm.promo_code,
                         add_ons: selectedAddOns.map(item => ({
                             id: item.addOnId,
@@ -559,6 +605,144 @@ const VendorsPlane = () => {
         ? vendorSubscriptions
         : (Array.isArray((vendorSubscriptions as any)?.data) ? (vendorSubscriptions as any).data : []);
 
+    const getVendorCompanyLabel = (vendorId: number) => {
+        const v = safeVendorList.find(it => Number((it as any)?.id) === Number(vendorId));
+        const company = (v as any)?.company_name
+            || (v as any)?.companyName
+            || (v as any)?.company
+            || (v as any)?.business_name
+            || (v as any)?.businessName;
+        return company || (v as any)?.name || '';
+    };
+
+    const getVendorIceLabel = (vendorId: number) => {
+        const v = safeVendorList.find(it => Number((it as any)?.id) === Number(vendorId));
+        const ice = (v as any)?.ice_id
+            || (v as any)?.iceId
+            || (v as any)?.ice
+            || (v as any)?.ICE
+            || (v as any)?.tax_id
+            || (v as any)?.taxId
+            || userIceIds[vendorId];
+        return ice ? String(ice) : '';
+    };
+
+    const getPlanTitleLabel = (planId: number) => {
+        const p = Array.isArray(vendors) ? vendors.find(it => Number((it as any)?.id) === Number(planId)) : undefined;
+        return (p as any)?.title || '';
+    };
+
+    const getPlanDurationLabel = (planId: number) => {
+        const p = Array.isArray(vendors) ? vendors.find(it => Number((it as any)?.id) === Number(planId)) : undefined;
+        const days = (p as any)?.duration_days;
+        if (days === undefined || days === null || days === '') return '';
+        const n = typeof days === 'string' ? Number(days) : days;
+        if (!Number.isFinite(n)) return String(days);
+        return `${n} day${n === 1 ? '' : 's'}`;
+    };
+
+    const formatDateCell = (raw: any) => {
+        if (!raw) return '-';
+        try {
+            const d = new Date(raw);
+            if (Number.isNaN(d.getTime())) return String(raw);
+            return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        } catch {
+            return String(raw);
+        }
+    };
+
+    const getSubscriptionStartDate = (s: any) => {
+        return s?.start_date
+            ?? s?.starts_at
+            ?? s?.startAt
+            ?? s?.raw?.start_date
+            ?? s?.raw?.starts_at
+            ?? s?.raw?.startAt
+            ?? s?.raw?.subscription?.start_date
+            ?? s?.raw?.subscription?.starts_at
+            ?? s?.created_at
+            ?? s?.raw?.created_at
+            ?? s?.raw?.subscription?.created_at;
+    };
+
+    const getSubscriptionEndDate = (s: any) => {
+        return s?.end_date
+            ?? s?.ends_at
+            ?? s?.endAt
+            ?? s?.raw?.end_date
+            ?? s?.raw?.ends_at
+            ?? s?.raw?.endAt
+            ?? s?.raw?.subscription?.end_date
+            ?? s?.raw?.subscription?.ends_at
+            ?? null;
+    };
+
+    const exportVendorSubscriptionsToCsv = () => {
+        try {
+            const escapeCsv = (val: any) => {
+                const s = val === undefined || val === null ? '' : String(val);
+                const safe = s.replace(/\r?\n/g, ' ').replace(/"/g, '""');
+                return `"${safe}"`;
+            };
+
+            const headers = [
+                'Subscription ID',
+                'ICE ID',
+                'Vendor Name',
+                'Plan Name',
+                'Start Date',
+                'End Date',
+                'Duration',
+                'Status',
+            ];
+
+            const rows = safeVendorSubscriptions.map((s: any) => {
+                const sr = s as any;
+                const subId = sr.id ?? sr.raw?.subscription?.id ?? sr.raw?.id ?? sr.raw?.subscription_id;
+                const userId = sr.user_id ?? sr.raw?.user_id ?? sr.raw?.user?.id ?? sr.raw?.vendor_id ?? sr.raw?.vendorId;
+                const planId = sr.plan_id ?? sr.raw?.plan_id ?? sr.raw?.plan?.id;
+                const companyName = getVendorCompanyLabel(Number(userId));
+                const vendorName = companyName || userNames[userId] || `User ${userId}`;
+                const iceId = getVendorIceLabel(Number(userId)) || '-';
+                const planTitle = getPlanTitleLabel(Number(planId)) || String(planId ?? '');
+                const startDate = formatDateCell(getSubscriptionStartDate(sr));
+                const endDate = formatDateCell(getSubscriptionEndDate(sr));
+                const duration = getPlanDurationLabel(Number(planId)) || '-';
+                const statusRaw = sr.status ?? sr.raw?.status ?? sr.raw?.subscription?.status;
+                const status = String(statusRaw ?? '').trim() || '-';
+
+                return [
+                    subId,
+                    iceId,
+                    vendorName,
+                    planTitle,
+                    startDate,
+                    endDate,
+                    duration,
+                    status,
+                ].map(escapeCsv).join(',');
+            });
+
+            const csv = [headers.map(escapeCsv).join(','), ...rows].join('\n');
+            const bom = '\ufeff';
+            const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const stamp = new Date().toISOString().slice(0, 10);
+            a.href = url;
+            a.download = `vendor-subscriptions-${stamp}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            toast.success('Export started');
+        } catch (e: any) {
+            toast.error(e?.message || 'Failed to export');
+        }
+    };
+
     const normalizeBool = (val: any): boolean | undefined => {
         if (typeof val === 'boolean') return val;
         if (typeof val === 'number') return val === 1;
@@ -650,7 +834,7 @@ const VendorsPlane = () => {
 
                     <>
                             {/* Desktop Table */}
-                            <div className="hidden lg:block rounded-md border overflow-x-auto">
+                            <div className="hidden xl:block rounded-md border overflow-x-auto">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
@@ -696,7 +880,7 @@ const VendorsPlane = () => {
                             </div>
 
                             {/* Mobile & Tablet Cards */}
-                            <div className="lg:hidden space-y-3">
+                            <div className="xl:hidden space-y-3">
                                 {vendors.map((vendor) => (
                                     <Card key={vendor.id} className="p-4">
                                         <div className="space-y-3">
@@ -736,17 +920,30 @@ const VendorsPlane = () => {
                                 <Card className="p-3 sm:p-4">
                                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 mb-3 sm:mb-4">
                                         <h4 className="font-semibold text-sm sm:text-base">Vendor Subscriptions</h4>
-                                        <span className="text-xs text-gray-500">Total: {safeVendorSubscriptions.length}</span>
+                                        <div className="flex items-center gap-2 sm:gap-3">
+                                            <span className="text-xs text-gray-500">Total: {safeVendorSubscriptions.length}</span>
+                                            <Button
+                                                onClick={exportVendorSubscriptionsToCsv}
+                                                className="bg-[#00897B] hover:bg-[#00796B] text-white w-full sm:w-auto"
+                                            >
+                                                <Download className="mr-2 h-4 w-4" />
+                                                Export to Excel
+                                            </Button>
+                                        </div>
                                     </div>
                                     
                                     {/* Desktop Table */}
-                                    <div className="hidden lg:block rounded-md border overflow-x-auto">
+                                    <div className="hidden xl:block rounded-md border overflow-x-auto">
                                         <Table className="text-xs sm:text-sm">
                                             <TableHeader>
                                                 <TableRow>
                                                     <TableHead className="min-w-[120px] sm:min-w-auto">Subscription ID</TableHead>
-                                                    <TableHead className="min-w-[120px] sm:min-w-auto">User Name</TableHead>
-                                                    <TableHead className="min-w-[70px] sm:min-w-auto">Plan ID</TableHead>
+                                                    <TableHead className="min-w-[90px] sm:min-w-auto">ICE ID</TableHead>
+                                                    <TableHead className="min-w-[120px] sm:min-w-auto">Venors Name</TableHead>
+                                                    <TableHead className="min-w-[70px] sm:min-w-auto">Plan Name</TableHead>
+                                                    <TableHead className="min-w-[90px] sm:min-w-auto">Start Date</TableHead>
+                                                    <TableHead className="min-w-[90px] sm:min-w-auto">End Date</TableHead>
+                                                    <TableHead className="min-w-[90px] sm:min-w-auto">Duration</TableHead>
                                                     <TableHead className="min-w-[80px] sm:min-w-auto">Status</TableHead>
                                                     <TableHead className="min-w-[50px] text-right">Actions</TableHead>
                                                 </TableRow>
@@ -765,12 +962,22 @@ const VendorsPlane = () => {
                                                             status = planActive ? 'active' : 'inactive';
                                                         }
                                                     }
-                                                    const userName = userNames[userId] || `Loading...`;
+                                                    const companyName = getVendorCompanyLabel(Number(userId));
+                                                    const userName = companyName || userNames[userId] || `Loading...`;
+                                                    const iceId = getVendorIceLabel(Number(userId));
+                                                    const planTitle = getPlanTitleLabel(Number(planId));
+                                                    const startDate = getSubscriptionStartDate(sr);
+                                                    const endDate = getSubscriptionEndDate(sr);
+                                                    const durationLabel = getPlanDurationLabel(Number(planId));
                                                     return (
                                                         <TableRow key={String(subId)}>
                                                             <TableCell className="whitespace-nowrap sm:whitespace-normal">{String(subId ?? '')}</TableCell>
+                                                            <TableCell className="whitespace-nowrap sm:whitespace-normal">{iceId || '-'}</TableCell>
                                                             <TableCell className="whitespace-nowrap sm:whitespace-normal">{userName}</TableCell>
-                                                            <TableCell className="whitespace-nowrap sm:whitespace-normal">{String(planId ?? '')}</TableCell>
+                                                            <TableCell className="whitespace-nowrap sm:whitespace-normal">{planTitle || String(planId ?? '')}</TableCell>
+                                                            <TableCell className="whitespace-nowrap sm:whitespace-normal">{formatDateCell(startDate)}</TableCell>
+                                                            <TableCell className="whitespace-nowrap sm:whitespace-normal">{formatDateCell(endDate)}</TableCell>
+                                                            <TableCell className="whitespace-nowrap sm:whitespace-normal">{durationLabel || '-'}</TableCell>
                                                             <TableCell className="whitespace-nowrap sm:whitespace-normal">{renderStatusBadge(status)}</TableCell>
                                                             <TableCell className="text-right">
                                                                 <Button
@@ -791,7 +998,7 @@ const VendorsPlane = () => {
                                                 })}
                                                 {safeVendorSubscriptions.length === 0 ? (
                                                     <TableRow>
-                                                        <TableCell colSpan={5} className="text-center text-xs sm:text-sm text-gray-500 py-3 sm:py-4">No subscriptions found</TableCell>
+                                                        <TableCell colSpan={9} className="text-center text-xs sm:text-sm text-gray-500 py-3 sm:py-4">No subscriptions found</TableCell>
                                                     </TableRow>
                                                 ) : null}
                                             </TableBody>
@@ -799,7 +1006,7 @@ const VendorsPlane = () => {
                                     </div>
                                     
                                     {/* Mobile & Tablet Cards */}
-                                    <div className="lg:hidden space-y-3">
+                                    <div className="xl:hidden space-y-3">
                                         {safeVendorSubscriptions.length === 0 ? (
                                             <div className="text-center text-xs sm:text-sm text-gray-500 py-6">
                                                 No subscriptions found
@@ -818,7 +1025,12 @@ const VendorsPlane = () => {
                                                         status = planActive ? 'active' : 'inactive';
                                                     }
                                                 }
-                                                const userName = userNames[userId] || `Loading...`;
+                                                const companyName = getVendorCompanyLabel(Number(userId));
+                                                const userName = companyName || userNames[userId] || `Loading...`;
+                                                const iceId = getVendorIceLabel(Number(userId));
+                                                const startDate = getSubscriptionStartDate(sr);
+                                                const endDate = getSubscriptionEndDate(sr);
+                                                const durationLabel = getPlanDurationLabel(Number(planId));
                                                 
                                                 return (
                                                     <Card key={String(subId)} className="p-3 border-l-4 border-l-[#00897B]">
@@ -842,18 +1054,39 @@ const VendorsPlane = () => {
                                                                 </Button>
                                                             </div>
                                                             <div>
-                                                                <p className="text-xs text-gray-500">User Name</p>
+                                                                <p className="text-xs text-gray-500">Company Name</p>
                                                                 <p className="text-sm font-medium">{userName}</p>
+                                                            </div>
+
+                                                            <div>
+                                                                <p className="text-xs text-gray-500">ICE ID</p>
+                                                                <p className="text-sm font-medium">{iceId || '-'}</p>
                                                             </div>
                                                             <div className="grid grid-cols-2 gap-2">
                                                                 <div>
-                                                                    <p className="text-xs text-gray-500">Plan ID</p>
-                                                                    <p className="text-sm">{String(planId ?? '')}</p>
+                                                                    <p className="text-xs text-gray-500">Plan Name</p>
+                                                                    <p className="text-sm">{getPlanTitleLabel(Number(planId)) || String(planId ?? '')}</p>
                                                                 </div>
                                                                 <div>
                                                                     <p className="text-xs text-gray-500">Status</p>
                                                                     <div className="mt-1">{renderStatusBadge(status)}</div>
                                                                 </div>
+                                                            </div>
+
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                <div>
+                                                                    <p className="text-xs text-gray-500">Start Date</p>
+                                                                    <p className="text-sm">{formatDateCell(startDate)}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-xs text-gray-500">End Date</p>
+                                                                    <p className="text-sm">{formatDateCell(endDate)}</p>
+                                                                </div>
+                                                            </div>
+
+                                                            <div>
+                                                                <p className="text-xs text-gray-500">Duration</p>
+                                                                <p className="text-sm">{durationLabel || '-'}</p>
                                                             </div>
                                                         </div>
                                                     </Card>
@@ -1011,7 +1244,7 @@ const VendorsPlane = () => {
                                     <SelectContent className="w-[90vw] sm:w-auto">
                                         {safeVendorList.map(v => (
                                             <SelectItem key={v.id} value={String(v.id)} className="text-sm sm:text-base">
-                                                {('name' in (v as any) ? (v as any).name : `Vendor ${v.id}`)} {('email' in (v as any) && (v as any).email) ? `- ${(v as any).email}` : ''}
+                                                {((v as any).company_name || (v as any).companyName || (v as any).company || (v as any).business_name || (v as any).businessName || (v as any).name || `Vendor ${v.id}`)} {('email' in (v as any) && (v as any).email) ? `- ${(v as any).email}` : ''}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -1037,6 +1270,19 @@ const VendorsPlane = () => {
                                         ))}
                                     </SelectContent>
                                 </Select>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="manual_start_date" className="text-sm sm:text-base">Start Date</Label>
+                                    <Input
+                                        id="manual_start_date"
+                                        type="date"
+                                        value={manualForm.start_date ?? ''}
+                                        onChange={(e) => handleManualFormChange('start_date', e.target.value || null)}
+                                        className="text-sm sm:text-base"
+                                    />
+                                </div>
                             </div>
 
                             {/* Plan Details Summary */}
@@ -1283,9 +1529,25 @@ const VendorsPlane = () => {
                                         </p>
                                     </div>
                                     <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-                                        <p className="text-xs sm:text-sm text-gray-600">Plan ID</p>
+                                        <p className="text-xs sm:text-sm text-gray-600">Plan Name</p>
                                         <p className="text-sm sm:text-lg font-semibold text-gray-900 mt-1">
-                                            {(selectedSubscription as any).plan_id ?? (selectedSubscription as any).raw?.plan_id ?? 'N/A'}
+                                            {(() => {
+                                                const pid = (selectedSubscription as any).plan_id ?? (selectedSubscription as any).raw?.plan_id;
+                                                if (!pid) return 'N/A';
+                                                return getPlanTitleLabel(Number(pid)) || String(pid);
+                                            })()}
+                                        </p>
+                                    </div>
+                                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                        <p className="text-xs sm:text-sm text-gray-600">Start Date</p>
+                                        <p className="text-sm sm:text-lg font-semibold text-gray-900 mt-1">
+                                            {formatDateCell(getSubscriptionStartDate(selectedSubscription as any))}
+                                        </p>
+                                    </div>
+                                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                        <p className="text-xs sm:text-sm text-gray-600">End Date</p>
+                                        <p className="text-sm sm:text-lg font-semibold text-gray-900 mt-1">
+                                            {formatDateCell(getSubscriptionEndDate(selectedSubscription as any))}
                                         </p>
                                     </div>
                                     <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
@@ -1293,21 +1555,6 @@ const VendorsPlane = () => {
                                         <div className="mt-1">
                                             {renderStatusBadge((selectedSubscription as any).status ?? (selectedSubscription as any).raw?.status)}
                                         </div>
-                                    </div>
-                                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-                                        <p className="text-xs sm:text-sm text-gray-600">Start Date</p>
-                                        <p className="text-sm sm:text-lg font-semibold text-gray-900 mt-1">
-                                            {(() => {
-                                                const createdAt = (selectedSubscription as any).created_at ?? (selectedSubscription as any).raw?.created_at ?? (selectedSubscription as any).raw?.subscription?.created_at;
-                                                if (!createdAt) return 'N/A';
-                                                try {
-                                                    const date = new Date(createdAt);
-                                                    return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '/');
-                                                } catch {
-                                                    return 'N/A';
-                                                }
-                                            })()}
-                                        </p>
                                     </div>
                                 </div>
                             </div>

@@ -4,7 +4,6 @@ import { ApiResponse } from '../types/api';
 import CustomerService from './customerService';
 import { toast } from 'react-hot-toast';
 import BACK_RESERVATIONS_ENDPOINTS from '../endpoints/reservations';
-const BASE_URL = '/back/v1/reservations';
 
 export const reservationApi = {
   async getReservations(filters: ReservationFilters = {}): Promise<ReservationsResponse> {
@@ -16,6 +15,7 @@ export const reservationApi = {
         ...(filters.sortOrder && { sortOrder: filters.sortOrder }),
         ...(filters.search && { search: filters.search }),
         ...(filters.user_id && { user_id: filters.user_id }),
+        ...(filters.status && { status: filters.status }),
       });
 
       // Get reservations and customers in parallel

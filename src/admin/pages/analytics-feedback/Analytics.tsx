@@ -56,6 +56,7 @@ import {
   Cell,
 } from "recharts";
 import { getAnalytics } from "@/admin/lib/api/services/Analytics";
+import { adminApiClient } from "@/admin/lib/api/client";
 import { Loader2 as Loader } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -160,7 +161,7 @@ const Analytics = () => {
   const [filterMetric, setFilterMetric] = useState<string>("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsItem[]>([]);
   const [isRealTime, setIsRealTime] = useState(false);
   const [isLoading, setIsLoading] = useState(true); // Add loading state
   const itemsPerPage = 10;
@@ -168,8 +169,84 @@ const Analytics = () => {
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true); // Set loading to true before fetching data
-      const data = await getAnalytics();
-      setAnalyticsData(data);
+      const parseNumber = (val: number | string | undefined) => {
+        if (typeof val === 'number') return val;
+        if (typeof val === 'string') {
+          const cleaned = val.replace(/[^0-9.-]/g, '');
+          const parsed = Number(cleaned);
+          return Number.isFinite(parsed) ? parsed : 0;
+        }
+        return 0;
+      };
+
+      const raw = await getAnalytics();
+      const list: AnalyticsItem[] = Array.isArray(raw) ? raw : (raw as any)?.data || [];
+      const enriched: AnalyticsItem[] = Array.isArray(list) ? [...list] : [];
+
+      const hasByName = (name: string) =>
+        enriched.some((i) => String(i.name).trim().toLowerCase() === name.trim().toLowerCase());
+
+      const confirmedFromAnalytics = enriched.find((i) =>
+        /confirm/i.test(String(i.name || ''))
+      );
+
+      if (!hasByName('Blane Confirmed')) {
+        if (confirmedFromAnalytics) {
+          enriched.push({
+            name: 'Blane Confirmed',
+            value: confirmedFromAnalytics.value,
+            change: confirmedFromAnalytics.change,
+            icon: confirmedFromAnalytics.icon || 'ConfirmedIcon',
+          });
+        } else {
+          try {
+            const res = await adminApiClient.get('/back/v1/reservations', {
+              params: {
+                page: 1,
+                paginationSize: 1,
+                status: 'confirmed',
+              },
+            });
+
+            const confirmedTotal =
+              res.data?.meta?.total ??
+              res.data?.data?.meta?.total ??
+              res.data?.total ??
+              0;
+
+            enriched.push({
+              name: 'Blane Confirmed',
+              value: Number(confirmedTotal) || 0,
+              change: 0,
+              icon: 'ConfirmedIcon',
+            });
+          } catch {
+            enriched.push({
+              name: 'Blane Confirmed',
+              value: 0,
+              change: 0,
+              icon: 'ConfirmedIcon',
+            });
+          }
+        }
+      }
+
+      if (!hasByName('Average Basket')) {
+        const ordersItem = enriched.find((i) => String(i.name).toLowerCase() === 'total orders');
+        const revenueItem = enriched.find((i) => String(i.name).toLowerCase() === 'total revenue');
+        const orders = parseNumber(ordersItem?.value);
+        const revenue = parseNumber(revenueItem?.value);
+        const averageBasket = orders > 0 ? revenue / orders : 0;
+
+        enriched.push({
+          name: 'Average Basket',
+          value: averageBasket,
+          change: 0,
+          icon: 'AverageBasketIcon',
+        });
+      }
+
+      setAnalyticsData(enriched);
       setIsLoading(false); // Set loading to false after data is fetched
     };
     fetchData();
@@ -281,12 +358,16 @@ const Analytics = () => {
         variants={animationVariants.fadeIn}
         className="p-3 sm:p-4 md:p-6 grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4"
       >
-        {analyticsData && analyticsData.slice(0, 8).map((kpi: AnalyticsItem, index: number) => {
+        {analyticsData && analyticsData.slice(0, 12).map((kpi: AnalyticsItem, index: number) => {
           const iconMap: { [key: string]: React.ReactNode } = {
             "OrdersIcon": <EyeIcon className="h-5 w-5" />,
             "DollarSignIcon": <span className="text-lg font-bold text-[#00897B]">DH</span>,
             "UsersIcon": <UsersIcon className="h-5 w-5" />,
             "ReservationsIcon": <BookCheck className="h-5 w-5" />,
+            "ConfirmedIcon": <BookCheck className="h-5 w-5" />,
+            "ConfirmedReservationsIcon": <BookCheck className="h-5 w-5" />,
+            "AverageBasketIcon": <ArrowUpRightIcon className="h-5 w-5" />,
+            "BasketIcon": <ArrowUpRightIcon className="h-5 w-5" />,
             "BlanesIcon": <BookmarkCheck className="h-5 w-5" />,
             "ExpiredBlanesIcon": <BookmarkX className="h-5 w-5" />,
             "CouponsIcon": <TicketCheck className="h-5 w-5" />,

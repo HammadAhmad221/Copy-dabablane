@@ -12,10 +12,11 @@ interface AdminLayoutProps {
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const { isAuthenticated, user, isLoading, authReady } = useAuth();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useIsMobile();
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile);
 
   // Set initial sidebar state based on device size
   useEffect(() => {

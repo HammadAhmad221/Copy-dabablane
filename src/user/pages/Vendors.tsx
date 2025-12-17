@@ -1,45 +1,61 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Search } from 'lucide-react';
+import { MapPin, Pause, Play, Search, Volume2, VolumeX } from 'lucide-react';
 import { VendorService, VendorListItem, VendorCoverMediaItem } from '@/user/lib/api/services/vendorService';
 import Loader from '@/user/components/ui/Loader';
 import { getPlaceholderImage } from '@/user/lib/utils/home';
 
-const VENDOR_MEDIA_BASE_URL = 'https://dev.dabablane.com/storage/uploads/vendor_images/';
+const API_ORIGIN = 'https://dev.dabablane.com';
+const VENDOR_MEDIA_BASE_URL = `${API_ORIGIN}/storage/uploads/vendor_images/`;
 
 const buildVendorAssetUrl = (path?: string | null): string => {
   if (!path) return '';
-  if (path.startsWith('http')) return path;
-  return `${VENDOR_MEDIA_BASE_URL}${path}`;
+
+  const trimmed = path.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  if (trimmed.startsWith('//')) return `https:${trimmed}`;
+  if (trimmed.startsWith('/')) return `${API_ORIGIN}${trimmed}`;
+  if (trimmed.startsWith('storage/')) return `${API_ORIGIN}/${trimmed}`;
+  if (trimmed.startsWith('uploads/')) return `${API_ORIGIN}/storage/${trimmed}`;
+  return `${VENDOR_MEDIA_BASE_URL}${trimmed}`;
 };
 
-const resolveCoverImage = (vendor: VendorListItem): string => {
+const isVideoUrl = (url: string): boolean => {
+  const normalized = url.split('?')[0].toLowerCase();
+  return /\.(mp4|mov|webm|ogg)$/.test(normalized);
+};
+
+const resolveCoverMedia = (vendor: VendorListItem): { url: string; type: 'video' | 'image' } => {
   if (Array.isArray(vendor.cover_media) && vendor.cover_media.length > 0) {
-    const firstMedia = vendor.cover_media.find((media) => {
-      if (typeof media === 'string') return true;
-      return (media as VendorCoverMediaItem)?.media_type !== 'video';
-    }) || vendor.cover_media[0];
+    for (const entry of vendor.cover_media) {
+      if (!entry) continue;
 
-    if (typeof firstMedia === 'string') {
-      return firstMedia.startsWith('http')
-        ? firstMedia
-        : buildVendorAssetUrl(firstMedia);
-    }
+      if (typeof entry === 'string') {
+        const url = buildVendorAssetUrl(entry);
+        if (!url) continue;
+        return { url, type: isVideoUrl(url) ? 'video' : 'image' };
+      }
 
-    const mediaObject = firstMedia as VendorCoverMediaItem;
-    const mediaUrl = mediaObject.media_url || mediaObject.url;
-    if (mediaUrl) {
-      return mediaUrl.startsWith('http')
-        ? mediaUrl
-        : buildVendorAssetUrl(mediaUrl);
+      const mediaObject = entry as VendorCoverMediaItem;
+      const mediaUrl = mediaObject.media_url || mediaObject.url;
+      if (!mediaUrl) continue;
+
+      const url = buildVendorAssetUrl(mediaUrl);
+      if (!url) continue;
+
+      const type = String(mediaObject.media_type || '').toLowerCase() === 'video' || isVideoUrl(url)
+        ? 'video'
+        : 'image';
+      return { url, type };
     }
   }
 
   if (vendor.logoUrl) {
-    return buildVendorAssetUrl(vendor.logoUrl);
+    return { url: buildVendorAssetUrl(vendor.logoUrl), type: 'image' };
   }
 
-  return '';
+  return { url: '', type: 'image' };
 };
 
 // Helper function to create URL-friendly slugs (replace spaces with hyphens)
@@ -64,6 +80,9 @@ const VendorsPage = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalVendors, setTotalVendors] = useState<number>(0);
+  const [playingVendorId, setPlayingVendorId] = useState<number | null>(null);
+  const [mutedByVendorId, setMutedByVendorId] = useState<Record<number, boolean>>({});
+  const videoRefs = useRef<Record<number, HTMLVideoElement | null>>({});
 
   const VENDORS_PER_PAGE = 9;
 
@@ -106,6 +125,20 @@ const VendorsPage = () => {
 
     fetchVendors();
   }, [debouncedSearch, currentPage]);
+
+  useEffect(() => {
+    setPlayingVendorId(null);
+
+    setMutedByVendorId((prev) => {
+      const next: Record<number, boolean> = { ...prev };
+      vendors.forEach((vendor) => {
+        if (typeof next[vendor.id] !== 'boolean') {
+          next[vendor.id] = true;
+        }
+      });
+      return next;
+    });
+  }, [vendors]);
 
   if (initialLoad && loading) {
     return (
@@ -202,12 +235,14 @@ const VendorsPage = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {vendors.map((vendor) => {
-              const mediaUrl = resolveCoverImage(vendor);
+              const coverMedia = resolveCoverMedia(vendor);
+              const mediaUrl = coverMedia.url;
               const displayName = vendor.company_name || vendor.name || 'Vendeur';
               const displayCity = vendor.city || 'Ville non renseignée';
               
-              // Check if media is video
-              const isVideo = mediaUrl.toLowerCase().match(/\.(mp4|mov|webm|ogg)$/);
+              const isVideo = coverMedia.type === 'video';
+              const isPlaying = playingVendorId === vendor.id;
+              const isMuted = mutedByVendorId[vendor.id] !== false;
 
               return (
                 <Link
@@ -219,26 +254,89 @@ const VendorsPage = () => {
                     {isVideo ? (
                       <video
                         src={mediaUrl}
-                        className="w-full h-full object-cover"
-                        autoPlay
-                        muted
-                        loop
-                        playsInline
-                        onClick={(e) => {
-                          if (e.currentTarget.paused) {
-                            e.currentTarget.play();
-                          } else {
-                            e.currentTarget.pause();
-                          }
+                        ref={(el) => {
+                          videoRefs.current[vendor.id] = el;
                         }}
+                        className="w-full h-full object-cover"
+                        muted={isMuted}
+                        playsInline
+                        preload="metadata"
                       />
                     ) : (
                       <img
                         src={getPlaceholderImage(mediaUrl, 640, 420)}
                         alt={displayName}
                         className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
+                        onError={(e) => {
+                          e.currentTarget.src = getPlaceholderImage(null, 640, 420);
+                        }}
                       />
                     )}
+
+                    {isVideo && (
+                      <>
+                        <button
+                          type="button"
+                          className="absolute top-3 right-3 z-20 bg-black/40 hover:bg-black/50 text-white rounded-full h-9 w-9 flex items-center justify-center"
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            const currentEl = videoRefs.current[vendor.id];
+                            if (!currentEl) return;
+
+                            Object.entries(videoRefs.current).forEach(([id, el]) => {
+                              if (Number(id) !== vendor.id && el) {
+                                el.pause();
+                                el.currentTime = 0;
+                              }
+                            });
+
+                            if (isPlaying) {
+                              currentEl.pause();
+                              currentEl.currentTime = 0;
+                              setPlayingVendorId(null);
+                              return;
+                            }
+
+                            try {
+                              await currentEl.play();
+                              setPlayingVendorId(vendor.id);
+                            } catch {
+                              setPlayingVendorId(null);
+                            }
+                          }}
+                        >
+                          {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="absolute top-3 right-14 z-20 bg-black/40 hover:bg-black/50 text-white rounded-full h-9 w-9 flex items-center justify-center"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            const nextMuted = !isMuted;
+                            setMutedByVendorId((prev) => ({
+                              ...prev,
+                              [vendor.id]: nextMuted,
+                            }));
+
+                            const el = videoRefs.current[vendor.id];
+                            if (el) {
+                              el.muted = nextMuted;
+                              if (!nextMuted && el.volume === 0) {
+                                el.volume = 1;
+                              }
+                            }
+                          }}
+                        >
+                          {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                        </button>
+                      </>
+                    )}
+
                     <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
                     <div className="absolute bottom-4 left-4 right-4 text-white">
                       <h3 className="text-xl font-semibold mb-1">

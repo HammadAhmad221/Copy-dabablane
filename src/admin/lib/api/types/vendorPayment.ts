@@ -14,7 +14,7 @@ export interface VendorPayment {
   commission_vat: number;
   net_amount: number;
   payment_type: 'full' | 'partial';
-  transfer_status: 'pending' | 'processed';
+  transfer_status: 'pending' | 'processed' | 'complete';
   note?: string;
   created_at: string;
   updated_at: string;
@@ -22,7 +22,7 @@ export interface VendorPayment {
 
 export interface VendorPaymentFilters {
   vendor_id?: number | string;
-  transfer_status?: 'pending' | 'processed';
+  transfer_status?: 'pending' | 'processed' | 'complete';
   payment_type?: 'full' | 'partial';
   category_id?: number | string;
   start_date?: string;

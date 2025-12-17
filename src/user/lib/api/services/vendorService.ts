@@ -57,6 +57,7 @@ export interface VendorDetailData {
   vat: string | null;
   logoUrl: string | null;
   coverPhotoUrl: string | null;
+  cover_media?: (VendorCoverMediaItem | string)[];
   rcCertificateUrl: string | null;
   ribUrl: string | null;
   rib_account: string | null;
@@ -120,6 +121,8 @@ export class VendorService {
     const params = isNumeric
       ? { id: Number(idOrName) }
       : { company_name: idOrName };
+
+    (params as any).include = 'coverMedia';
 
     const response = await axios.get(`${API_BASE_URL}/vendors/getVendorByIdOrCompanyName`, {
       params,

@@ -160,24 +160,88 @@ const SubscriptionManagement = () => {
   };
 
   const handleSavePlan = async () => {
-    if (!planForm.title || !planForm.price_ht) {
-      toast.error('Please fill all required fields');
+    const slugify = (input: string) => {
+      return String(input || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-');
+    };
+
+    const title = String(planForm.title || '').trim();
+    const slugFromTitle = slugify(title);
+    
+    // Ensure unique slug by adding timestamp suffix for new plans
+    let slug = String(planForm.slug || '').trim() || slugFromTitle;
+    if (!editingPlan) {
+      // For new plans, always add timestamp to ensure uniqueness
+      slug = `${slug}-${Date.now()}`;
+    }
+    const priceHt = typeof planForm.price_ht === 'string' ? Number(planForm.price_ht) : planForm.price_ht;
+    const originalPriceHt = typeof planForm.original_price_ht === 'string' ? Number(planForm.original_price_ht) : planForm.original_price_ht;
+    const durationDays = typeof planForm.duration_days === 'string' ? Number(planForm.duration_days) : planForm.duration_days;
+    const displayOrder = typeof planForm.display_order === 'string' ? Number(planForm.display_order) : planForm.display_order;
+
+    if (!title) {
+      toast.error('Please enter plan title');
       return;
     }
+
+    if (!slug) {
+      toast.error('Please enter plan slug');
+      return;
+    }
+
+    if (!Number.isFinite(priceHt) || Number(priceHt) <= 0) {
+      toast.error('Please enter a valid price');
+      return;
+    }
+
+    if (!Number.isFinite(durationDays) || Number(durationDays) <= 0) {
+      toast.error('Please enter a valid duration (days)');
+      return;
+    }
+
+    const payload = {
+      ...planForm,
+      title,
+      slug,
+      price_ht: Number(priceHt),
+      original_price_ht: Number.isFinite(originalPriceHt) && Number(originalPriceHt) > 0 ? Number(originalPriceHt) : Number(priceHt),
+      duration_days: Number(durationDays),
+      display_order: Number.isFinite(displayOrder) && Number(displayOrder) > 0 ? Number(displayOrder) : 1,
+    };
 
     try {
       setIsLoading(true);
       if (editingPlan) {
-        await vendorPlanService.updatePlan(editingPlan.id, planForm);
+        await vendorPlanService.updatePlan(editingPlan.id, payload);
         toast.success('Plan updated successfully');
       } else {
-        await vendorPlanService.createPlan(planForm);
+        await vendorPlanService.createPlan(payload);
         toast.success('Plan created successfully');
       }
       await fetchVendorPlans();
       setPlanDialog(false);
     } catch (error) {
-      toast.error('Failed to save vendor plan');
+      const err: any = error;
+      const data = err?.response?.data;
+
+      const errorsObj = data?.errors;
+      const errorsMsg = errorsObj && typeof errorsObj === 'object'
+        ? Object.values(errorsObj).flat().filter(Boolean).map((x: any) => String(x)).join(' | ')
+        : '';
+
+      const msg =
+        errorsMsg
+        || data?.message
+        || data?.error
+        || (typeof data === 'string' ? data : undefined)
+        || err?.message
+        || 'Failed to save vendor plan';
+
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }

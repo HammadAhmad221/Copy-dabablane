@@ -10,7 +10,7 @@ export interface ReservationType {
   quantity:number;
   time: string;
   comments: string;
-  status: "pending" | "confirmed" | "canceled";
+  status: "pending" | "confirmed" | "canceled" | "cancelled" | "paid";
   created_at: string;
   updated_at: string;
 }
@@ -67,6 +67,7 @@ export interface ReservationFilters {
   sortOrder?: string | null;
   search?: string | null;
   user_id?: string | null;
+  status?: string | null;
 }
 
 export interface OrderFormData {

@@ -392,6 +392,8 @@ const Reservations: React.FC = () => {
       const userEmail = selectedUser?.email?.toLowerCase().trim();
       const userName = selectedUser?.name?.toLowerCase().trim();
       const userPhone = selectedUser?.phone?.toLowerCase().trim();
+      const normalizedSearchTerm = String(searchTerm || '').toLowerCase().trim();
+      const hasSearchTerm = normalizedSearchTerm.length > 0;
 
       console.log('🔍 User filter selected:', {
         userFilter,
@@ -420,12 +422,12 @@ const Reservations: React.FC = () => {
 
       // When filtering by user, fetch all matching reservations first, then paginate client-side
       const response = await reservationApi.getReservations({
-        page: userEmail ? 1 : pagination.currentPage,
-        paginationSize: userEmail ? 9999 : pagination.perPage, // Fetch all when filtering by user
+        page: (userEmail || hasSearchTerm) ? 1 : pagination.currentPage,
+        paginationSize: (userEmail || hasSearchTerm) ? 9999 : pagination.perPage, // Fetch all when filtering by user/search
         sortBy,
         sortOrder,
         // Don't use search parameter when filtering by user - fetch all and filter client-side
-        search: userEmail ? undefined : (searchTerm || undefined),
+        search: (userEmail || hasSearchTerm) ? undefined : (searchTerm || undefined),
         ...(statusFilter !== "all" && { status: statusFilter }),
         // Note: user_id filter may not work on backend, so we filter client-side instead
       });
@@ -541,6 +543,28 @@ const Reservations: React.FC = () => {
         const startIndex = (pagination.currentPage - 1) * pagination.perPage;
         const endIndex = startIndex + pagination.perPage;
         filteredData = filteredData.slice(startIndex, endIndex);
+      } else if (hasSearchTerm) {
+        const allMatched = response.data.filter((reservation) => {
+          const name = reservation.name?.toLowerCase().trim() || '';
+          const email = reservation.email?.toLowerCase().trim() || '';
+          const phone = reservation.phone?.toLowerCase().trim() || '';
+          return (
+            name.includes(normalizedSearchTerm) ||
+            email.includes(normalizedSearchTerm) ||
+            phone.includes(normalizedSearchTerm)
+          );
+        });
+
+        const startIndex = (pagination.currentPage - 1) * pagination.perPage;
+        const endIndex = startIndex + pagination.perPage;
+        filteredData = allMatched.slice(startIndex, endIndex);
+
+        setPagination({
+          currentPage: pagination.currentPage,
+          perPage: pagination.perPage,
+          total: allMatched.length,
+          lastPage: Math.max(1, Math.ceil(allMatched.length / pagination.perPage)),
+        });
       }
 
       setReservations(filteredData);
@@ -582,7 +606,7 @@ const Reservations: React.FC = () => {
           total: totalFiltered,
           lastPage: Math.max(1, Math.ceil(totalFiltered / pagination.perPage)),
         });
-      } else {
+      } else if (!hasSearchTerm) {
         // Use server-side pagination metadata
         setPagination({
           currentPage: response.meta.current_page,
@@ -1003,7 +1027,7 @@ const Reservations: React.FC = () => {
             </div>
 
             {/* Grille des filtres */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 md:gap-3 lg:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-3 lg:gap-4">
               <div className="col-span-1 sm:col-span-1 md:col-span-1 lg:col-span-1">
                 <Select value={statusFilter} onValueChange={handleStatusChange}>
                   <SelectTrigger className="w-full text-sm md:text-sm lg:text-base">
@@ -1100,9 +1124,9 @@ const Reservations: React.FC = () => {
         {/* Section du tableau */}
         <div className="w-full overflow-x-auto -mx-0 sm:mx-0">
           {/* Desktop/Tablet Table View */}
-          <div className="hidden md:block">
+          <div className="hidden xl:block">
             <div className="overflow-x-auto">
-              <Table className="w-full min-w-[700px] md:min-w-0">
+              <Table className="w-full min-w-[900px]">
                 <TableHeader>
                   <TableRow className="bg-gray-50">
                     <TableHead className="w-[20%] md:min-w-[140px] lg:min-w-[150px]">Client</TableHead>
@@ -1241,7 +1265,7 @@ const Reservations: React.FC = () => {
           </div>
 
           {/* Mobile Card View - Show on screens smaller than 768px */}
-          <div className="md:hidden space-y-3 p-3 sm:p-4">
+          <div className="xl:hidden space-y-3 p-3 sm:p-4">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Icon icon="lucide:loader" className="h-6 w-6 animate-spin text-[#00897B]" />

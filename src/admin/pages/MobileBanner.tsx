@@ -10,6 +10,74 @@ import { Loader2, Trash2 } from "lucide-react"
 import { useToast } from "@/admin/hooks/use-toast"
 import { mobileBannerApi } from "@/admin/lib/api/services/mobileBannerService"
 
+ const getMediaUrl = (media: unknown): string | null => {
+   if (!media) return null
+
+   const candidate = (() => {
+     if (Array.isArray(media)) {
+       for (const item of media) {
+         const resolved = getMediaUrl(item)
+         if (resolved) return resolved
+       }
+       return null
+     }
+     if (typeof media === "string") return media
+     if (typeof media === "object") {
+       const obj: any = media
+       return (
+         obj?.url ||
+         obj?.src ||
+         obj?.path ||
+         obj?.data?.url ||
+         obj?.data?.src ||
+         obj?.data?.path ||
+         obj?.data?.attributes?.url ||
+         obj?.data?.attributes?.src ||
+         obj?.data?.attributes?.path ||
+         obj?.attributes?.url ||
+         obj?.attributes?.src ||
+         obj?.attributes?.path ||
+         obj?.file?.url ||
+         obj?.file?.path ||
+         obj?.image_link ||
+         obj?.image_url ||
+         obj?.image ||
+         null
+       )
+     }
+     return null
+   })()
+
+   if (!candidate || typeof candidate !== "string") return null
+
+   const trimmed = candidate.trim()
+   if (!trimmed) return null
+
+   if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:")) {
+     return trimmed
+   }
+
+   const apiBaseUrl = import.meta.env.VITE_API_URL || "https://dev.dabablane.com/api"
+   const baseDomain = apiBaseUrl.replace(/\/?api\/?$/, "")
+
+   let cleanPath = trimmed
+   if (cleanPath.startsWith("/")) cleanPath = cleanPath.slice(1)
+
+   if (cleanPath.startsWith("storage/app/public/")) {
+     cleanPath = `storage/${cleanPath.slice("storage/app/public/".length)}`
+   } else if (cleanPath.startsWith("public/storage/")) {
+     cleanPath = `storage/${cleanPath.slice("public/storage/".length)}`
+   } else if (cleanPath.startsWith("public/")) {
+     cleanPath = cleanPath.slice("public/".length)
+   }
+
+   if (cleanPath.startsWith("storage/") || cleanPath.startsWith("uploads/") || cleanPath.startsWith("public/")) {
+     return `${baseDomain}/${cleanPath}`
+   }
+
+   return `${baseDomain}/storage/${cleanPath}`
+ }
+
 interface BannerFormData {
   title: string
   description: string
@@ -29,6 +97,7 @@ function MobileBanner() {
 
   const [banners, setBanners] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [failedMedia, setFailedMedia] = useState<Record<string, boolean>>({})
   const { toast } = useToast()
 
   const fetchBanners = useCallback(async () => {
@@ -232,31 +301,66 @@ function MobileBanner() {
         <h2 className="text-2xl font-bold text-gray-800 mb-6">Bannières existantes</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
           {banners.map((banner, idx) => {
-            const mediaSrc = banner.image_link || banner.image_url || banner.image
-            const isVideoMedia = typeof mediaSrc === "string" && mediaSrc.toLowerCase().endsWith(".mp4")
+            const rawMedia =
+              banner.image_link ||
+              banner.image_url ||
+              banner.image ||
+              banner.banner_image ||
+              banner.banner ||
+              banner.media ||
+              banner.file ||
+              banner.path ||
+              banner.image_path
+            const mediaSrc = getMediaUrl(rawMedia)
+            const isVideoMedia =
+              typeof mediaSrc === "string" &&
+              [".mp4", ".mov", ".webm", ".ogg"].some((ext) => mediaSrc.toLowerCase().includes(ext))
+            const videoType = typeof mediaSrc === "string" && mediaSrc.toLowerCase().includes(".mov")
+              ? "video/quicktime"
+              : "video/mp4"
             const isActive = typeof banner.is_active === "boolean"
               ? banner.is_active
               : Boolean(Number(banner.is_active))
 
+            const bannerKey = String(banner.id ?? banner.uuid ?? idx)
+            const mediaFailed = Boolean(failedMedia[bannerKey])
+
             return (
               <Card key={banner.id ?? banner.uuid ?? idx} className="border-0 shadow-lg overflow-hidden bg-white">
-                {mediaSrc ? (
+                {mediaSrc && !mediaFailed ? (
                   isVideoMedia ? (
                     <video
-                      autoPlay
-                      loop
+                      controls
                       muted
                       playsInline
+                      preload="metadata"
                       className="w-full h-48 object-cover"
+                      onError={() => setFailedMedia((prev) => ({ ...prev, [bannerKey]: true }))}
                     >
-                      <source src={mediaSrc} type="video/mp4" />
+                      <source src={mediaSrc} type={videoType} />
                     </video>
                   ) : (
-                    <img src={mediaSrc} alt={banner.title} className="w-full h-48 object-cover" />
+                    <img
+                      src={mediaSrc}
+                      alt={banner.title}
+                      className="w-full h-48 object-cover"
+                      onError={() => setFailedMedia((prev) => ({ ...prev, [bannerKey]: true }))}
+                    />
                   )
                 ) : (
                   <div className="w-full h-48 bg-gray-200 flex items-center justify-center text-gray-500">
-                    Aucune image
+                    {mediaSrc ? (
+                      <a
+                        href={mediaSrc}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[#00897B] underline"
+                      >
+                        Open media
+                      </a>
+                    ) : (
+                      "Aucune image"
+                    )}
                   </div>
                 )}
                 <CardContent className="p-4">

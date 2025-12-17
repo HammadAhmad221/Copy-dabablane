@@ -459,9 +459,15 @@ const UserFormDialog: React.FC<{
         ? z.object({
             name: z.string().min(1, 'Name is required'),
             email: z.string().email('Invalid email address'),
-            roles: z.array(z.string()).min(1, 'At least one role is required'),
-            password: z.string().min(6, 'Password must be at least 6 characters').optional(),
-            password_confirmation: z.string().optional()
+            roles: z.array(z.string()).optional(),
+            password: z.preprocess(
+              (val) => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+              z.string().min(6, 'Password must be at least 6 characters').optional()
+            ),
+            password_confirmation: z.preprocess(
+              (val) => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+              z.string().optional()
+            )
           }).refine((data) => {
             if (data.password) {
               return data.password === data.password_confirmation;
@@ -839,14 +845,17 @@ const Users = () => {
     if (!selectedUser) return;
     
     try {
-
       const updateData: Partial<UserFormData> = {
         name: data.name,
         email: data.email,
         phone: data.phone || '',
         city: data.city || '',
-        roles: data.roles
       };
+
+      // Only include roles if provided (optional on edit)
+      if (data.roles && data.roles.length > 0) {
+        updateData.roles = data.roles;
+      }
 
       // Only include password fields if password is provided
       if (data.password) {
