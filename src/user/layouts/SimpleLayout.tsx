@@ -1,13 +1,78 @@
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import Footer from '../components/Footer';
 import ScrollToTop from '../components/ScrollToTop';
 import Logo from '@/assets/images/dabablane.png';
+import { VendorService } from '@/user/lib/api/services/vendorService';
+
+const API_ORIGIN = 'https://dev.dabablane.com';
+
+const buildVendorAssetUrl = (path?: string | null): string => {
+  if (!path) return '';
+
+  const trimmed = path.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  if (trimmed.startsWith('//')) return `https:${trimmed}`;
+  if (trimmed.startsWith('/')) return `${API_ORIGIN}${trimmed}`;
+  if (trimmed.startsWith('storage/')) return `${API_ORIGIN}/${trimmed}`;
+  if (trimmed.startsWith('uploads/')) return `${API_ORIGIN}/storage/${trimmed}`;
+  return `${API_ORIGIN}/storage/uploads/vendor_images/${trimmed}`;
+};
 
 interface SimpleLayoutProps {
   children: React.ReactNode;
 }
 
 const SimpleLayout = ({ children }: SimpleLayoutProps) => {
+  const location = useLocation();
+  const { name } = useParams<{ name?: string }>();
+  const [vendorLogoUrl, setVendorLogoUrl] = useState<string>('');
+  const [vendorLogoAlt, setVendorLogoAlt] = useState<string>('DabaBlane');
+
+  const isVendorDetailRoute = Boolean(name) && location.pathname !== '/vendors';
+
+  useEffect(() => {
+    let isActive = true;
+    const fetchVendorLogo = async () => {
+      if (!isVendorDetailRoute || !name) {
+        setVendorLogoUrl('');
+        setVendorLogoAlt('DabaBlane');
+        return;
+      }
+
+      try {
+        const decodedName = name.replace(/-/g, ' ');
+
+        const response = await VendorService.getVendorByIdOrCompanyName(decodedName);
+        const vendor = response?.status ? response.data : null;
+        const logo = buildVendorAssetUrl(vendor?.logoUrl || '');
+
+        if (!logo) {
+          const fallbackResponse = await VendorService.getVendorByIdOrCompanyName(name);
+          const fallbackVendor = fallbackResponse?.status ? fallbackResponse.data : null;
+          const fallbackLogo = buildVendorAssetUrl(fallbackVendor?.logoUrl || '');
+          if (!isActive) return;
+          setVendorLogoUrl(fallbackLogo);
+          setVendorLogoAlt(fallbackVendor?.company_name || fallbackVendor?.name || 'Vendor');
+          return;
+        }
+        if (!isActive) return;
+        setVendorLogoUrl(logo);
+        setVendorLogoAlt(vendor?.company_name || vendor?.name || 'Vendor');
+      } catch {
+        if (!isActive) return;
+        setVendorLogoUrl('');
+        setVendorLogoAlt('DabaBlane');
+      }
+    };
+
+    fetchVendorLogo();
+    return () => {
+      isActive = false;
+    };
+  }, [isVendorDetailRoute, name]);
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Simple header with logo only on the left */}
@@ -19,9 +84,16 @@ const SimpleLayout = ({ children }: SimpleLayoutProps) => {
               className="inline-block transition-transform hover:scale-105"
             >
               <img 
-                src={Logo} 
-                alt="DabaBlane" 
-                className="h-7 md:h-8 w-auto object-contain"
+                src={vendorLogoUrl || Logo} 
+                alt={vendorLogoAlt} 
+                className={
+                  vendorLogoUrl
+                    ? 'h-9 w-9 md:h-10 md:w-10 rounded-full object-cover'
+                    : 'h-7 md:h-8 w-auto object-contain'
+                }
+                onError={(e) => {
+                  e.currentTarget.src = Logo;
+                }}
               />
             </Link>
           </div>

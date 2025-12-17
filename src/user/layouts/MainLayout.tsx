@@ -19,26 +19,31 @@ const MainLayout = ({ children }: MainLayoutProps) => {
   const location = useLocation();
   const menuItems = useMemo(() => {
     const items = response?.data?.menu_items || [];
-    const hasVendorLink = items.some((item) => item.url === '/vendors');
 
-    if (hasVendorLink) {
-      return items;
-    }
+    const sorted = [...items].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+    const vendorIndex = sorted.findIndex((item) => item.url === '/vendors');
+    const vendorItem =
+      vendorIndex >= 0
+        ? sorted[vendorIndex]
+        : {
+            id: -101,
+            label: 'Commerces partenaires',
+            url: '/vendors',
+            position: 0,
+          };
 
-    const maxPosition = items.reduce(
-      (acc, item) => Math.max(acc, item.position ?? 0),
-      0,
-    );
-
-    return [
-      ...items,
-      {
-        id: -101,
-        label: 'Vendors',
-        url: '/vendors',
-        position: maxPosition + 1,
-      },
+    const withoutVendor = vendorIndex >= 0 ? sorted.filter((_, idx) => idx !== vendorIndex) : sorted;
+    const insertionIndex = Math.min(1, withoutVendor.length);
+    const reordered = [
+      ...withoutVendor.slice(0, insertionIndex),
+      vendorItem,
+      ...withoutVendor.slice(insertionIndex),
     ];
+
+    return reordered.map((item, index) => ({
+      ...item,
+      position: index + 1,
+    }));
   }, [response?.data?.menu_items]);
   
   // Use the shared search hook

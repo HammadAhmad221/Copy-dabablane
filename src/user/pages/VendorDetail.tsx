@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, MapPin, Facebook, Instagram, Phone } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MapPin, Facebook, Instagram, Pause, Phone, Play, Volume2, VolumeX } from 'lucide-react';
 import { Blane } from '@/user/lib/types/home';
 import Loader from '@/user/components/ui/Loader';
 import { getPlaceholderImage } from '@/user/lib/utils/home';
-import { VendorService, VendorDetailData } from '@/user/lib/api/services/vendorService';
+import { VendorCoverMediaItem, VendorService, VendorDetailData } from '@/user/lib/api/services/vendorService';
 import { BlaneService } from '@/user/lib/api/services/blaneService';
 
 const VENDOR_MEDIA_BASE_URL = 'https://dev.dabablane.com/storage/uploads/vendor_images/';
@@ -13,6 +13,11 @@ const buildVendorAssetUrl = (path?: string | null): string => {
   if (!path) return '';
   if (path.startsWith('http')) return path;
   return `${VENDOR_MEDIA_BASE_URL}${path}`;
+};
+
+const isVideoUrl = (url: string): boolean => {
+  const normalized = url.split('?')[0].toLowerCase();
+  return /\.(mp4|mov|webm|ogg)$/.test(normalized);
 };
 
 const sanitizeUrl = (value?: string | null): string | undefined => {
@@ -29,6 +34,8 @@ interface VendorInfo {
   id: number;
   name: string;
   description: string;
+  businessCategory?: string;
+  subCategory?: string;
   city: string;
   address?: string;
   district?: string;
@@ -51,6 +58,10 @@ const VendorDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [videoMediaUrls, setVideoMediaUrls] = useState<Set<string>>(new Set());
+  const [isHeroVideoPlaying, setIsHeroVideoPlaying] = useState(false);
+  const [isHeroVideoMuted, setIsHeroVideoMuted] = useState(true);
+  const heroVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     let isActive = true;
@@ -84,7 +95,7 @@ const VendorDetail = () => {
           commerce_name: vendor.company_name,
           paginationSize: 100,
           page: 1,
-          include: 'blaneImages',
+          include: 'blaneImages,subcategory,category',
         });
 
         const blanesData = blanesResponse.data ?? [];
@@ -97,9 +108,44 @@ const VendorDetail = () => {
           .slice(0, 6);
 
         const coverImage = buildVendorAssetUrl(vendor.coverPhotoUrl);
-        const imageSet = Array.from(
-          new Set([coverImage, ...blaneImages].filter(Boolean)),
+
+        const rawCoverMedia = Array.isArray(vendor.cover_media) ? vendor.cover_media : [];
+        const vendorCoverUrls = rawCoverMedia
+          .map((media) => {
+            if (typeof media === 'string') {
+              return media.startsWith('http') ? media : buildVendorAssetUrl(media);
+            }
+            const obj = media as VendorCoverMediaItem;
+            const mediaUrl = obj.media_url || obj.url;
+            if (!mediaUrl) return '';
+            return mediaUrl.startsWith('http') ? mediaUrl : buildVendorAssetUrl(mediaUrl);
+          })
+          .filter(Boolean);
+
+        const videoUrls = new Set(
+          rawCoverMedia
+            .filter((m) => typeof m !== 'string' && String((m as VendorCoverMediaItem)?.media_type || '').toLowerCase() === 'video')
+            .map((m) => {
+              const obj = m as VendorCoverMediaItem;
+              const mediaUrl = obj.media_url || obj.url;
+              if (!mediaUrl) return '';
+              return mediaUrl.startsWith('http') ? mediaUrl : buildVendorAssetUrl(mediaUrl);
+            })
+            .filter(Boolean),
         );
+
+        const mergedMedia: string[] = [];
+        const pushUnique = (value: string) => {
+          if (!value) return;
+          if (mergedMedia.includes(value)) return;
+          mergedMedia.push(value);
+        };
+
+        vendorCoverUrls.forEach(pushUnique);
+        pushUnique(coverImage);
+        blaneImages.forEach(pushUnique);
+
+        const imageSet = mergedMedia.length > 0 ? mergedMedia : [''];
 
         if (!isActive) return;
 
@@ -107,6 +153,8 @@ const VendorDetail = () => {
           id: vendor.id,
           name: vendor.company_name || vendor.name,
           description: vendor.description || 'Découvrez nos offres exclusives',
+          businessCategory: vendor.businessCategory || undefined,
+          subCategory: vendor.subCategory || undefined,
           city: vendor.city || 'Ville non renseignée',
           address: vendor.address || undefined,
           district: vendor.district || undefined,
@@ -121,9 +169,12 @@ const VendorDetail = () => {
             landline: vendor.landline ? `tel:${vendor.landline}` : undefined,
           },
         });
+
+        setVideoMediaUrls(videoUrls);
         
         if (isActive) {
           setCurrentImageIndex(0);
+          setIsHeroVideoPlaying(false);
           setLoading(false);
         }
       } catch (err) {
@@ -155,6 +206,14 @@ const VendorDetail = () => {
     }
   };
 
+  useEffect(() => {
+    setIsHeroVideoPlaying(false);
+    if (heroVideoRef.current) {
+      heroVideoRef.current.pause();
+      heroVideoRef.current.currentTime = 0;
+    }
+  }, [currentImageIndex]);
+
   if (loading) {
     return <Loader />;
   }
@@ -175,7 +234,7 @@ const VendorDetail = () => {
   }
 
   const currentMedia = vendorInfo.coverImages[currentImageIndex] || '';
-  const isCurrentMediaVideo = currentMedia.toLowerCase().match(/\.(mp4|mov|webm|ogg)$/);
+  const isCurrentMediaVideo = isVideoUrl(currentMedia) || videoMediaUrls.has(currentMedia);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -186,11 +245,13 @@ const VendorDetail = () => {
           <video
             key={currentImageIndex}
             src={currentMedia}
+            ref={(el) => {
+              heroVideoRef.current = el;
+            }}
             className="w-full h-full object-cover"
-            autoPlay
-            muted
-            loop
+            muted={isHeroVideoMuted}
             playsInline
+            preload="metadata"
           />
         ) : (
           <img
@@ -198,6 +259,53 @@ const VendorDetail = () => {
             alt={vendorInfo.name}
             className="w-full h-full object-cover transition-opacity duration-500"
           />
+        )}
+
+        {isCurrentMediaVideo && (
+          <>
+            <button
+              type="button"
+              className="absolute top-4 right-16 z-20 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-full h-11 w-11 flex items-center justify-center transition-all duration-300"
+              onClick={() => {
+                const el = heroVideoRef.current;
+                const nextMuted = !isHeroVideoMuted;
+                setIsHeroVideoMuted(nextMuted);
+                if (el) {
+                  el.muted = nextMuted;
+                  if (!nextMuted && el.volume === 0) {
+                    el.volume = 1;
+                  }
+                }
+              }}
+            >
+              {isHeroVideoMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+            </button>
+
+            <button
+              type="button"
+              className="absolute top-4 right-4 z-20 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-full h-11 w-11 flex items-center justify-center transition-all duration-300"
+              onClick={async () => {
+                const el = heroVideoRef.current;
+                if (!el) return;
+
+                if (isHeroVideoPlaying) {
+                  el.pause();
+                  el.currentTime = 0;
+                  setIsHeroVideoPlaying(false);
+                  return;
+                }
+
+                try {
+                  await el.play();
+                  setIsHeroVideoPlaying(true);
+                } catch {
+                  setIsHeroVideoPlaying(false);
+                }
+              }}
+            >
+              {isHeroVideoPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+            </button>
+          </>
         )}
         <div className="absolute inset-0 bg-black bg-opacity-60" />
         
@@ -224,26 +332,30 @@ const VendorDetail = () => {
         {/* Content */}
         <div className="absolute inset-0 flex flex-col items-center justify-center px-4">
           <div className="text-center text-white max-w-3xl">
-            {/* Logo */}
-            {vendorInfo.logoUrl && (
-              <div className="flex justify-center mb-4">
-                <img
-                  src={vendorInfo.logoUrl}
-                  alt={`${vendorInfo.name} logo`}
-                  className="w-32 h-32 rounded-full drop-shadow-lg object-cover"
-                />
-              </div>
-            )}
-            
-            {/* Description/Tagline */}
-            <p className="text-sm md:text-base text-white/90 mb-2">
-              {vendorInfo.description}
-            </p>
-            
             {/* Vendor Name */}
             <h1 className="text-4xl md:text-5xl font-bold mb-6">
               {vendorInfo.name}
             </h1>
+
+            {(vendorInfo.businessCategory || vendorInfo.subCategory) && (
+              <div className="flex items-center justify-center gap-2 mb-4 flex-wrap">
+                {vendorInfo.businessCategory && (
+                  <span className="px-3 py-1 text-xs font-medium bg-white/20 backdrop-blur-sm text-white rounded-full">
+                    {vendorInfo.businessCategory}
+                  </span>
+                )}
+                {vendorInfo.subCategory && (
+                  <span className="px-3 py-1 text-xs font-medium bg-white/20 backdrop-blur-sm text-white rounded-full">
+                    {vendorInfo.subCategory}
+                  </span>
+                )}
+              </div>
+            )}
+            
+            {/* Description/Tagline */}
+            <p className="text-sm md:text-base text-white/90 mb-6">
+              {vendorInfo.description}
+            </p>
             
             {/* Social Media Icons */}
             <div className="flex items-center justify-center gap-3 mb-8">
@@ -348,7 +460,8 @@ const VendorDetail = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {blanes.map((blane) => {
               const mediaUrl = blane.blane_images?.[0]?.image_link || '';
-              const rating = parseFloat(blane.rating) || 0;
+              const categoryName = (blane as any)?.category?.name as string | undefined;
+              const subcategoryName = blane.subcategory?.name;
               
               // Check if media is video
               const isVideo = mediaUrl.toLowerCase().match(/\.(mp4|mov|webm|ogg)$/);
@@ -390,6 +503,13 @@ const VendorDetail = () => {
                         {blane.name}
                       </h3>
                     </div>
+
+                    {(categoryName || subcategoryName) && (
+                      <p className="text-sm text-gray-500 mb-3">
+                        {categoryName || '---'}
+                        {subcategoryName ? ` / ${subcategoryName}` : ''}
+                      </p>
+                    )}
 
                     {/* Price */}
                     <div className="mb-4">

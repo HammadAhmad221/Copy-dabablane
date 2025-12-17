@@ -3,6 +3,7 @@ const BACK_VENDOR_PAYMENT_ENDPOINTS = {
   getAllPayments: () => `${BACK_VENDOR_PAYMENT_ENDPOINTS.BASE}`,
   getPaymentById: (id: string | number) => `${BACK_VENDOR_PAYMENT_ENDPOINTS.BASE}/${id}`,
   updatePayment: (id: string | number) => `${BACK_VENDOR_PAYMENT_ENDPOINTS.BASE}/${id}`,
+  updateStatus: (id: string | number) => `${BACK_VENDOR_PAYMENT_ENDPOINTS.BASE}/${id}/status`,
   markProcessed: () => `${BACK_VENDOR_PAYMENT_ENDPOINTS.BASE}/mark-processed`,
   revertPayment: (id: string | number) => `${BACK_VENDOR_PAYMENT_ENDPOINTS.BASE}/${id}/revert`,
   exportExcel: () => `${BACK_VENDOR_PAYMENT_ENDPOINTS.BASE}/export/excel`,

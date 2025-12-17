@@ -21,6 +21,7 @@ import {
 } from "@/admin/components/ui/dialog";
 import { format } from "date-fns";
 import { EyeIcon, MoreVerticalIcon, PencilIcon } from "lucide-react";
+import { toast } from "react-hot-toast";
 import { Vendor, VendorStatus } from "@/admin/lib/api/types/vendor";
 import { getVendorStatusLabel } from "@/admin/lib/constants/vendor";
 import { useVendors } from "@/admin/hooks/useVendors";
@@ -340,9 +341,8 @@ const EditVendorDialog = React.memo(({
     setErrors({});
     try {
       // The API expects all fields including empty strings
-      // Exclude name and email since they are read-only and cannot be changed
-      const { name, email, blaneLimit, ...editableFields } = formData;
-      const payload: any = { ...editableFields };
+      const { blaneLimit, ...allFields } = formData;
+      const payload: any = { ...allFields };
       
       // Ensure empty strings are sent as empty strings, not undefined
       Object.keys(payload).forEach(key => {
@@ -356,6 +356,7 @@ const EditVendorDialog = React.memo(({
       }
       // Convert blaneLimit to blane_limit (API expects underscore format)
       payload.blane_limit = String(blaneLimit || 0);
+      delete payload.blaneLimit;
       
       // Add vendor ID to payload for API endpoint
       payload.id = vendor.id;
@@ -1624,6 +1625,10 @@ const Vendors: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isSearching, setIsSearching] = useState(false);
   const [isPaginationLoading, setIsPaginationLoading] = useState(false);
+  const [addVendorOpen, setAddVendorOpen] = useState(false);
+  const [newVendorEmail, setNewVendorEmail] = useState('');
+  const [addVendorError, setAddVendorError] = useState<string | null>(null);
+  const [isAddVendorSubmitting, setIsAddVendorSubmitting] = useState(false);
   // Track initial load and retry attempts
   const [initialLoadAttempted, setInitialLoadAttempted] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true); // Track if we're still in initial load phase
@@ -1771,6 +1776,51 @@ const Vendors: React.FC = () => {
       // You might want to handle page reset here if needed
     }
   };
+
+  const validateNewVendorEmail = useCallback((email: string) => {
+    const trimmed = email.trim();
+
+    if (!trimmed) {
+      return 'Email is required';
+    }
+
+    const emailRegex = /^\S+@\S+\.\S+$/;
+    if (!emailRegex.test(trimmed)) {
+      return 'Invalid email format';
+    }
+
+    const alreadyExistsInLoaded = vendors.some(v => (v.email || '').toLowerCase().trim() === trimmed.toLowerCase());
+    if (alreadyExistsInLoaded) {
+      return 'Email already exists';
+    }
+
+    return null;
+  }, [vendors]);
+
+  const handleAddVendor = useCallback(async () => {
+    const validationError = validateNewVendorEmail(newVendorEmail);
+    setAddVendorError(validationError);
+    if (validationError) return;
+
+    setIsAddVendorSubmitting(true);
+    try {
+      const email = newVendorEmail.trim();
+      await vendorApi.createVendorByEmail(email);
+      toast.success('Vendor added successfully. Login credentials have been sent to the vendor’s email.');
+      setAddVendorOpen(false);
+      setNewVendorEmail('');
+      setAddVendorError(null);
+      setStatusFilter('all');
+      setSearchTerm(email);
+      await fetchVendors({ search: email }, 1, pagination.perPage);
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to add vendor';
+      setAddVendorError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsAddVendorSubmitting(false);
+    }
+  }, [fetchVendors, newVendorEmail, pagination.perPage, validateNewVendorEmail]);
   // Initial load - fetch vendors automatically on page refresh
   // Automatically retry on error to prevent showing error on page refresh
   useEffect(() => {
@@ -2038,6 +2088,69 @@ const Vendors: React.FC = () => {
               <div className="text-white w-full lg:w-auto">
                 <h2 className="text-base sm:text-xl md:text-2xl font-bold">Gestion des Vendeurs</h2>
                 <p className="text-gray-100 mt-0.5 sm:mt-1 text-xs sm:text-base">Gérez vos vendeurs et leurs statuts</p>
+              </div>
+
+              <div className="w-full lg:w-auto">
+                <Dialog
+                  open={addVendorOpen}
+                  onOpenChange={(open) => {
+                    setAddVendorOpen(open);
+                    if (!open) {
+                      setNewVendorEmail('');
+                      setAddVendorError(null);
+                      setIsAddVendorSubmitting(false);
+                    }
+                  }}
+                >
+                  <DialogTrigger asChild>
+                    <Button
+                      className="mt-2 lg:mt-0 bg-white text-[#00796B] hover:bg-gray-100"
+                      disabled={loading || isPaginationLoading}
+                    >
+                      Add Vendor
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Add Vendor</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="newVendorEmail">Email Address</Label>
+                        <Input
+                          id="newVendorEmail"
+                          type="email"
+                          value={newVendorEmail}
+                          onChange={(e) => {
+                            setNewVendorEmail(e.target.value);
+                            setAddVendorError(null);
+                          }}
+                          placeholder="email@example.com"
+                          required
+                          disabled={isAddVendorSubmitting}
+                        />
+                        {addVendorError && (
+                          <p className="text-sm text-red-600">{addVendorError}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-3">
+                      <Button
+                        variant="outline"
+                        onClick={() => setAddVendorOpen(false)}
+                        disabled={isAddVendorSubmitting}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleAddVendor}
+                        disabled={isAddVendorSubmitting || Boolean(validateNewVendorEmail(newVendorEmail))}
+                      >
+                        {isAddVendorSubmitting ? 'Adding...' : 'Add Vendor'}
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
             </div>
           </motion.div>

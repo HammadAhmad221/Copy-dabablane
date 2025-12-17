@@ -72,6 +72,14 @@ const getIcon = (iconType: string) => {
       return <UsersIcon className="h-5 w-5" />;
     case "ReservationsIcon":
       return <BookCheck className="h-5 w-5" />;
+    case "ConfirmedIcon":
+      return <BookCheck className="h-5 w-5" />;
+    case "ConfirmedReservationsIcon":
+      return <BookCheck className="h-5 w-5" />;
+    case "AverageBasketIcon":
+      return <ArrowUpRightIcon className="h-5 w-5" />;
+    case "BasketIcon":
+      return <ArrowUpRightIcon className="h-5 w-5" />;
     case "BlanesIcon":
       return <BookmarkCheck className="h-5 w-5" />;
     case "ExpiredBlanesIcon":
@@ -452,7 +460,7 @@ const VendorDashboard = () => {
         {/* KPI Cards Section */}
         {analyticsData.length > 0 && (
           <div className="p-3 sm:p-4 md:p-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
-            {analyticsData.slice(0, 8).map((kpi) => {
+            {analyticsData.slice(0, 10).map((kpi) => {
               const Icon = getIcon(kpi.icon);
 
               return (

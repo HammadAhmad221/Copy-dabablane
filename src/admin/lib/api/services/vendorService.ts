@@ -89,6 +89,11 @@ export const vendorApi = {
     return response.data as Vendor;
   },
 
+  createVendorByEmail: async (email: string) => {
+    const response = await adminApiClient.post('/admin/createVendor', { email });
+    return response.data;
+  },
+
   // Update vendor
   updateVendor: async (id: string, vendorData: UpdateVendorRequest): Promise<Vendor> => {
     const validatedData = UpdateVendorRequestSchema.parse(vendorData);
@@ -101,8 +106,28 @@ export const vendorApi = {
     // Don't validate with schema since API accepts all fields
     const { id, ...dataToSend } = vendorData;
     const endpoint = id ? `/admin/updateVendor/${id}` : '/admin/updateVendor';
-    const response = await adminApiClient.put(endpoint, dataToSend);
-    return response.data as Vendor;
+    const formData = new FormData();
+
+    Object.entries(dataToSend).forEach(([key, value]) => {
+      if (Array.isArray(value)) {
+        return;
+      }
+
+      if (value === null || value === undefined) {
+        formData.append(key, '');
+        return;
+      }
+
+      if (typeof value === 'boolean') {
+        formData.append(key, value ? '1' : '0');
+        return;
+      }
+
+      formData.append(key, String(value));
+    });
+
+    const response = await adminApiClient.post(endpoint, formData);
+    return (response.data?.data || response.data) as Vendor;
   },
 
   // Update vendor status

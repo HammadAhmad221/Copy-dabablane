@@ -44,7 +44,7 @@ import {
   PaginationNext,
 } from '@/admin/components/ui/pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/admin/components/ui/select";
-import { MenuItem, MenuItemFormData } from '@/lib/types/menuItems';
+import type { MenuItem, MenuItemFormData } from '@/admin/lib/api/types/menuItems';
 import { menuItemApi } from "@/admin/lib/api/services/menuItemService";
 import { motion } from "framer-motion";
 import { Icon } from "@iconify/react";
@@ -164,7 +164,7 @@ const MenuItems: React.FC = () => {
     field: 'created_at',
     order: 'desc'
   });
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
 
   // Update the validation schema to make fields optional
@@ -356,13 +356,13 @@ const MenuItems: React.FC = () => {
   };
 
   return (
-  <div className="space-y-4 sm:space-y-6 w-full px-2 sm:px-4">
-    <Card className="overflow-hidden shadow-sm">
+  <div className="space-y-4 sm:space-y-6 w-full max-w-full px-2 sm:px-4 overflow-x-hidden">
+    <Card className="overflow-hidden shadow-sm w-full max-w-full">
       <motion.div 
         className="p-4 sm:p-6 bg-gradient-to-r from-[#00897B] to-[#00796B]"
       >
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
-          <div className="text-white">
+          <div className="text-white min-w-0">
             <h2 className="text-xl sm:text-2xl font-bold">Gestion des Menus</h2>
             <p className="text-sm sm:text-base text-gray-100 mt-1">Gérez les éléments de navigation de votre site web</p>
           </div>
@@ -392,7 +392,7 @@ const MenuItems: React.FC = () => {
             }}
           >
             <DialogTrigger asChild>
-              <Button className="bg-white text-[#00897B] hover:bg-gray-100 transition-colors">
+              <Button className="bg-white text-[#00897B] hover:bg-gray-100 transition-colors w-full sm:w-auto">
                 <PlusIcon className="mr-2 h-4 w-4" />
                 Ajouter un élément de menu
               </Button>
@@ -434,14 +434,15 @@ const MenuItems: React.FC = () => {
                         <Input
                           value={formData.label}
                           onChange={(e) => {
-                            setFormData(prev => ({ ...prev, label: e.target.value }));
-                            setErrors(prev => ({ ...prev, label: undefined }));
+                            setFormData((prev) => ({ ...prev, label: e.target.value }));
+                            setErrors((prev) => ({ ...prev, label: undefined }));
                           }}
                           className={cn(
                             errors.label && "border-red-500 focus:ring-red-500"
                           )}
                           placeholder="Entrez le libellé de l'élément de menu"
                         />
+
                         {errors.label && (
                           <p className="text-sm text-red-500">{errors.label}</p>
                         )}
@@ -456,14 +457,15 @@ const MenuItems: React.FC = () => {
                           type="text"
                           value={formData.url}
                           onChange={(e) => {
-                            setFormData(prev => ({ ...prev, url: e.target.value }));
-                            setErrors(prev => ({ ...prev, url: undefined }));
+                            setFormData((prev) => ({ ...prev, url: e.target.value }));
+                            setErrors((prev) => ({ ...prev, url: undefined }));
                           }}
                           className={cn(
                             errors.url && "border-red-500 focus:ring-red-500"
                           )}
                           placeholder="Entrez l'URL ou le chemin"
                         />
+
                         {errors.url && (
                           <p className="text-sm text-red-500">{errors.url}</p>
                         )}
@@ -487,6 +489,7 @@ const MenuItems: React.FC = () => {
                               errors.position && "border-red-500 focus:ring-red-500"
                             )}
                           />
+
                           {errors.position && (
                             <p className="text-sm text-red-500">{errors.position}</p>
                           )}
@@ -504,9 +507,10 @@ const MenuItems: React.FC = () => {
                         </div>
                         <Switch
                           checked={formData.is_active}
-                          onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_active: checked }))}
+                          onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_active: checked }))}
                           className="data-[state=checked]:bg-[#00897B]"
                         />
+
                       </div>
                     </div>
 
@@ -552,22 +556,24 @@ const MenuItems: React.FC = () => {
       <motion.div 
         className="p-4 sm:p-6 border-b space-y-4"
       >
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
+        <div className="flex flex-col sm:flex-row items-stretch gap-4">
+          <div className="relative flex-1 min-w-0">
             <Input
               placeholder="Rechercher des éléments de menu..."
               className="pl-10 w-full"
             />
+
             <Icon 
               icon="lucide:search" 
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" 
             />
           </div>
-          <div className="w-full sm:w-[200px]">
+          <div className="w-full sm:w-[200px] flex-shrink-0">
             <Select>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Éléments par page" />
               </SelectTrigger>
+
               <SelectContent>
                 <SelectItem value="10">10 par page</SelectItem>
                 <SelectItem value="20">20 par page</SelectItem>
@@ -578,19 +584,227 @@ const MenuItems: React.FC = () => {
         </div>
       </motion.div>
 
-      <div className="w-full overflow-x-auto">
-        <div className="">
+      <div className="sm:hidden px-2 pb-2">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8 text-gray-600">
+            <Icon icon="lucide:loader" className="h-6 w-6 animate-spin text-[#00897B]" />
+            <span className="ml-2">Chargement...</span>
+          </div>
+        ) : menuItems.length === 0 ? (
+          <div className="flex flex-col items-center justify-center text-gray-500 py-8">
+            <Icon icon="lucide:inbox" className="h-12 w-12 mb-2" />
+            <p>Aucun élément de menu trouvé</p>
+            <Button
+              variant="link"
+              onClick={() => setIsDialogOpen(true)}
+              className="mt-2 text-[#00897B]"
+            >
+              Créez votre premier élément de menu
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {menuItems.map((item) => (
+              <div key={item.id} className="bg-white rounded-lg border shadow-sm p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-gray-900 truncate">{item.label}</div>
+                    <div className="text-xs text-gray-500 font-mono truncate mt-1">
+                      {truncateUrl(item.url, 28, true)}
+                    </div>
+                  </div>
+                  <Switch
+                    checked={item.is_active}
+                    onCheckedChange={() => handleStatusChange(item)}
+                    className="data-[state=checked]:bg-[#00897B] flex-shrink-0"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between mt-3">
+                  <div className="text-xs text-gray-500">Position: {item.position}</div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => {
+                        setSelectedMenuItem(item);
+                        setFormData({
+                          label: item.label,
+                          url: item.url,
+                          position: item.position,
+                          is_active: item.is_active,
+                          updated_at: item.updated_at,
+                        });
+                        setIsDialogOpen(true);
+                      }}
+                    >
+                      <PencilIcon className="h-4 w-4" />
+                    </Button>
+
+                    <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" size="icon" className="h-8 w-8">
+                          <EyeIcon className="h-4 w-4" />
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] max-w-[95vw] w-full sm:max-w-2xl p-0 overflow-hidden bg-white rounded-lg shadow-lg">
+                        <button
+                          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+                          onClick={() => setIsViewDialogOpen(false)}
+                        >
+                          <Icon icon="lucide:x" className="h-4 w-4" />
+                          <span className="sr-only">Fermer</span>
+                        </button>
+
+                        <div className="max-h-[90vh] overflow-y-auto">
+                          <div className="sticky top-0 bg-white z-20 px-6 pt-6 pb-4 border-b">
+                            <DialogHeader>
+                              <DialogTitle className="text-xl sm:text-2xl font-bold text-[#00897B] flex items-center gap-2">
+                                <div className="w-8 sm:w-10 h-8 sm:h-10 rounded-full bg-[#00897B]/10 flex items-center justify-center">
+                                  <Icon icon="lucide:menu" className="h-4 sm:h-5 w-4 sm:w-5 text-[#00897B]" />
+                                </div>
+                                Détails de l'élément de menu
+                              </DialogTitle>
+                              <DialogDescription className="text-sm text-gray-500">
+                                Élément de menu #{item.id}
+                              </DialogDescription>
+                            </DialogHeader>
+                          </div>
+
+                          <div className="p-6 space-y-6">
+                            <div className="grid gap-6 sm:grid-cols-2">
+                              <InfoField 
+                                label="Libellé"
+                                value={item.label}
+                                icon={<Icon icon="lucide:tag" className="h-5 w-5" />}
+                              />
+                              <InfoField 
+                                label="URL"
+                                value={
+                                  <div className="flex flex-col gap-2">
+                                    <div className="border rounded p-2 bg-gray-50 font-mono text-sm">
+                                      {truncateUrl(item.url, 25, true)}
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="w-fit text-xs hover:bg-gray-100 flex items-center gap-1"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigator.clipboard.writeText(item.url);
+                                        toast.success('URL copiée dans le presse-papiers');
+                                      }}
+                                    >
+                                      <Icon icon="lucide:copy" className="h-3 w-3" />
+                                      Copier l'URL complète
+                                    </Button>
+                                  </div>
+                                }
+                                icon={<Icon icon="lucide:link" className="h-5 w-5" />}
+                              />
+                              <InfoField 
+                                label="Position"
+                                value={item.position}
+                                icon={<Icon icon="lucide:move" className="h-5 w-5" />}
+                              />
+                              <InfoField 
+                                label="Statut"
+                                value={item.is_active ? 'Actif' : 'Inactif'}
+                                icon={<Icon icon="lucide:activity" className="h-5 w-5" />}
+                              />
+                              <InfoField 
+                                label="Créé le"
+                                value={format(new Date(item.created_at), 'PPpp')}
+                                icon={<Icon icon="lucide:calendar" className="h-5 w-5" />}
+                              />
+                              <InfoField 
+                                label="Mis à jour le"
+                                value={item.updated_at ? format(new Date(item.updated_at), 'PPpp') : '-'}
+                                icon={<Icon icon="lucide:clock" className="h-5 w-5" />}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="sticky bottom-0 bg-white border-t p-4 sm:p-6">
+                            <Button
+                              variant="outline"
+                              onClick={() => setIsViewDialogOpen(false)}
+                              className="w-full sm:w-auto"
+                            >
+                              Fermer
+                            </Button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="icon" className="h-8 w-8">
+                          <TrashIcon className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] max-w-[95vw] w-full sm:max-w-[400px] p-0 overflow-hidden bg-white rounded-lg shadow-lg">
+                        <motion.div
+                          initial="hidden"
+                          animate="visible"
+                          exit="exit"
+                          variants={popupAnimationVariants.content}
+                          className="p-6"
+                        >
+                          <div className="flex flex-col items-center text-center">
+                            <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mb-4">
+                              <Icon icon="lucide:trash-2" className="h-6 w-6 text-red-600" />
+                            </div>
+                            <AlertDialogHeader className="space-y-2">
+                              <AlertDialogTitle className="text-xl font-semibold">
+                                Supprimer l'élément de menu
+                              </AlertDialogTitle>
+                              <AlertDialogDescription className="text-gray-500">
+                                Êtes-vous sûr de vouloir supprimer cet élément de menu ? Cette action ne peut pas être annulée.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+
+                            <div className="w-full mt-6">
+                              <AlertDialogFooter className="flex flex-col sm:flex-row gap-2 w-full">
+                                <AlertDialogCancel className="w-full sm:w-auto mt-0">
+                                  Annuler
+                                </AlertDialogCancel>
+                                <AlertDialogAction
+                                  className="w-full sm:w-auto bg-red-600 hover:bg-red-700"
+                                  onClick={() => handleDelete(item.id)}
+                                >
+                                  Supprimer l'élément de menu
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </div>
+                          </div>
+                        </motion.div>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="hidden sm:block w-full overflow-x-auto -mx-2 sm:mx-0">
+        <div className="min-w-[640px] lg:min-w-0 px-2 sm:px-0">
           <DragDropContext onDragEnd={handleDragEnd}>
             <Droppable droppableId="menu-items">
               {(provided) => (
                 <div {...provided.droppableProps} ref={provided.innerRef}>
-                  <Table>
+                  <Table className="min-w-[640px] lg:min-w-0">
                     <TableHeader>
                       <TableRow className="bg-gray-50">
-                        <TableHead className="w-[40px] hidden sm:table-cell"></TableHead>
-                        <TableHead className="hidden sm:table-cell">Libellé</TableHead>
-                        <TableHead className="hidden sm:table-cell">URL</TableHead>
-                        <TableHead className="hidden sm:table-cell">Position</TableHead>
+                        <TableHead className="w-[40px] hidden lg:table-cell"></TableHead>
+                        <TableHead className="hidden lg:table-cell">Libellé</TableHead>
+
+                        <TableHead className="hidden lg:table-cell">URL</TableHead>
+                        <TableHead className="hidden lg:table-cell">Position</TableHead>
                         <TableHead>Détails</TableHead>
                         <TableHead className="w-[80px]">Statut</TableHead>
                         <TableHead className="text-right w-[120px]">Actions</TableHead>
@@ -639,7 +853,7 @@ const MenuItems: React.FC = () => {
                                 )}
                               >
                                 {/* Masqué sur mobile */}
-                                <TableCell className="hidden sm:table-cell w-[40px]">
+                                <TableCell className="hidden lg:table-cell w-[40px]">
                                   <div 
                                     {...provided.dragHandleProps}
                                     className="w-8 h-8 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
@@ -647,8 +861,8 @@ const MenuItems: React.FC = () => {
                                     <GripVertical className="h-4 w-4 text-gray-400" />
                                   </div>
                                 </TableCell>
-                                <TableCell className="hidden sm:table-cell">{item.label}</TableCell>
-                                <TableCell className="hidden sm:table-cell">
+                                <TableCell className="hidden lg:table-cell">{item.label}</TableCell>
+                                <TableCell className="hidden lg:table-cell">
                                   <div className="flex flex-col gap-2">
                                     <div className="border rounded p-1.5 sm:p-2 bg-gray-50 font-mono text-xs sm:text-sm">
                                       {truncateUrl(item.url, 20, true)}
@@ -668,7 +882,7 @@ const MenuItems: React.FC = () => {
                                     </Button>
                                   </div>
                                 </TableCell>
-                                <TableCell className="hidden sm:table-cell">{item.position}</TableCell>
+                                <TableCell className="hidden lg:table-cell">{item.position}</TableCell>
 
                                 {/* Visible sur tous les écrans */}
                                 <TableCell>
@@ -682,7 +896,7 @@ const MenuItems: React.FC = () => {
                                   />
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  <div className="flex items-center justify-end space-x-1 sm:space-x-2">
+                                  <div className="flex flex-wrap items-center justify-end gap-1 sm:gap-2">
                                     <Button
                                       variant="outline"
                                       size="icon"

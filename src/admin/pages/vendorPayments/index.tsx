@@ -41,6 +41,7 @@ import {
 import vendorPaymentApi from "@/admin/lib/api/services/vendorPaymentService";
 import { vendorApi } from "@/admin/lib/api/services/vendorService";
 import { categoryApi } from "@/admin/lib/api/services/categoryService";
+import { blaneApi } from "@/admin/lib/api/services/blaneService";
 import type { VendorPayment } from "@/admin/lib/api/types/vendorPayment";
 import type { Vendor } from "@/admin/lib/api/types/vendor";
 
@@ -50,7 +51,7 @@ const useIsMobile = () => {
   
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 900);
+      setIsMobile(window.innerWidth < 1025);
     };
     
     checkMobile();
@@ -78,7 +79,10 @@ const VendorPaymentsIndex = () => {
   const [isLoadingVendors, setIsLoadingVendors] = useState(false);
   const [vendorMap, setVendorMap] = useState<Record<number, string>>({});
   const [categoryMap, setCategoryMap] = useState<Record<number, string>>({});
+  const [blaneMap, setBlaneMap] = useState<Record<number, string>>({});
   const [allVendorIdsWithPayments, setAllVendorIdsWithPayments] = useState<Set<number>>(new Set());
+  const [statusUpdates, setStatusUpdates] = useState<Record<number, string>>({});
+  const [statusUpdating, setStatusUpdating] = useState<Record<number, boolean>>({});
 
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -157,6 +161,47 @@ const VendorPaymentsIndex = () => {
         console.log('📊 First mapped payment:', paymentsWithNames[0]);
       }
       setPayments(paymentsWithNames);
+
+      try {
+        const uniqueVendorIds = [...new Set(paymentsWithNames.map((p: any) => Number(p.vendor_id)).filter((id: any) => Number.isFinite(id) && id > 0))];
+        const idsToFetch = uniqueVendorIds.filter((id) => blaneMap[id] === undefined);
+
+        if (idsToFetch.length) {
+          const entries = await Promise.all(
+            idsToFetch.map(async (vendorId) => {
+              try {
+                const commerceName = paymentsWithNames.find((p: any) => Number(p.vendor_id) === Number(vendorId))?.vendor_company
+                  || vendorMap[vendorId]
+                  || '';
+
+                if (!commerceName || commerceName === 'N/A') {
+                  return [vendorId, '-'] as const;
+                }
+
+                const res = await blaneApi.getBlanes({
+                  page: 1,
+                  paginationSize: 1,
+                  commerce_name: commerceName,
+                } as any);
+
+                const first = (res as any)?.data?.[0];
+                const blaneName = first?.name || first?.title || '';
+                return [vendorId, blaneName ? String(blaneName) : '-'] as const;
+              } catch {
+                return [vendorId, '-'] as const;
+              }
+            })
+          );
+
+          setBlaneMap((prev) => {
+            const next = { ...prev };
+            for (const [id, name] of entries) next[id] = name;
+            return next;
+          });
+        }
+      } catch {
+        // ignore blane mapping failures; page remains usable
+      }
       
       // Track all unique vendor IDs from payments
       setAllVendorIdsWithPayments(prev => {
@@ -326,11 +371,77 @@ const VendorPaymentsIndex = () => {
 
 
 
+  const handleStatusChange = async (paymentId: number, newStatus: string) => {
+    const previousStatus =
+      statusUpdates[paymentId] ||
+      String(payments.find((p) => p.id === paymentId)?.transfer_status || '').toLowerCase();
+
+    setStatusUpdates((prev) => ({ ...prev, [paymentId]: newStatus }));
+    setStatusUpdating((prev) => ({ ...prev, [paymentId]: true }));
+
+    try {
+      await vendorPaymentApi.updateStatus(paymentId, newStatus);
+      setPayments((prev) =>
+        prev.map((p) => (p.id === paymentId ? ({ ...p, transfer_status: newStatus } as any) : p))
+      );
+      toast.success('Status updated');
+    } catch (error: any) {
+      if (previousStatus) {
+        setStatusUpdates((prev) => ({ ...prev, [paymentId]: previousStatus }));
+      } else {
+        setStatusUpdates((prev) => {
+          const next = { ...prev };
+          delete next[paymentId];
+          return next;
+        });
+      }
+
+      const errorMessage = error?.response?.data?.message || 'Failed to update status';
+      toast.error(errorMessage);
+    } finally {
+      setStatusUpdating((prev) => ({ ...prev, [paymentId]: false }));
+    }
+  };
+
+  const renderStatusDropdown = (paymentId: number, currentStatus: string) => {
+    const statusOptions = [
+      { value: 'complete', label: 'Complete' },
+      { value: 'pending', label: 'Pending' },
+      { value: 'processed', label: 'Processed' }
+    ];
+
+    const currentStatusValue = statusUpdates[paymentId] || String(currentStatus || '').toLowerCase();
+    const isUpdating = !!statusUpdating[paymentId];
+    
+    return (
+      <Select
+        value={currentStatusValue || undefined}
+        onValueChange={(value) => handleStatusChange(paymentId, value)}
+      >
+        <SelectTrigger
+          className={`w-32 h-8 text-xs ${getStatusBadgeColor(currentStatusValue)}`}
+          disabled={isUpdating}
+        >
+          <SelectValue placeholder="Select status" />
+        </SelectTrigger>
+        <SelectContent>
+          {statusOptions.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  };
+
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
       case 'processed':
+        return 'bg-blue-100 text-blue-800';
+      case 'complete':
         return 'bg-green-100 text-green-800';
       default:
         return 'bg-gray-100 text-gray-800';
@@ -499,6 +610,7 @@ const VendorPaymentsIndex = () => {
                 <SelectItem value="all-status">All Status</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="processed">Processed</SelectItem>
+                <SelectItem value="complete">Complete</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -531,9 +643,7 @@ const VendorPaymentsIndex = () => {
                           </div>
                         </div>
                         <div className="flex gap-1 flex-shrink-0">
-                          <Badge className={getStatusBadgeColor(payment.transfer_status)}>
-                            {payment.transfer_status}
-                          </Badge>
+                          {renderStatusDropdown(payment.id, payment.transfer_status)}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -551,6 +661,13 @@ const VendorPaymentsIndex = () => {
                         <Badge variant="outline" className="mt-0.5">
                           {payment.payment_type || 'N/A'}
                         </Badge>
+                      </div>
+
+                      <div>
+                        <Label className="text-xs text-gray-500">Blane</Label>
+                        <p className="text-xs text-gray-600 mt-0.5">
+                          {blaneMap[payment.vendor_id] || '-'}
+                        </p>
                       </div>
 
                       {/* Period */}
@@ -617,6 +734,7 @@ const VendorPaymentsIndex = () => {
                       <TableRow>
                         <TableHead className="whitespace-nowrap text-xs lg:text-sm">ID</TableHead>
                         <TableHead className="whitespace-nowrap text-xs lg:text-sm">Vendor</TableHead>
+                        <TableHead className="whitespace-nowrap text-xs lg:text-sm">Blane</TableHead>
                         <TableHead className="whitespace-nowrap text-xs lg:text-sm">Period</TableHead>
                         <TableHead className="text-right whitespace-nowrap text-xs lg:text-sm">Amount</TableHead>
                         <TableHead className="text-right whitespace-nowrap text-xs lg:text-sm">Commission</TableHead>
@@ -633,6 +751,9 @@ const VendorPaymentsIndex = () => {
                           <TableCell className="font-mono text-xs lg:text-sm whitespace-nowrap">#{payment.id}</TableCell>
                           <TableCell className="whitespace-nowrap">
                             <div className="font-medium text-xs lg:text-sm">{payment.vendor_company}</div>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs lg:text-sm">
+                            {blaneMap[payment.vendor_id] || '-'}
                           </TableCell>
                           <TableCell className="whitespace-nowrap text-xs lg:text-sm">
                             {payment.booking_date 
@@ -663,9 +784,7 @@ const VendorPaymentsIndex = () => {
                             </Badge>
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
-                            <Badge className={`${getStatusBadgeColor(payment.transfer_status)} text-xs`}>
-                              {payment.transfer_status}
-                            </Badge>
+                            {renderStatusDropdown(payment.id, payment.transfer_status)}
                           </TableCell>
                           <TableCell className="whitespace-nowrap text-xs lg:text-sm">
                             {payment.transfer_date 

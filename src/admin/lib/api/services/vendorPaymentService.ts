@@ -245,6 +245,23 @@ export const vendorPaymentApi = {
     }
   },
 
+  // Update payment status
+  updateStatus: async (
+    id: string | number,
+    transfer_status: string
+  ): Promise<VendorPayment | { success?: boolean; message?: string }> => {
+    try {
+      const response = await adminApiClient.put(
+        BACK_VENDOR_PAYMENT_ENDPOINTS.updateStatus(id),
+        { transfer_status }
+      );
+      return response.data?.data || response.data;
+    } catch (error) {
+      console.error('Error updating payment status:', error);
+      throw error;
+    }
+  },
+
   // Export to Excel
   exportExcel: async (filters?: VendorPaymentFilters): Promise<Blob> => {
     try {
