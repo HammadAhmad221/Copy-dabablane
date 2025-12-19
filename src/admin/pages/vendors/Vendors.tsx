@@ -1397,7 +1397,7 @@ const VendorRow = React.memo(({
                               ) : (
                                 <div className="relative group">
                                   <video
-                                    className="w-full h-32 object-cover rounded-lg border border-gray-200 bg-black"
+                                    className="w-full h-32 object-cover rounded-lg border border-gray-200 bg-black vendor-video-preview"
                                     controls
                                     playsInline
                                     preload="metadata"
@@ -1430,9 +1430,6 @@ const VendorRow = React.memo(({
                                   >
                                     <source src={normalizedMediaUrl} type={getVideoMimeType(normalizedMediaUrl)} />
                                   </video>
-                                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center pointer-events-none">
-                                    <Icon icon="lucide:play" className="h-8 w-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                  </div>
                                 </div>
                               )}
 

@@ -73,6 +73,22 @@ const ManualTransfer = () => {
     fetchPendingPayments();
   }, []);
 
+  const toNumber = (value: unknown): number => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value === 'string') {
+      const cleaned = value.replace(/[^0-9.-]+/g, '');
+      const n = Number(cleaned);
+      return Number.isFinite(n) ? n : 0;
+    }
+    return 0;
+  };
+
+  const getNetAmount = (payment: VendorPayment) =>
+    toNumber((payment as any).net_amount_ttc ?? payment.net_amount ?? (payment as any).net_amount_incl_vat);
+
+  const getTotalAmount = (payment: VendorPayment) =>
+    toNumber((payment as any).total_amount_ttc ?? payment.total_amount ?? (payment as any).total_amount_incl_vat);
+
   const handleProcess = async () => {
     if (selected.size === 0) {
       toast.error("Select at least one payment");
@@ -154,8 +170,8 @@ const ManualTransfer = () => {
 
   const totalSelected = Array.from(selected).reduce((sum, id) => {
     const payment = payments.find(p => p.id === id);
-    const netAmount = payment?.net_amount ? parseFloat(payment.net_amount as any) : 0;
-    return sum + netAmount;
+    if (!payment) return sum;
+    return sum + getNetAmount(payment);
   }, 0);
 
   return (
@@ -249,10 +265,10 @@ const ManualTransfer = () => {
                 </div>
                 <div className="text-right">
                   <p className="font-semibold text-green-600">
-                    {payment.net_amount ? parseFloat(payment.net_amount as any).toFixed(2) : '0.00'} DH
+                    {getNetAmount(payment).toFixed(2)} DH
                   </p>
                   <p className="text-xs text-gray-500">
-                    Total: {payment.total_amount ? parseFloat(payment.total_amount as any).toFixed(2) : '0.00'} DH
+                    Total: {getTotalAmount(payment).toFixed(2)} DH
                   </p>
                   <Badge className="bg-yellow-500 mt-1">{payment.transfer_status}</Badge>
                   <p className="text-xs text-gray-500 mt-1">{payment.payment_type}</p>

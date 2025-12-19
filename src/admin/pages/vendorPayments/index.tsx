@@ -460,7 +460,7 @@ const VendorPaymentsIndex = () => {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-5 lg:p-6 xl:p-8 w-full max-w-full overflow-x-hidden">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-5 lg:p-6 xl:p-6 2xl:p-8 w-full max-w-full overflow-x-hidden">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:gap-4 lg:gap-5">
         <div className="flex-1 min-w-0">
@@ -488,7 +488,7 @@ const VendorPaymentsIndex = () => {
             variant="outline"
             onClick={handleExportExcel}
             disabled={isLoading}
-            className="w-full sm:w-auto lg:min-w-[140px] xl:min-w-[160px]"
+            className="w-full sm:w-auto lg:min-w-[140px] xl:min-w-[140px] 2xl:min-w-[160px]"
             size={isMobile ? "default" : "default"}
           >
             <FileSpreadsheet className="h-4 w-4 mr-2" />
@@ -496,7 +496,7 @@ const VendorPaymentsIndex = () => {
           </Button>
           <Button
             onClick={() => navigate("/admin/vendor-payments/report")}
-            className="bg-[#00897B] hover:bg-[#00796B] w-full sm:w-auto lg:min-w-[140px] xl:min-w-[160px]"
+            className="bg-[#00897B] hover:bg-[#00796B] w-full sm:w-auto lg:min-w-[140px] xl:min-w-[140px] 2xl:min-w-[160px]"
             size={isMobile ? "default" : "default"}
           >
             <Calendar className="h-4 w-4 mr-2" />
@@ -504,7 +504,7 @@ const VendorPaymentsIndex = () => {
           </Button>
           <Button
             onClick={() => navigate("/admin/vendor-payments/manual-transfer")}
-            className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto lg:min-w-[140px] xl:min-w-[160px]"
+            className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto lg:min-w-[140px] xl:min-w-[140px] 2xl:min-w-[160px]"
             size={isMobile ? "default" : "default"}
           >
             <Download className="h-4 w-4 mr-2" />
@@ -726,15 +726,15 @@ const VendorPaymentsIndex = () => {
               </div>
             ) : (
               /* Desktop Table View */
-              <Card className="w-full overflow-hidden">
-                <div className="overflow-x-auto w-full">
+              <Card className="w-full xl:overflow-visible 2xl:overflow-hidden">
+                <div className="overflow-x-auto w-full xl:pb-2">
                   <div className="min-w-[900px]">
                   <Table className="w-full">
                     <TableHeader>
                       <TableRow>
                         <TableHead className="whitespace-nowrap text-xs lg:text-sm">ID</TableHead>
-                        <TableHead className="whitespace-nowrap text-xs lg:text-sm">Vendor</TableHead>
-                        <TableHead className="whitespace-nowrap text-xs lg:text-sm">Blane</TableHead>
+                        <TableHead className="whitespace-nowrap xl:whitespace-normal 2xl:whitespace-nowrap text-xs lg:text-sm">Vendor</TableHead>
+                        <TableHead className="whitespace-nowrap xl:whitespace-normal 2xl:whitespace-nowrap text-xs lg:text-sm">Blane</TableHead>
                         <TableHead className="whitespace-nowrap text-xs lg:text-sm">Period</TableHead>
                         <TableHead className="text-right whitespace-nowrap text-xs lg:text-sm">Amount</TableHead>
                         <TableHead className="text-right whitespace-nowrap text-xs lg:text-sm">Commission</TableHead>
@@ -749,11 +749,15 @@ const VendorPaymentsIndex = () => {
                       {payments.map((payment) => (
                         <TableRow key={payment.id}>
                           <TableCell className="font-mono text-xs lg:text-sm whitespace-nowrap">#{payment.id}</TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            <div className="font-medium text-xs lg:text-sm">{payment.vendor_company}</div>
+                          <TableCell className="whitespace-nowrap xl:whitespace-normal 2xl:whitespace-nowrap">
+                            <div className="font-medium text-xs lg:text-sm xl:max-w-[220px] 2xl:max-w-none xl:break-words">
+                              {payment.vendor_company}
+                            </div>
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs lg:text-sm">
-                            {blaneMap[payment.vendor_id] || '-'}
+                          <TableCell className="whitespace-nowrap xl:whitespace-normal 2xl:whitespace-nowrap text-xs lg:text-sm">
+                            <div className="xl:max-w-[220px] 2xl:max-w-none xl:break-words">
+                              {blaneMap[payment.vendor_id] || '-'}
+                            </div>
                           </TableCell>
                           <TableCell className="whitespace-nowrap text-xs lg:text-sm">
                             {payment.booking_date 
