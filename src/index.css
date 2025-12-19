@@ -67,6 +67,15 @@
     @apply overflow-x-hidden;
   }
 }
+
+/* Hide the big center overlay play button for preview videos (keep control bar) */
+.vendor-video-preview::-webkit-media-controls-overlay-play-button {
+  display: none !important;
+}
+
+.vendor-video-preview::-webkit-media-controls-start-playback-button {
+  display: none !important;
+}
 /* Hide scrollbars for Webkit browsers */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;

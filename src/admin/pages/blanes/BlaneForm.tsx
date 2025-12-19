@@ -86,6 +86,7 @@ interface ImagePreview {
   url: string | null;  // Allow null for url
   file?: File;
   isExisting?: boolean;
+  mediaType?: "image" | "video";
 }
 
 // Add these types based on the JSON structure
@@ -556,10 +557,21 @@ const BlaneForm = ({
   // Effect to handle existing images
   useEffect(() => {
     if (existingImages?.length) {
+      const isVideoUrl = (url: string) => {
+        const cleaned = String(url || '').split('?')[0].toLowerCase();
+        return (
+          cleaned.endsWith('.mp4') ||
+          cleaned.endsWith('.webm') ||
+          cleaned.endsWith('.ogg') ||
+          cleaned.endsWith('.mov')
+        );
+      };
+
       const existingPreviews: ImagePreview[] = existingImages.map((img) => ({
         id: img.id.toString(),
         url: img.imageLink || '',  // Add fallback empty string
         isExisting: true,
+        mediaType: img.imageLink && isVideoUrl(img.imageLink) ? "video" : "image",
       }));
       setImagePreviews(existingPreviews);
     }
@@ -990,13 +1002,21 @@ const BlaneForm = ({
 
     // Validate files
     const validFiles = files.filter((file) => {
-      if (!file.type.startsWith("image/")) {
-        toast.error("Seules les images sont autorisées");
+      const isImage = file.type.startsWith("image/");
+      const isVideo = file.type.startsWith("video/");
+
+      if (!isImage && !isVideo) {
+        toast.error("Seules les images et vidéos sont autorisées");
         return false;
       }
-      if (file.size > 2 * 1024 * 1024) {
-        // 2MB limit
+
+      if (isImage && file.size > 2 * 1024 * 1024) {
         toast.error("Les images doivent être inférieures à 2MB");
+        return false;
+      }
+
+      if (isVideo && file.size > 50 * 1024 * 1024) {
+        toast.error("Les vidéos doivent être inférieures à 50MB");
         return false;
       }
       return true;
@@ -1007,6 +1027,7 @@ const BlaneForm = ({
         id: `${Date.now()}-${file.name}`,
         url: URL.createObjectURL(file),
         file,
+        mediaType: file.type.startsWith("video/") ? "video" : "image",
       }));
 
       setImageFiles((prev) => [...prev, ...validFiles]);
@@ -1899,11 +1920,21 @@ const BlaneForm = ({
                   {imagePreviews.map((preview) => (
                     <CarouselItem key={preview.id} className="h-full">
                       <div className="relative h-80 w-full group">
-                        <img
-                          src={preview.url || ''}
-                          alt={`Preview ${preview.id}`}
-                          className="w-full h-full object-cover transform transition-all duration-300 hover:scale-105"
-                        />
+                        {preview.mediaType === "video" ? (
+                          <video
+                            src={preview.url || ''}
+                            className="w-full h-full object-cover transform transition-all duration-300 hover:scale-105"
+                            controls
+                            playsInline
+                            preload="metadata"
+                          />
+                        ) : (
+                          <img
+                            src={preview.url || ''}
+                            alt={`Preview ${preview.id}`}
+                            className="w-full h-full object-cover transform transition-all duration-300 hover:scale-105"
+                          />
+                        )}
                         <button
                           onClick={() => handleImageDelete(preview)}
                           className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-all duration-200 shadow-lg"
