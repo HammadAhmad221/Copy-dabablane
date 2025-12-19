@@ -13,6 +13,7 @@ import { Label } from "../../components/ui/label";
 import { motion } from "framer-motion";
 import { Upload, Building2 } from "lucide-react";
 import { invoiceConfigService } from "../../lib/api/invoice-config";
+import { isHeic, heicTo } from "heic-to";
 
 interface InvoiceTemplate {
   logo: string;
@@ -53,6 +54,12 @@ export default function InvoiceConfig() {
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
 
+  const convertHeicToJpegFile = async (file: File): Promise<File> => {
+    const jpegBlob = await heicTo({ blob: file, type: 'image/jpeg', quality: 0.8 });
+    const baseName = file.name.replace(/\.(heic|heif)$/i, '');
+    return new File([jpegBlob], `${baseName || 'image'}.jpg`, { type: 'image/jpeg' });
+  };
+
   const resetFormToEmpty = () => {
     const emptyTemplate = {
       logo: "",
@@ -92,43 +99,59 @@ export default function InvoiceConfig() {
     });
   };
 
-  const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      // Validate file type (restrict to png/jpeg per backend requirements)
-      const allowedTypes = ["image/png", "image/jpeg", "image/jpg"];
-      if (!allowedTypes.includes(file.type)) {
-        toast({
-          title: "Invalid File Type",
-          description: "Please upload a PNG or JPEG image",
-          variant: "destructive",
-        });
-        return;
-      }
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = event.target.files?.[0];
+    if (!selected) return;
 
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        toast({
-          title: "File Too Large",
-          description: "Please upload an image smaller than 5MB",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Create a preview URL for the uploaded image
-      const previewUrl = URL.createObjectURL(file);
-      setLogoFile(file);
-      setTemplate((prev) => ({
-        ...prev,
-        logo: previewUrl,
-      }));
-
+    // Validate file type (allow png/jpeg and heic/heif)
+    const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/heic", "image/heif"];
+    const looksHeicByName = /\.(heic|heif)$/i.test(selected.name);
+    const isAllowed = allowedTypes.includes(selected.type) || looksHeicByName;
+    if (!isAllowed) {
       toast({
-        title: "Logo Uploaded",
-        description: "Your invoice logo has been updated",
+        title: "Invalid File Type",
+        description: "Please upload a PNG, JPEG, or HEIC image",
+        variant: "destructive",
       });
+      return;
     }
+
+    // Validate file size (max 5MB)
+    if (selected.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "Please upload an image smaller than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    let fileToUse: File = selected;
+    try {
+      if (looksHeicByName || (await isHeic(selected))) {
+        fileToUse = await convertHeicToJpegFile(selected);
+      }
+    } catch {
+      toast({
+        title: "Conversion Failed",
+        description: "Could not convert HEIC image. Please try another image.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Create a preview URL for the uploaded image
+    const previewUrl = URL.createObjectURL(fileToUse);
+    setLogoFile(fileToUse);
+    setTemplate((prev) => ({
+      ...prev,
+      logo: previewUrl,
+    }));
+
+    toast({
+      title: "Logo Uploaded",
+      description: "Your invoice logo has been updated",
+    });
   };
 
   const handleRemoveLogo = () => {

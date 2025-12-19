@@ -60,6 +60,15 @@ export const useVendors = (): UseVendorsState & UseVendorsActions => {
         lastPage: response.meta.last_page
       });
     } catch (error: any) {
+      if (error?.response) {
+        console.error('fetchVendors request failed', {
+          status: error.response.status,
+          url: error.config?.url,
+          data: error.response.data,
+        });
+      } else {
+        console.error('fetchVendors error', error);
+      }
       const errorMessage = error.response?.data?.message || error.message || 'Erreur lors du chargement des vendeurs';
       setError(errorMessage);
       toast.error(errorMessage);

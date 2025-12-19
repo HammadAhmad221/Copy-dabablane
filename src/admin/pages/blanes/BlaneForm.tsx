@@ -332,13 +332,18 @@ const validateForm = (formData: BlaneFormData, activeTab: "reservation" | "order
     errors.name = ["Name is required"];
   }
 
+  // Payment methods must be explicitly selected (avoid backend defaulting to cash)
+  if (!formData.online && !formData.partiel && !formData.cash) {
+    errors.payment_methods = ["Please select at least one payment method"];
+  }
+
   return errors;
 };
 
 // Add this utility function at the top of the file
 const isNumeric = (value: string | number): boolean => {
   if (typeof value === 'number') return true;
-  return /^\d*DH/.test(value);
+  return /^\d*(\.\d+)?$/.test(value.trim());
 };
 
 // Add this function to normalize date range objects
@@ -430,8 +435,9 @@ const BlaneForm = ({
     reservation_type: initialData?.reservation_type as ReservationType || "instante" as ReservationType,
     nombre_max_reservation: initialData?.nombre_max_reservation || 0,
     max_reservation_par_creneau: initialData?.max_reservation_par_creneau || 0,
-    reservation_per_day: initialData?.reservation_per_day || 0,
-    order_per_day: initialData?.order_per_day || 0,
+    reservation_per_day: initialData?.reservation_per_day ?? 0,
+    availability_per_day: (initialData as any)?.availability_per_day ?? initialData?.reservation_per_day ?? 0,
+    order_per_day: initialData?.order_per_day ?? 0,
     jours_creneaux: Array.isArray(initialData?.jours_creneaux)
       ? initialData.jours_creneaux
       : initialData?.jours_creneaux
@@ -795,7 +801,10 @@ const BlaneForm = ({
       if (formData.type === "reservation") {
         submitFormData.set("nombre_max_reservation", formData.nombre_max_reservation.toString());
         submitFormData.set("max_reservation_par_creneau", formData.max_reservation_par_creneau.toString());
-        submitFormData.set("reservation_per_day", (formData.reservation_per_day || 0).toString());
+        const perDay = ((formData as any).availability_per_day ?? formData.reservation_per_day ?? 0) as number;
+        submitFormData.set("availability_per_day", perDay.toString());
+        submitFormData.set("reservation_per_day", perDay.toString());
+        submitFormData.set("max_reservation_per_day", perDay.toString());
         submitFormData.set("intervale_reservation", formData.intervale_reservation.toString());
         submitFormData.set("personnes_prestation", formData.personnes_prestation.toString());
         submitFormData.set("reservation_type", formData.reservation_type || "instante");
@@ -813,7 +822,12 @@ const BlaneForm = ({
       if (formData.type === "order") {
         submitFormData.set("stock", formData.stock.toString());
         submitFormData.set("max_orders", formData.max_orders.toString());
-        submitFormData.set("order_per_day", (formData.order_per_day || 0).toString());
+        const perDay = ((formData as any).availability_per_day ?? formData.order_per_day ?? 0) as number;
+        // Backend expects this key for per-day limit (confirmed via Postman)
+        submitFormData.set("availability_per_day", perDay.toString());
+        // Keep legacy keys for backward compatibility across environments
+        submitFormData.set("order_per_day", perDay.toString());
+        submitFormData.set("max_order_per_day", perDay.toString());
         submitFormData.set("livraison_in_city", formData.livraison_in_city.toString());
         submitFormData.set("livraison_out_city", formData.livraison_out_city.toString());
       }
@@ -1186,15 +1200,17 @@ const BlaneForm = ({
     <div className="">
       <div className="flex justify-between mb-4 items-center bg-white px-6 py-3 rounded-lg">
         <h1 className="text-2xl font-bold text-gray-800">
-          {isDuplicating ? "Duplicate Blane" : initialData ? "Edit Blane" : "Create Blane"}
+          {isDuplicating ? "Duplicate Blane" : isEditing ? "Edit Blane" : "Add Blane"}
         </h1>
         <Tabs
           value={activeTab}
           onValueChange={(value) => {
-            setActiveTab(value as "reservation" | "order");
+            const nextTab = value as "reservation" | "order";
+            setActiveTab(nextTab);
+            setIsOrder(nextTab === 'order');
             setFormData((prev) => ({
               ...prev,
-              type: value as "reservation" | "order",
+              type: nextTab,
             }));
           }}
           className="w-[300px]"
@@ -1686,8 +1702,8 @@ const BlaneForm = ({
                         <Label>Reservation per day</Label>
                         <Input
                           type="text"
-                          value={formData.reservation_per_day === 0 ? "" : formData.reservation_per_day?.toString() || ""}
-                          onChange={(e) => handleNumericInputChange("reservation_per_day", e.target.value)}
+                          value={(formData as any).availability_per_day === 0 ? "" : (formData as any).availability_per_day?.toString() || ""}
+                          onChange={(e) => handleNumericInputChange("availability_per_day", e.target.value)}
                           className="w-full"
                           placeholder="Reservation per day"
                         />
@@ -1725,8 +1741,8 @@ const BlaneForm = ({
                       <Label>Order per day</Label>
                       <Input
                         type="text"
-                        value={formData.order_per_day === 0 ? "" : formData.order_per_day?.toString() || ""}
-                        onChange={(e) => handleNumericInputChange("order_per_day", e.target.value)}
+                        value={(formData as any).availability_per_day === 0 ? "" : (formData as any).availability_per_day?.toString() || ""}
+                        onChange={(e) => handleNumericInputChange("availability_per_day", e.target.value)}
                         className="w-full"
                         placeholder="Order per day"
                       />
@@ -1804,10 +1820,13 @@ const BlaneForm = ({
                   </div>
                 </div>
 
-                <div className="mt-4 w-full">
+                {formErrors.payment_methods && formErrors.payment_methods.length > 0 && (
+                  <p className="text-red-500 text-sm mt-2">{formErrors.payment_methods[0]}</p>
+                )}
+
+                <div className="space-y-2">
                   <Label>TVA (%)</Label>
                   <Input
-                    id="tva-input"
                     type="text"
                     value={formData.tva === 0 ? "" : formData.tva.toString()}
                     onChange={(e) => handleNumericInputChange("tva", e.target.value)}

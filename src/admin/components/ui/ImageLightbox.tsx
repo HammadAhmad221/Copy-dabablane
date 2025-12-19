@@ -13,6 +13,22 @@ interface ImageLightboxProps {
   alt?: string;
 }
 
+const isVideoUrl = (url: string): boolean => {
+  return /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i.test(url);
+};
+
+const getVideoMimeType = (url: string): string | undefined => {
+  const clean = url.split('?')[0].toLowerCase();
+  if (clean.endsWith('.mp4') || clean.endsWith('.m4v')) return 'video/mp4';
+  if (clean.endsWith('.webm')) return 'video/webm';
+  if (clean.endsWith('.ogg')) return 'video/ogg';
+  if (clean.endsWith('.mov')) return 'video/quicktime';
+  return undefined;
+};
+
+const DEFAULT_VIDEO_POSTER =
+  'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQwIiBoZWlnaHQ9IjM2MCIgdmlld0JveD0iMCAwIDY0MCAzNjAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjY0MCIgaGVpZ2h0PSIzNjAiIGZpbGw9IiMwQjBGMTEiLz48Y2lyY2xlIGN4PSIzMjAiIGN5PSIxODAiIHI9IjU4IiBmaWxsPSIjMTExODI3IiBzdHJva2U9IiM0QjU1NjMiIHN0cm9rZS13aWR0aD0iNCIvPjxwYXRoIGQ9Ik0zMDIgMTQ5VjIxMUwzNTQgMTgwTDMwMiAxNDlaIiBmaWxsPSIjRTVFN0VCIi8+PHRleHQgeD0iMzIwIiB5PSIzMDUiIGZpbGw9IiM5Q0EzQUYiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+VmlkZW8gcHJldmlldyA8L3RleHQ+PC9zdmc+';
+
 const ImageLightbox: React.FC<ImageLightboxProps> = ({
   isOpen,
   onClose,
@@ -21,6 +37,7 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({
   onIndexChange,
   alt = 'Image'
 }) => {
+  const [videoDecodeFailed, setVideoDecodeFailed] = React.useState(false);
   // Handle keyboard navigation
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (!isOpen) return;
@@ -84,9 +101,21 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({
   }, [handleKeyDown]);
 
   const currentImage = images[currentIndex];
+  const isCurrentVideo = Boolean(currentImage && isVideoUrl(currentImage));
+
+  useEffect(() => {
+    setVideoDecodeFailed(false);
+  }, [currentIndex, isCurrentVideo]);
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          onClose();
+        }
+      }}
+    >
       <DialogContent className="max-w-[95vw] max-h-[95vh] w-full h-full p-0 bg-black/95 border-0 overflow-hidden">
         <div className="relative w-full h-full flex items-center justify-center">
           {/* Close button */}
@@ -129,20 +158,63 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({
             onTouchStart={handleTouchStart}
           >
             <AnimatePresence mode="wait">
-              <motion.img
-                key={currentIndex}
-                src={currentImage}
-                alt={`${alt} ${currentIndex + 1}`}
-                className="max-w-full max-h-full object-contain"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 1.1 }}
-                transition={{ duration: 0.3 }}
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMiA4VjEyTDE1IDE1IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjMiIHN0cm9rZT0iIzlDQTNBRiIgc3Ryb2tlLXdpZHRoPSIyIi8+Cjwvc3ZnPgo=';
-                }}
-              />
+              {isCurrentVideo ? (
+                <motion.div
+                  key={currentIndex}
+                  className="max-w-full max-h-full"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.1 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <video
+                    className="max-w-full max-h-full object-contain bg-black"
+                    controls
+                    autoPlay
+                    playsInline
+                    preload="metadata"
+                    poster={DEFAULT_VIDEO_POSTER}
+                    crossOrigin="anonymous"
+                    src={currentImage}
+                    onLoadedMetadata={(e) => {
+                      const v = e.currentTarget;
+                      if (v.videoWidth === 0 || v.videoHeight === 0) {
+                        setVideoDecodeFailed(true);
+                      }
+                    }}
+                  >
+                    <source src={currentImage} type={getVideoMimeType(currentImage)} />
+                  </video>
+                  {videoDecodeFailed && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 text-white p-4 text-center">
+                      <div className="text-sm">Video track not supported by this browser</div>
+                      <a
+                        className="text-xs underline"
+                        href={currentImage}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Open video in new tab
+                      </a>
+                    </div>
+                  )}
+                </motion.div>
+              ) : (
+                <motion.img
+                  key={currentIndex}
+                  src={currentImage}
+                  alt={`${alt} ${currentIndex + 1}`}
+                  className="max-w-full max-h-full object-contain"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.1 }}
+                  transition={{ duration: 0.3 }}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMiA4VjEyTDE1IDE1IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjMiIHN0cm9rZT0iIzlDQTNBRiIgc3Ryb2tlLXdpZHRoPSIyIi8+Cjwvc3ZnPgo=';
+                  }}
+                />
+              )}
             </AnimatePresence>
           </div>
 
@@ -166,15 +238,34 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({
                       : 'border-white/40 hover:border-white/70'
                   }`}
                 >
-                  <img 
-                    src={image} 
-                    alt={`Thumbnail ${index + 1}`}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMiA4VjEyTDE1IDE1IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjMiIHN0cm9rZT0iIzlDQTNBRiIgc3Ryb2tlLXdpZHRoPSIyIi8+Cjwvc3ZnPgo=';
-                    }}
-                  />
+                  {isVideoUrl(image) ? (
+                    <div className="relative w-full h-full">
+                      <video
+                        className="w-full h-full object-cover bg-black"
+                        preload="metadata"
+                        muted
+                        playsInline
+                        poster={DEFAULT_VIDEO_POSTER}
+                        crossOrigin="anonymous"
+                        src={image}
+                      >
+                        <source src={image} type={getVideoMimeType(image)} />
+                      </video>
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                        <Icon icon="lucide:play" className="h-5 w-5 text-white" />
+                      </div>
+                    </div>
+                  ) : (
+                    <img 
+                      src={image} 
+                      alt={`Thumbnail ${index + 1}`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMiA4VjEyTDE1IDE1IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjMiIHN0cm9rZT0iIzlDQTNBRiIgc3Ryb2tlLXdpZHRoPSIyIi8+Cjwvc3ZnPgo=';
+                      }}
+                    />
+                  )}
                 </button>
               ))}
             </div>

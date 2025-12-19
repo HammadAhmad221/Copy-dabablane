@@ -24,18 +24,115 @@ export const vendorApi = {
       }
     }
 
-    const params = new URLSearchParams();
-    
-    if (filters?.status) params.append('status', filters.status);
-    if (filters?.city) params.append('city', filters.city);
-    if (filters?.search) params.append('search', filters.search);
-    if (filters?.sortBy) params.append('sortBy', filters.sortBy);
-    if (filters?.sortOrder) params.append('sortOrder', filters.sortOrder);
-    params.append('include', 'coverMedia');
-    params.append('paginationSize', limit.toString());
-    params.append('page', page.toString());
+    const buildParams = (statusOverride?: string) => {
+      const params = new URLSearchParams();
 
-    const response = await adminApiClient.get(`/getAllVendors?${params.toString()}`);
+      if (filters?.status) {
+        const statusParam = statusOverride ?? String(filters.status);
+        params.append('status', statusParam);
+      }
+      if (filters?.city) params.append('city', filters.city);
+      if (filters?.search) params.append('search', filters.search);
+      if (filters?.sortBy) params.append('sortBy', filters.sortBy);
+      if (filters?.sortOrder) params.append('sortOrder', filters.sortOrder);
+      params.append('include', 'coverMedia');
+      params.append('paginationSize', limit.toString());
+      params.append('page', page.toString());
+
+      return params;
+    };
+
+    const requestOnce = async (statusOverride?: string) => {
+      const params = buildParams(statusOverride);
+      return adminApiClient.get(`/getAllVendors?${params.toString()}`);
+    };
+
+    let response;
+    const rawStatus = filters?.status ? String(filters.status) : undefined;
+
+    // Normalize status for API + retry for inActive variations.
+    if (rawStatus) {
+      // Backend rejects the inactive status filter with 422 in some environments.
+      // For inActive/waiting, skip sending status to the API and apply filtering client-side.
+      if (rawStatus === 'inActive' || rawStatus === 'waiting') {
+        const fallbackPageSizes = [1000, 500, 200, 100];
+
+        let fallbackResponse: any;
+        let lastFallbackError: any;
+        for (const fallbackPageSize of fallbackPageSizes) {
+          try {
+            const params = new URLSearchParams();
+            if (filters?.city) params.append('city', filters.city);
+            if (filters?.search) params.append('search', filters.search);
+            if (filters?.sortBy) params.append('sortBy', filters.sortBy);
+            if (filters?.sortOrder) params.append('sortOrder', filters.sortOrder);
+            params.append('include', 'coverMedia');
+            params.append('paginationSize', fallbackPageSize.toString());
+            params.append('page', '1');
+
+            fallbackResponse = await adminApiClient.get(`/getAllVendors?${params.toString()}`);
+            lastFallbackError = undefined;
+            break;
+          } catch (err: any) {
+            lastFallbackError = err;
+          }
+        }
+
+        if (!fallbackResponse) {
+          throw lastFallbackError;
+        }
+
+        const payload = fallbackResponse.data ?? {};
+        const vendorsRaw = payload?.data?.data ?? payload?.data ?? payload ?? [];
+        const allVendors = Array.isArray(vendorsRaw) ? vendorsRaw : [];
+        const wanted = String(rawStatus).toLowerCase();
+        const filteredAll = allVendors.filter((v: any) => String(v?.status).toLowerCase() === wanted);
+
+        const total = filteredAll.length;
+        const lastPage = Math.max(1, Math.ceil(total / limit));
+        const currentPage = Math.min(Math.max(page, 1), lastPage);
+        const start = (currentPage - 1) * limit;
+        const data = filteredAll.slice(start, start + limit);
+
+        return {
+          data,
+          meta: {
+            total,
+            current_page: currentPage,
+            last_page: lastPage,
+            per_page: limit,
+            from: total === 0 ? 0 : start + 1,
+            to: Math.min(start + data.length, total),
+          },
+        } as VendorListResponse;
+      }
+
+      const normalizedStatus = rawStatus === 'inActive' ? rawStatus : rawStatus.toLowerCase();
+      const statusAttempts = rawStatus === 'inActive'
+        ? ['inActive', 'inactive', 'in_active']
+        : [normalizedStatus];
+
+      let lastError: any;
+      for (const attempt of statusAttempts) {
+        try {
+          response = await requestOnce(attempt);
+          lastError = undefined;
+          break;
+        } catch (err: any) {
+          lastError = err;
+          const statusCode = err?.response?.status;
+          if (statusCode !== 422) {
+            throw err;
+          }
+        }
+      }
+
+      if (!response) {
+        throw lastError;
+      }
+    } else {
+      response = await requestOnce();
+    }
     
     // Handle the new API response structure with meta object
     if (response.data && response.data.meta) {

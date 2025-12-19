@@ -41,11 +41,13 @@ import { toast } from 'react-hot-toast';
 const VendorReservationOrders: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  type TimePeriodSelection = TimePeriod | 'orders';
   
   // State management
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [selectedVendor, setSelectedVendor] = useState<string>('');
-  const [timePeriod, setTimePeriod] = useState<TimePeriod | ''>('');
+  const [timePeriod, setTimePeriod] = useState<TimePeriodSelection | ''>('');
   const [reservationOrders, setReservationOrders] = useState<ReservationOrderItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [vendorsLoading, setVendorsLoading] = useState(true);
@@ -160,9 +162,13 @@ const VendorReservationOrders: React.FC = () => {
 
       const commerceName = selectedVendorData.company_name || selectedVendorData.name;
 
+      const apiTimePeriod: TimePeriod = timePeriod === 'orders'
+        ? 'past'
+        : (timePeriod as TimePeriod);
+
       const response = await vendorReservationOrderApi.getByVendorCommerceName(
         commerceName,
-        timePeriod,
+        apiTimePeriod,
         100,
         1
       );
@@ -267,18 +273,18 @@ const VendorReservationOrders: React.FC = () => {
         
         // Get reservations based on time period
         let reservations: ReservationOrderItem[] = [];
-        if (timePeriod === 'past') {
+        if (apiTimePeriod === 'past') {
           reservations = (response.past_reservations || []).map(item => normalizeItem(item, 'reservation'));
-        } else if (timePeriod === 'present') {
+        } else if (apiTimePeriod === 'present') {
           reservations = (response.current_reservations || []).map(item => normalizeItem(item, 'reservation'));
-        } else if (timePeriod === 'future') {
+        } else if (apiTimePeriod === 'future') {
           reservations = (response.future_reservations || []).map(item => normalizeItem(item, 'reservation'));
         }
         
         combinedItems = [...reservations, ...allOrders];
-        console.log(`📦 Combined ${reservations.length} reservations + ${allOrders.length} orders = ${combinedItems.length} total for ${timePeriod} period`);
+        console.log(`📦 Combined ${reservations.length} reservations + ${allOrders.length} orders = ${combinedItems.length} total for ${apiTimePeriod} period`);
       } 
-      else if (timePeriod === 'past') {
+      else if (apiTimePeriod === 'past') {
         const pastReservations = (response.past_reservations || []).map(item => normalizeItem(item, 'reservation'));
         const pastOrders = (response.past_orders || []).map(item => normalizeItem(item, 'order'));
         
@@ -308,7 +314,7 @@ const VendorReservationOrders: React.FC = () => {
           combinedItems = [...pastReservations, ...pastOrders];
         }
         console.log(`📦 Past items combined: ${pastReservations.length} reservations + ${pastOrders.length} orders = ${combinedItems.length} total`);
-      } else if (timePeriod === 'present') {
+      } else if (apiTimePeriod === 'present') {
         // Show current/active reservations and orders
         const currentReservations = (response.current_reservations || []).map(item => normalizeItem(item, 'reservation'));
         const currentOrders = (response.current_orders || []).map(item => normalizeItem(item, 'order'));
@@ -335,7 +341,7 @@ const VendorReservationOrders: React.FC = () => {
           combinedItems = [...currentReservations, ...currentOrders];
         }
         console.log(`📦 Current items combined: ${currentReservations.length} reservations + ${currentOrders.length} orders = ${combinedItems.length} total`);
-      } else if (timePeriod === 'future') {
+      } else if (apiTimePeriod === 'future') {
         const futureReservations = (response.future_reservations || []).map(item => normalizeItem(item, 'reservation'));
         const futureOrders = (response.future_orders || []).map(item => normalizeItem(item, 'order'));
         
@@ -361,6 +367,10 @@ const VendorReservationOrders: React.FC = () => {
           combinedItems = [...futureReservations, ...futureOrders];
         }
         console.log(`📦 Future items combined: ${futureReservations.length} reservations + ${futureOrders.length} orders = ${combinedItems.length} total`);
+      }
+
+      if (timePeriod === 'orders') {
+        combinedItems = combinedItems.filter((item) => item.type === 'order');
       }
 
       setReservationOrders(combinedItems);
@@ -421,7 +431,7 @@ const VendorReservationOrders: React.FC = () => {
   };
 
   const handleTimePeriodChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setTimePeriod(event.target.value as TimePeriod);
+    setTimePeriod(event.target.value as TimePeriodSelection);
     setReservationOrders([]);
     setDataLoaded(false);
     setError(null);
@@ -665,7 +675,7 @@ const VendorReservationOrders: React.FC = () => {
                 <em>Select time period</em>
               </MenuItem>
               <MenuItem value="past">Past Reservation</MenuItem>
-              <MenuItem value="present">Orders</MenuItem>
+              <MenuItem value="orders">Orders</MenuItem>
               <MenuItem value="future">Future Reservation</MenuItem>
             </TextField>
           </Grid>

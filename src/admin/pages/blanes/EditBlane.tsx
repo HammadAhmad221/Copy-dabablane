@@ -15,6 +15,15 @@ import BlaneForm from "./BlaneForm";
 import Loader from "@/admin/components/ui/Loader";
 import { BlaneImage } from "@/admin/lib/api/types/blaneImg";
 
+const toNumber = (value: unknown): number => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const match = value.match(/-?\d+(?:\.\d+)?/);
+    return match ? Number(match[0]) : 0;
+  }
+  return 0;
+};
+
 const EditBlane: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -102,15 +111,36 @@ const EditBlane: React.FC = () => {
           jours_creneaux: blaneData.jours_creneaux || [],
           dates: [],
           dateRanges: [],
-          reservation_type: blaneData.reservation_type || 'instante',
+          reservation_type: ((blaneData as any).reservation_type ?? 'instante') as any,
           heure_debut: blaneData.heure_debut ? formatTimeForInput(blaneData.heure_debut) : null,
           heure_fin: blaneData.heure_fin ? formatTimeForInput(blaneData.heure_fin) : null,
           intervale_reservation: blaneData.intervale_reservation || 0,
           personnes_prestation: blaneData.personnes_prestation || 0,
           nombre_max_reservation: blaneData.nombre_max_reservation || 0,
           max_reservation_par_creneau: blaneData.max_reservation_par_creneau || 0,
-          reservation_per_day: blaneData.reservation_per_day || (blaneData as any).reservationPerDay || (blaneData as any).max_reservation_per_day || 0,
-          order_per_day: blaneData.order_per_day || (blaneData as any).orderPerDay || (blaneData as any).max_order_per_day || 0,
+          reservation_per_day: toNumber(
+            (blaneData as any).availability_per_day ??
+              (blaneData as any).reservation_per_day ??
+              (blaneData as any).max_reservation_per_day ??
+              (blaneData as any).max_reservations_per_day ??
+              (blaneData as any).reservation_per_day_max ??
+              (blaneData as any).reservation_day ??
+              (blaneData as any).reservationPerDay
+          ),
+          availability_per_day: toNumber(
+            (blaneData as any).availability_per_day ??
+              (blaneData as any).reservation_per_day ??
+              (blaneData as any).max_reservation_per_day
+          ),
+          order_per_day: toNumber(
+            (blaneData as any).availability_per_day ??
+              (blaneData as any).order_per_day ??
+              (blaneData as any).max_order_per_day ??
+              (blaneData as any).max_orders_per_day ??
+              (blaneData as any).order_per_day_max ??
+              (blaneData as any).order_day ??
+              (blaneData as any).orderPerDay
+          ),
           partiel_field: blaneData.partiel_field || 0,
           tva: typeof blaneData.tva === 'number' ? blaneData.tva : 0,
           type_time: blaneData.type_time || 'time',
@@ -127,13 +157,14 @@ const EditBlane: React.FC = () => {
         console.log('🔍 DEBUG: Formatted order_per_day:', formattedData.order_per_day);
 
         // Try to parse date ranges from dates if it's a JSON string
-        if (blaneData.dates) {
+        const datesValue = (blaneData as any).dates;
+        if (datesValue) {
           try {
             // Check if dates might be a JSON string (both array of strings or array of objects)
-            if (typeof blaneData.dates === 'string' && 
-                (blaneData.dates.startsWith('[{') || blaneData.dates.startsWith('["'))) {
+            if (typeof datesValue === 'string' && 
+                (datesValue.startsWith('[{') || datesValue.startsWith('["'))) {
               // This looks like a JSON array
-              const parsedData = JSON.parse(blaneData.dates);              
+              const parsedData = JSON.parse(datesValue);
               if (Array.isArray(parsedData)) {
                 if (parsedData.length > 0) {
                   // Check if we have date range objects with start and end
@@ -161,10 +192,10 @@ const EditBlane: React.FC = () => {
                     formattedData.dates = parsedData;
                     
                     // Try to group consecutive dates into ranges
-                    if (blaneData.type_time === 'date') {
+                    if ((blaneData as any).type_time === 'date') {
                       const dateRanges = [];
-                      let rangeStart = null;
-                      let rangeEnd = null;
+                      let rangeStart: string | null = null;
+                      let rangeEnd: string | null = null;
                       
                       // Sort dates first
                       const sortedDates = [...parsedData].sort();
@@ -178,7 +209,10 @@ const EditBlane: React.FC = () => {
                           rangeEnd = sortedDates[i];
                         } else {
                           // Check if the current date is consecutive
-                          const prevDate = new Date(rangeEnd);
+                          if (!rangeEnd) {
+                            rangeEnd = sortedDates[i];
+                          }
+                          const prevDate = new Date(rangeEnd as string);
                           prevDate.setDate(prevDate.getDate() + 1);
                           
                           if (currentDate.getTime() === prevDate.getTime()) {
@@ -186,7 +220,7 @@ const EditBlane: React.FC = () => {
                             rangeEnd = sortedDates[i];
                           } else {
                             // End the current range and start a new one
-                            dateRanges.push({ start: rangeStart, end: rangeEnd });
+                            dateRanges.push({ start: rangeStart as string, end: rangeEnd as string });
                             rangeStart = sortedDates[i];
                             rangeEnd = sortedDates[i];
                           }
@@ -195,7 +229,7 @@ const EditBlane: React.FC = () => {
                       
                       // Add the last range
                       if (rangeStart !== null) {
-                        dateRanges.push({ start: rangeStart, end: rangeEnd });
+                        dateRanges.push({ start: rangeStart as string, end: (rangeEnd ?? rangeStart) as string });
                       }
                       
                       if (dateRanges.length > 0) {
@@ -210,18 +244,18 @@ const EditBlane: React.FC = () => {
               } else {
                 formattedData.dates = [];
               }
-            } else if (Array.isArray(blaneData.dates)) {
+            } else if (Array.isArray(datesValue)) {
               // Already an array, use as is
-              formattedData.dates = blaneData.dates;
+              formattedData.dates = datesValue;
               
               // If type_time is 'date', try to construct date ranges
-              if (blaneData.type_time === 'date') {
+              if ((blaneData as any).type_time === 'date') {
                 const dateRanges = [];
-                let rangeStart = null;
-                let rangeEnd = null;
+                let rangeStart: string | null = null;
+                let rangeEnd: string | null = null;
                 
                 // Sort dates first
-                const sortedDates = [...blaneData.dates].sort();
+                const sortedDates = [...datesValue].sort();
                 
                 for (let i = 0; i < sortedDates.length; i++) {
                   const currentDate = new Date(sortedDates[i]);
@@ -232,7 +266,10 @@ const EditBlane: React.FC = () => {
                     rangeEnd = sortedDates[i];
                   } else {
                     // Check if the current date is consecutive
-                    const prevDate = new Date(rangeEnd);
+                    if (!rangeEnd) {
+                      rangeEnd = sortedDates[i];
+                    }
+                    const prevDate = new Date(rangeEnd as string);
                     prevDate.setDate(prevDate.getDate() + 1);
                     
                     if (currentDate.getTime() === prevDate.getTime()) {
@@ -240,7 +277,7 @@ const EditBlane: React.FC = () => {
                       rangeEnd = sortedDates[i];
                     } else {
                       // End the current range and start a new one
-                      dateRanges.push({ start: rangeStart, end: rangeEnd });
+                      dateRanges.push({ start: rangeStart as string, end: rangeEnd as string });
                       rangeStart = sortedDates[i];
                       rangeEnd = sortedDates[i];
                     }
@@ -249,7 +286,7 @@ const EditBlane: React.FC = () => {
                 
                 // Add the last range
                 if (rangeStart !== null) {
-                  dateRanges.push({ start: rangeStart, end: rangeEnd });
+                  dateRanges.push({ start: rangeStart as string, end: (rangeEnd ?? rangeStart) as string });
                 }
                 
                 if (dateRanges.length > 0) {
@@ -263,8 +300,8 @@ const EditBlane: React.FC = () => {
           } catch (err) {
             // If JSON parsing fails, just use as is
             console.error('Error processing dates:', err);
-            if (Array.isArray(blaneData.dates)) {
-              formattedData.dates = blaneData.dates;
+            if (Array.isArray(datesValue)) {
+              formattedData.dates = datesValue;
             } else {
               formattedData.dates = [];
             }
