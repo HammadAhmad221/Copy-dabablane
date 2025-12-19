@@ -55,6 +55,7 @@ export interface Blane {
   personnes_prestation: number;
   max_reservation_par_creneau?: number;
   reservation_per_day?: number;
+  availability_per_day?: number;
   blaneImages?: BlaneImage[];
   rating: number;
   images: string[];
@@ -146,6 +147,7 @@ export interface BlaneFormData {
   nombre_max_reservation: number;
   max_reservation_par_creneau: number;
   reservation_per_day?: number;
+  availability_per_day?: number;
   partiel_field: number;
   tva: number;
   type_time?: "date" | "time";

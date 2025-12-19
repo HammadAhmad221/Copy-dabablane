@@ -62,6 +62,27 @@ import { Label } from "@/admin/components/ui/label";
 import { Textarea } from "@/admin/components/ui/textarea";
 import { Switch } from "@/admin/components/ui/switch";
 
+const BASE_VENDOR_MEDIA_URL = 'https://dev.dabablane.com/storage/uploads/vendor_images/';
+
+const normalizeVendorMediaUrl = (value: string | null | undefined) => {
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value)) return value;
+  return `${BASE_VENDOR_MEDIA_URL}${value}`;
+};
+
+const getVideoMimeType = (url: string): string | undefined => {
+  const clean = url.split('?')[0].toLowerCase();
+  if (clean.endsWith('.mp4') || clean.endsWith('.m4v')) return 'video/mp4';
+  if (clean.endsWith('.webm')) return 'video/webm';
+  if (clean.endsWith('.ogg')) return 'video/ogg';
+  if (clean.endsWith('.mov')) return 'video/quicktime';
+  if (clean.endsWith('.avi')) return 'video/x-msvideo';
+  return undefined;
+};
+
+const DEFAULT_VIDEO_POSTER =
+  'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQwIiBoZWlnaHQ9IjM2MCIgdmlld0JveD0iMCAwIDY0MCAzNjAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjY0MCIgaGVpZ2h0PSIzNjAiIGZpbGw9IiNGM0Y0RjYiLz48Y2lyY2xlIGN4PSIzMjAiIGN5PSIxODAiIHI9IjU4IiBmaWxsPSIjRTVFN0VCIiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iNCIvPjxwYXRoIGQ9Ik0zMDIgMTQ5VjIxMUwzNTQgMTgwTDMwMiAxNDlaIiBmaWxsPSIjNkI3MjgwIi8+PHRleHQgeD0iMzIwIiB5PSIzMDUiIGZpbGw9IiM2QjcyODAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+VmlkZW88L3RleHQ+PC9zdmc+';
+
 // Status Change Dialog Component
 const StatusChangeDialog = React.memo(({
   vendor,
@@ -993,7 +1014,7 @@ const EditVendorDialog = React.memo(({
                 {formData.cover_media_urls.length > 0 ? (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {formData.cover_media_urls.map((mediaUrl, index) => {
-                      const isVideo = mediaUrl.toLowerCase().match(/\.(mp4|webm|ogg|mov|avi)DH/);
+                      const isVideo = /\.(mp4|webm|ogg|mov|avi)(\?.*)?$/i.test(mediaUrl);
                       const isPdf = mediaUrl.toLowerCase().endsWith('.pdf');
                       const isImage = !isVideo && !isPdf;
                       
@@ -1003,7 +1024,7 @@ const EditVendorDialog = React.memo(({
                             <div className="relative w-full h-32 bg-gray-100 rounded-md overflow-hidden flex items-center justify-center">
                               {isVideo ? (
                                 <video
-                                  src={`https://dev.dabablane.com/storage/uploads/vendor_images/${mediaUrl}`}
+                                  src={normalizeVendorMediaUrl(mediaUrl)}
                                   className="max-w-full max-h-full object-contain"
                                   controls
                                   preload="metadata"
@@ -1031,7 +1052,7 @@ const EditVendorDialog = React.memo(({
                                 </div>
                               ) : (
                                 <img
-                                  src={`https://dev.dabablane.com/storage/uploads/vendor_images/${mediaUrl}`}
+                                  src={normalizeVendorMediaUrl(mediaUrl)}
                                   alt={`Cover media ${index + 1}`}
                                   className="max-w-full max-h-full object-contain"
                                   onError={(e) => {
@@ -1110,28 +1131,41 @@ const VendorRow = React.memo(({
 
   // Helper function to get all vendor images
   const getVendorImages = () => {
-    const images: string[] = [];
-    const baseUrl = 'https://dev.dabablane.com/storage/uploads/vendor_images/';
+    const mediaUrls: string[] = [];
 
-    if (vendor.logoUrl) images.push(`${baseUrl}${vendor.logoUrl}`);
-    if (vendor.coverPhotoUrl) images.push(`${baseUrl}${vendor.coverPhotoUrl}`);
-    if (vendor.rcCertificateUrl) images.push(`${baseUrl}${vendor.rcCertificateUrl}`);
+    const normalizeUrl = (value: string) => normalizeVendorMediaUrl(value);
+
+    const pushIfOk = (value: string) => {
+      const normalized = normalizeUrl(value);
+      if (!normalized) return;
+      // Skip PDFs in lightbox preview (eye icon) since the request is image/video
+      if (/\.pdf(\?.*)?$/i.test(normalized)) return;
+      mediaUrls.push(normalized);
+    };
+
+    if (vendor.logoUrl) pushIfOk(vendor.logoUrl);
+    if (vendor.coverPhotoUrl) pushIfOk(vendor.coverPhotoUrl);
+    if (vendor.rcCertificateUrl) pushIfOk(vendor.rcCertificateUrl);
+
     if (vendor.cover_media && vendor.cover_media.length > 0) {
       vendor.cover_media.forEach((media: any) => {
         if (typeof media === 'string') {
-          // Handle string URLs
-          images.push(`${baseUrl}${media}`);
-        } else if (media && typeof media === 'object') {
-          // Handle object with media_url or url property
+          pushIfOk(media);
+          return;
+        }
+
+        if (media && typeof media === 'object') {
           const mediaUrl = media.media_url || media.url;
-          if (mediaUrl && media.media_type === 'image') {
-            images.push(`${baseUrl}${mediaUrl}`);
+          if (!mediaUrl) return;
+          // Include both images and videos
+          if (media.media_type === 'image' || media.media_type === 'video' || !media.media_type) {
+            pushIfOk(mediaUrl);
           }
         }
       });
     }
 
-    return images;
+    return mediaUrls;
   };
 
   return (
@@ -1235,12 +1269,12 @@ const VendorRow = React.memo(({
                             }}
                           >
                             <img
-                              src={`https://dev.dabablane.com/storage/uploads/vendor_images/${vendor.logoUrl}`}
+                              src={normalizeVendorMediaUrl(vendor.logoUrl)}
                               alt="Logo du vendeur"
                               className="w-full h-32 object-contain rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
-                              onLoad={() => console.log('Logo loaded successfully:', `https://dev.dabablane.com/storage/uploads/vendor_images/${vendor.logoUrl}`)}
+                              onLoad={() => console.log('Logo loaded successfully:', normalizeVendorMediaUrl(vendor.logoUrl))}
                               onError={(e) => {
-                                console.error('Logo failed to load:', `https://dev.dabablane.com/storage/uploads/vendor_images/${vendor.logoUrl}`);
+                                console.error('Logo failed to load:', normalizeVendorMediaUrl(vendor.logoUrl));
                                 const target = e.target as HTMLImageElement;
                                 target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMiA4VjEyTDE1IDE1IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjMiIHN0cm9rZT0iIzlDQTNBRiIgc3Ryb2tlLXdpZHRoPSIyIi8+Cjwvc3ZnPgo=';
                               }}
@@ -1264,7 +1298,7 @@ const VendorRow = React.memo(({
                             }}
                           >
                             <img
-                              src={`https://dev.dabablane.com/storage/uploads/vendor_images/${vendor.coverPhotoUrl}`}
+                              src={normalizeVendorMediaUrl(vendor.coverPhotoUrl)}
                               alt="Photo de couverture du vendeur"
                               className="w-full h-32 object-contain rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
                               onError={(e) => {
@@ -1291,7 +1325,7 @@ const VendorRow = React.memo(({
                             }}
                           >
                             <img
-                              src={`https://dev.dabablane.com/storage/uploads/vendor_images/${vendor.rcCertificateUrl}`}
+                              src={normalizeVendorMediaUrl(vendor.rcCertificateUrl)}
                               alt="Certificat RC du vendeur"
                               className="w-full h-32 object-contain rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
                               onError={(e) => {
@@ -1319,6 +1353,7 @@ const VendorRow = React.memo(({
                           const mediaType = typeof media === 'string' ? 'image' : (media.media_type || 'image');
                           const mediaId = typeof media === 'string' ? index : (media.id || index);
                           const createdAt = typeof media === 'string' ? null : media.created_at;
+                          const normalizedMediaUrl = mediaUrl ? normalizeVendorMediaUrl(mediaUrl) : '';
 
                           return (
                             <div key={mediaId} className="space-y-2">
@@ -1340,14 +1375,14 @@ const VendorRow = React.memo(({
                                   onClick={() => {
                                     const images = getVendorImages();
                                     // Find the index of this image in the images array
-                                    const imageIndex = images.findIndex(img => img.includes(mediaUrl));
+                                    const imageIndex = images.findIndex(img => img === normalizedMediaUrl);
                                     if (imageIndex !== -1) {
                                       onImageClick(images, imageIndex);
                                     }
                                   }}
                                 >
                                   <img
-                                    src={`https://dev.dabablane.com/storage/uploads/vendor_images/${mediaUrl}`}
+                                    src={normalizedMediaUrl}
                                     alt={`Média de couverture ${index + 1}`}
                                     className="w-full h-32 object-cover rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
                                     onError={(e) => {
@@ -1362,10 +1397,28 @@ const VendorRow = React.memo(({
                               ) : (
                                 <div className="relative group">
                                   <video
-                                    src={`https://dev.dabablane.com/storage/uploads/vendor_images/${mediaUrl}`}
-                                    className="w-full h-32 object-cover rounded-lg border border-gray-200"
+                                    className="w-full h-32 object-cover rounded-lg border border-gray-200 bg-black"
                                     controls
+                                    playsInline
                                     preload="metadata"
+                                    poster={DEFAULT_VIDEO_POSTER}
+                                    crossOrigin="anonymous"
+                                    src={normalizedMediaUrl}
+                                    onLoadedMetadata={(e) => {
+                                      const target = e.currentTarget;
+                                      // If audio plays but video stays blank, often the video track can't be decoded
+                                      if (target.videoWidth === 0 || target.videoHeight === 0) {
+                                        target.style.display = 'none';
+                                        const fallback = document.createElement('div');
+                                        fallback.className = 'w-full h-32 bg-gray-100 rounded-lg border border-gray-200 flex flex-col items-center justify-center gap-1 p-2 text-center';
+                                        fallback.innerHTML =
+                                          '<div class="text-gray-500 text-sm">Vidéo non supportée par le navigateur</div>' +
+                                          '<a class="text-blue-600 text-xs underline" target="_blank" rel="noopener noreferrer" href="' +
+                                          target.currentSrc +
+                                          '">Ouvrir la vidéo</a>';
+                                        target.parentNode?.insertBefore(fallback, target);
+                                      }
+                                    }}
                                     onError={(e) => {
                                       const target = e.target as HTMLVideoElement;
                                       target.style.display = 'none';
@@ -1374,10 +1427,11 @@ const VendorRow = React.memo(({
                                       fallback.innerHTML = '<div class="text-gray-400 text-sm">Vidéo non disponible</div>';
                                       target.parentNode?.insertBefore(fallback, target);
                                     }}
-                                  />
-                                  <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
-                                    <Icon icon="lucide:play" className="h-3 w-3 inline mr-1" />
-                                    Vidéo
+                                  >
+                                    <source src={normalizedMediaUrl} type={getVideoMimeType(normalizedMediaUrl)} />
+                                  </video>
+                                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center pointer-events-none">
+                                    <Icon icon="lucide:play" className="h-8 w-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                                   </div>
                                 </div>
                               )}
@@ -1706,7 +1760,8 @@ const Vendors: React.FC = () => {
     }
     // Apply status filter
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(vendor => vendor.status === statusFilter);
+      const wantedStatus = String(statusFilter).toLowerCase();
+      filtered = filtered.filter(vendor => String(vendor.status).toLowerCase() === wantedStatus);
     }
     return filtered;
   }, [vendors, searchTerm, statusFilter, targetVendorId]);
@@ -1769,11 +1824,25 @@ const Vendors: React.FC = () => {
     debouncedSearch();
   };
   // Handle status filter change
-  const handleStatusFilterChange = (value: string) => {
+  const handleStatusFilterChange = async (value: string) => {
     setStatusFilter(value);
-    // Reset to first page when filter changes
-    if (pagination.currentPage !== 1) {
-      // You might want to handle page reset here if needed
+
+    if (loading || isPaginationLoading) return;
+
+    const nextFilters = {
+      ...(value !== 'all' && { status: value as VendorStatus }),
+      ...(searchTerm && { search: searchTerm }),
+      ...(sortBy && { sortBy }),
+      ...(sortOrder && { sortOrder }),
+    };
+
+    setIsPaginationLoading(true);
+    try {
+      // Reset to first page when filter changes (server-side pagination)
+      await fetchVendors(nextFilters, 1, pagination.perPage);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } finally {
+      setIsPaginationLoading(false);
     }
   };
 

@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
 import { XMarkIcon, PhotoIcon } from '@heroicons/react/24/outline'
 import { toast } from 'react-hot-toast'
+import { isHeic, heicTo } from 'heic-to'
 
 interface ImageItem {
   type: 'file'
@@ -29,7 +30,13 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  const handleFiles = (files: FileList | null) => {
+  const convertHeicToJpegFile = async (file: File): Promise<File> => {
+    const jpegBlob = await heicTo({ blob: file, type: 'image/jpeg', quality: 0.8 });
+    const baseName = file.name.replace(/\.(heic|heif)$/i, '');
+    return new File([jpegBlob], `${baseName || 'image'}.jpg`, { type: 'image/jpeg' });
+  };
+
+  const handleFiles = async (files: FileList | null) => {
     if (!files) return;
 
     const remainingSlots = maxFiles - currentImages.length;
@@ -38,9 +45,11 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
       return;
     }
 
-    const validFiles = Array.from(files).slice(0, remainingSlots).filter((file) => {
+    const selectedFiles = Array.from(files).slice(0, remainingSlots);
+    const validFiles = selectedFiles.filter((file) => {
       // Check file type
-      if (!file.type.startsWith('image/')) {
+      const looksHeicByName = /\.(heic|heif)$/i.test(file.name);
+      if (!file.type.startsWith('image/') && !looksHeicByName) {
         toast.error(`${file.name} must be an image file`);
         return false;
       }
@@ -54,15 +63,29 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
       return true;
     });
 
-    if (validFiles.length > 0) {
-      if (currentImages.length + validFiles.length > maxFiles) {
+    const convertedFiles: File[] = [];
+    for (const file of validFiles) {
+      try {
+        const looksHeicByName = /\.(heic|heif)$/i.test(file.name);
+        if (looksHeicByName || (await isHeic(file))) {
+          convertedFiles.push(await convertHeicToJpegFile(file));
+        } else {
+          convertedFiles.push(file);
+        }
+      } catch {
+        toast.error(`Failed to convert ${file.name}. Please upload a JPG/PNG instead.`);
+      }
+    }
+
+    if (convertedFiles.length > 0) {
+      if (currentImages.length + convertedFiles.length > maxFiles) {
         toast.error(`Maximum ${maxFiles} images allowed`);
         return;
       }
 
-      setImageFiles(prev => [...prev, ...validFiles]);
+      setImageFiles(prev => [...prev, ...convertedFiles]);
       setFormErrors(prev => ({ ...prev, images: '' }));
-      onChange(validFiles);
+      onChange(convertedFiles);
     }
   };
 
@@ -74,7 +97,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragActive(false);
-    handleFiles(e.dataTransfer.files);
+    void handleFiles(e.dataTransfer.files);
   };
 
   return (
@@ -121,7 +144,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
           multiple
           accept="image/*"
           name="images[]"
-          onChange={(e) => handleFiles(e.target.files)}
+          onChange={(e) => void handleFiles(e.target.files)}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
 
         />

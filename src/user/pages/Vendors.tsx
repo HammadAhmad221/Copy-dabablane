@@ -64,7 +64,7 @@ const slugify = (text: string): string => {
     .toString()
     .trim()
     .replace(/\s+/g, '-')           // Replace spaces with hyphens
-    .replace(/[^\w\-]+/g, '')       // Remove all non-word chars except hyphens
+    .replace(/[^\w\-.]+/g, '')      // Remove all non-word chars except hyphens and dots
     .replace(/\-\-+/g, '-')         // Replace multiple hyphens with single hyphen
     .replace(/^-+/, '')             // Trim hyphens from start
     .replace(/-+$/, '');            // Trim hyphens from end
@@ -140,6 +140,35 @@ const VendorsPage = () => {
     });
   }, [vendors]);
 
+  useEffect(() => {
+    const stopAndReset = (el: HTMLVideoElement | null) => {
+      if (!el) return;
+      el.pause();
+      try {
+        el.currentTime = 0;
+      } catch {
+        // Ignore reset errors (e.g., if media isn't seekable yet)
+      }
+    };
+
+    const playActive = async (el: HTMLVideoElement | null) => {
+      if (!el) return;
+      try {
+        await el.play();
+      } catch {
+        setPlayingVendorId(null);
+      }
+    };
+
+    Object.entries(videoRefs.current).forEach(([id, el]) => {
+      if (Number(id) === playingVendorId) {
+        void playActive(el);
+      } else {
+        stopAndReset(el);
+      }
+    });
+  }, [playingVendorId]);
+
   if (initialLoad && loading) {
     return (
       <div className="container mx-auto px-4 py-16 flex justify-center items-center">
@@ -180,7 +209,7 @@ const VendorsPage = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Rechercher par nom, ville, catégorie..."
+              placeholder="Rechercher par nom..."
               className="w-full pl-12 pr-4 py-4 text-gray-900 placeholder-gray-500 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#197874] focus:border-transparent shadow-sm transition-all duration-200"
             />
             {searchTerm && (
@@ -248,6 +277,14 @@ const VendorsPage = () => {
                 <Link
                   key={vendor.id}
                   to={`/${slugify(vendor.company_name || vendor.name || '')}`}
+                  state={
+                    isVideo
+                      ? {
+                          autoplayHeroVideo: true,
+                          heroMediaUrl: mediaUrl,
+                        }
+                      : undefined
+                  }
                   className="group bg-white rounded-2xl shadow-sm hover:shadow-lg transition-shadow duration-300 overflow-hidden border border-gray-100"
                 >
                   <div className="relative h-56 overflow-hidden bg-gray-100">
@@ -256,11 +293,38 @@ const VendorsPage = () => {
                         src={mediaUrl}
                         ref={(el) => {
                           videoRefs.current[vendor.id] = el;
+                          if (el) {
+                            el.autoplay = false;
+                            el.pause();
+                            try {
+                              el.currentTime = 0;
+                            } catch {
+                              // Ignore reset errors
+                            }
+                          }
                         }}
                         className="w-full h-full object-cover"
                         muted={isMuted}
                         playsInline
                         preload="metadata"
+                        onPlay={() => {
+                          setPlayingVendorId(vendor.id);
+                        }}
+                        onPause={() => {
+                          setPlayingVendorId((prev) => (prev === vendor.id ? null : prev));
+                        }}
+                        onEnded={() => {
+                          const el = videoRefs.current[vendor.id];
+                          if (el) {
+                            el.pause();
+                            try {
+                              el.currentTime = 0;
+                            } catch {
+                              // Ignore reset errors
+                            }
+                          }
+                          setPlayingVendorId((prev) => (prev === vendor.id ? null : prev));
+                        }}
                       />
                     ) : (
                       <img
@@ -282,29 +346,7 @@ const VendorsPage = () => {
                             e.preventDefault();
                             e.stopPropagation();
 
-                            const currentEl = videoRefs.current[vendor.id];
-                            if (!currentEl) return;
-
-                            Object.entries(videoRefs.current).forEach(([id, el]) => {
-                              if (Number(id) !== vendor.id && el) {
-                                el.pause();
-                                el.currentTime = 0;
-                              }
-                            });
-
-                            if (isPlaying) {
-                              currentEl.pause();
-                              currentEl.currentTime = 0;
-                              setPlayingVendorId(null);
-                              return;
-                            }
-
-                            try {
-                              await currentEl.play();
-                              setPlayingVendorId(vendor.id);
-                            } catch {
-                              setPlayingVendorId(null);
-                            }
+                            setPlayingVendorId((prev) => (prev === vendor.id ? null : vendor.id));
                           }}
                         >
                           {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}

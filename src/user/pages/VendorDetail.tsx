@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, MapPin, Facebook, Instagram, Pause, Phone, Play, Volume2, VolumeX } from 'lucide-react';
 import { Blane } from '@/user/lib/types/home';
 import Loader from '@/user/components/ui/Loader';
@@ -53,6 +53,7 @@ interface VendorInfo {
 
 const VendorDetail = () => {
   const { name } = useParams<{ name: string }>();
+  const location = useLocation();
   const [blanes, setBlanes] = useState<Blane[]>([]);
   const [vendorInfo, setVendorInfo] = useState<VendorInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,6 +63,19 @@ const VendorDetail = () => {
   const [isHeroVideoPlaying, setIsHeroVideoPlaying] = useState(false);
   const [isHeroVideoMuted, setIsHeroVideoMuted] = useState(true);
   const heroVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  const navigationState = (location.state || {}) as {
+    autoplayHeroVideo?: boolean;
+    heroMediaUrl?: string;
+  };
+  const [shouldAutoplayHeroVideo, setShouldAutoplayHeroVideo] = useState<boolean>(
+    Boolean(navigationState.autoplayHeroVideo),
+  );
+  const [autoplayHeroMediaUrl, setAutoplayHeroMediaUrl] = useState<string | undefined>(
+    navigationState.heroMediaUrl,
+  );
+
+  const AUTO_SLIDE_MS = 5000;
 
   useEffect(() => {
     let isActive = true;
@@ -190,6 +204,11 @@ const VendorDetail = () => {
     };
   }, [name]);
 
+  useEffect(() => {
+    setShouldAutoplayHeroVideo(Boolean(navigationState.autoplayHeroVideo));
+    setAutoplayHeroMediaUrl(navigationState.heroMediaUrl);
+  }, [navigationState.autoplayHeroVideo, navigationState.heroMediaUrl, name]);
+
   const handlePrevImage = () => {
     if (vendorInfo && vendorInfo.coverImages.length > 0) {
       setCurrentImageIndex((prev) => 
@@ -213,6 +232,63 @@ const VendorDetail = () => {
       heroVideoRef.current.currentTime = 0;
     }
   }, [currentImageIndex]);
+
+  useEffect(() => {
+    if (!vendorInfo) return;
+    if (!shouldAutoplayHeroVideo) return;
+    if (!autoplayHeroMediaUrl) return;
+
+    const index = vendorInfo.coverImages.findIndex((value) => value === autoplayHeroMediaUrl);
+    if (index >= 0 && index !== currentImageIndex) {
+      setIsHeroVideoMuted(true);
+      setCurrentImageIndex(index);
+    }
+  }, [vendorInfo, shouldAutoplayHeroVideo, autoplayHeroMediaUrl, currentImageIndex]);
+
+  useEffect(() => {
+    if (!vendorInfo) return;
+    if (!shouldAutoplayHeroVideo) return;
+
+    const currentMedia = vendorInfo.coverImages[currentImageIndex] || '';
+    const isCurrentMediaVideo = isVideoUrl(currentMedia) || videoMediaUrls.has(currentMedia);
+    if (!isCurrentMediaVideo) return;
+
+    const el = heroVideoRef.current;
+    if (!el) return;
+
+    el.muted = true;
+    setIsHeroVideoMuted(true);
+
+    const play = async () => {
+      try {
+        await el.play();
+        setIsHeroVideoPlaying(true);
+      } catch {
+        setIsHeroVideoPlaying(false);
+      } finally {
+        setShouldAutoplayHeroVideo(false);
+      }
+    };
+
+    void play();
+  }, [vendorInfo, currentImageIndex, shouldAutoplayHeroVideo, videoMediaUrls]);
+
+  useEffect(() => {
+    if (!vendorInfo || vendorInfo.coverImages.length <= 1) return;
+
+    const currentMedia = vendorInfo.coverImages[currentImageIndex] || '';
+    const isCurrentMediaVideo = isVideoUrl(currentMedia) || videoMediaUrls.has(currentMedia);
+
+    if (isCurrentMediaVideo && isHeroVideoPlaying) return;
+
+    const intervalId = window.setInterval(() => {
+      handleNextImage();
+    }, AUTO_SLIDE_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [vendorInfo, currentImageIndex, videoMediaUrls, isHeroVideoPlaying]);
 
   if (loading) {
     return <Loader />;
@@ -239,7 +315,7 @@ const VendorDetail = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Hero Banner with Image/Video Carousel */}
-      <div className="relative h-[400px] overflow-hidden">
+      <div className="relative h-[320px] sm:h-[380px] md:h-[420px] lg:h-[460px] overflow-hidden">
         {/* Background Image or Video */}
         {isCurrentMediaVideo ? (
           <video
@@ -247,11 +323,33 @@ const VendorDetail = () => {
             src={currentMedia}
             ref={(el) => {
               heroVideoRef.current = el;
+              if (el) {
+                el.autoplay = false;
+              }
             }}
             className="w-full h-full object-cover"
             muted={isHeroVideoMuted}
             playsInline
             preload="metadata"
+            onPlay={() => {
+              setIsHeroVideoPlaying(true);
+            }}
+            onPause={() => {
+              setIsHeroVideoPlaying(false);
+            }}
+            onEnded={() => {
+              const el = heroVideoRef.current;
+              if (el) {
+                el.pause();
+                try {
+                  el.currentTime = 0;
+                } catch {
+                  // Ignore reset errors
+                }
+              }
+              setIsHeroVideoPlaying(false);
+              handleNextImage();
+            }}
           />
         ) : (
           <img
@@ -314,14 +412,14 @@ const VendorDetail = () => {
           <>
             <button
               onClick={handlePrevImage}
-              className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white p-2 rounded-full transition-all duration-300 z-10"
+              className="absolute left-3 sm:left-4 top-[62%] sm:top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white p-2 rounded-full transition-all duration-300 z-10"
               aria-label="Previous image"
             >
               <ChevronLeft className="w-6 h-6" />
             </button>
             <button
               onClick={handleNextImage}
-              className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white p-2 rounded-full transition-all duration-300 z-10"
+              className="absolute right-3 sm:right-4 top-[62%] sm:top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white p-2 rounded-full transition-all duration-300 z-10"
               aria-label="Next image"
             >
               <ChevronRight className="w-6 h-6" />
@@ -330,10 +428,10 @@ const VendorDetail = () => {
         )}
         
         {/* Content */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center px-4">
-          <div className="text-center text-white max-w-3xl">
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-14 sm:px-6">
+          <div className="text-center text-white w-full max-w-3xl">
             {/* Vendor Name */}
-            <h1 className="text-4xl md:text-5xl font-bold mb-6">
+            <h1 className="text-2xl sm:text-3xl md:text-5xl font-bold mb-4 sm:mb-6 break-words">
               {vendorInfo.name}
             </h1>
 
@@ -353,7 +451,7 @@ const VendorDetail = () => {
             )}
             
             {/* Description/Tagline */}
-            <p className="text-sm md:text-base text-white/90 mb-6">
+            <p className="mx-auto max-w-prose text-xs sm:text-sm md:text-base lg:text-lg leading-relaxed text-white/90 mb-5 sm:mb-6 whitespace-normal break-words">
               {vendorInfo.description}
             </p>
             
