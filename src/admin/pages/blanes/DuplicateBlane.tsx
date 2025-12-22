@@ -98,6 +98,10 @@ const DuplicateBlane: React.FC = () => {
           tva: blaneData.tva || 0,
           type_time: blaneData.type_time || 'time',
           is_digital: blaneData.is_digital || false,
+          allow_out_of_city_delivery:
+            (blaneData as any).allow_out_of_city_delivery ||
+            (blaneData as any).allow_out_of_city ||
+            false,
           images: [],
           // Set visibility to private by default when duplicating
           visibility: 'private',

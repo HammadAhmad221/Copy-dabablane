@@ -145,6 +145,10 @@ const EditBlane: React.FC = () => {
           tva: typeof blaneData.tva === 'number' ? blaneData.tva : 0,
           type_time: blaneData.type_time || 'time',
           is_digital: blaneData.is_digital || false,
+          allow_out_of_city_delivery:
+            (blaneData as any).allow_out_of_city_delivery ||
+            (blaneData as any).allow_out_of_city ||
+            false,
           visibility: blaneData.visibility || 'private',
           share_token: blaneData.share_token || undefined,
           share_url: blaneData.share_url || undefined,

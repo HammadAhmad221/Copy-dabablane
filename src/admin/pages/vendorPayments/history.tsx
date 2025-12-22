@@ -14,6 +14,26 @@ const VendorPaymentHistory = () => {
   const [logs, setLogs] = useState<PaymentLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const toNumber = (value: unknown): number => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value === 'string') {
+      const cleaned = value.replace(/[^0-9.-]+/g, '');
+      const n = Number(cleaned);
+      return Number.isFinite(n) ? n : 0;
+    }
+    return 0;
+  };
+
+  const getStatusLabel = (action: string): 'pending' | 'processed' | 'complete' | 'unknown' => {
+    const a = String(action || '').toLowerCase();
+
+    if (a.includes('pending') || a.includes('status_changed_to_pending')) return 'pending';
+    if (a.includes('complete') || a.includes('status_changed_to_complete')) return 'complete';
+    if (a.includes('processed') || a.includes('marked_processed') || a.includes('mark_processed')) return 'processed';
+
+    return 'unknown';
+  };
+
   useEffect(() => {
     const fetchHistory = async () => {
       setIsLoading(true);
@@ -67,48 +87,69 @@ const VendorPaymentHistory = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {logs.map((log: any) => (
-              <div key={log.id} className="flex justify-between items-center border-b pb-4">
-                <div>
-                  <p className="font-medium">Payment #{log.vendor_payment_id}</p>
-                  {/* Show vendor and category info if available */}
-                  {log.vendor_payment && (
-                    <div className="text-sm text-gray-600 mt-1">
-                      <p>Vendor: {log.vendor_payment.vendor?.company_name || log.vendor_payment.vendor?.name || 'N/A'}</p>
-                      {log.vendor_payment.category_name && (
-                        <p>Category: {log.vendor_payment.category_name}</p>
-                      )}
-                    </div>
-                  )}
-                  <p className="text-sm text-gray-500 mt-1">{log.admin_name} - {log.action}</p>
-                  {log.note && <p className="text-xs text-gray-400 mt-1">Note: {log.note}</p>}
-                  {log.old_values && (
-                    <details className="text-xs text-gray-400 mt-1">
-                      <summary className="cursor-pointer">View changes</summary>
-                      <div className="mt-1 bg-gray-50 p-2 rounded">
-                        <p className="font-semibold">Old Values:</p>
-                        <pre>{JSON.stringify(log.old_values, null, 2)}</pre>
-                        {log.new_values && (
-                          <>
-                            <p className="font-semibold mt-2">New Values:</p>
-                            <pre>{JSON.stringify(log.new_values, null, 2)}</pre>
-                          </>
+            {logs.map((log) => {
+              const totalAmount = toNumber(
+                log.vendor_payment?.total_amount_ttc ??
+                  log.vendor_payment?.total_amount_incl_vat ??
+                  log.vendor_payment?.total_amount
+              );
+
+              const status = getStatusLabel(log.action);
+
+              return (
+                <div key={log.id} className="flex justify-between items-center border-b pb-4">
+                  <div>
+                    <p className="font-medium">Payment #{log.vendor_payment_id}</p>
+
+                    {log.vendor_payment && (
+                      <div className="text-sm text-gray-600 mt-1">
+                        <p>
+                          Vendor: {log.vendor_payment.vendor?.company_name || log.vendor_payment.vendor?.name || 'N/A'}
+                        </p>
+                        {log.vendor_payment.category_name && (
+                          <p>Category: {log.vendor_payment.category_name}</p>
                         )}
+                        <p className="font-semibold text-gray-800 mt-1">
+                          Total Amount: {totalAmount.toFixed(2)} DH
+                        </p>
                       </div>
-                    </details>
-                  )}
+                    )}
+
+                    {log.admin_name && (
+                      <p className="text-sm text-gray-500 mt-1">{log.admin_name}</p>
+                    )}
+                    {log.note && <p className="text-xs text-gray-400 mt-1">Note: {log.note}</p>}
+                    {log.old_values && (
+                      <details className="text-xs text-gray-400 mt-1">
+                        <summary className="cursor-pointer">View changes</summary>
+                        <div className="mt-1 bg-gray-50 p-2 rounded">
+                          <p className="font-semibold">Old Values:</p>
+                          <pre>{JSON.stringify(log.old_values, null, 2)}</pre>
+                          {log.new_values && (
+                            <>
+                              <p className="font-semibold mt-2">New Values:</p>
+                              <pre>{JSON.stringify(log.new_values, null, 2)}</pre>
+                            </>
+                          )}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+
+                  <div className="text-right">
+                    <Badge className="bg-red-500 text-white">
+                      {status === 'unknown' ? log.action : status}
+                    </Badge>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {format(new Date(log.created_at), "PPpp")}
+                    </p>
+                    {log.ip_address && (
+                      <p className="text-xs text-gray-400">IP: {log.ip_address}</p>
+                    )}
+                  </div>
                 </div>
-                <div className="text-right">
-                  <Badge className="bg-red-500 text-white">{log.action}</Badge>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {format(new Date(log.created_at), "PPpp")}
-                  </p>
-                  {log.ip_address && (
-                    <p className="text-xs text-gray-400">IP: {log.ip_address}</p>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Card>
