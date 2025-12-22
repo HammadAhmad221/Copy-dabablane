@@ -557,7 +557,7 @@ const VendorPaymentsIndex = () => {
         onValueChange={(value) => handleStatusChange(paymentId, value)}
       >
         <SelectTrigger
-          className={`w-32 h-8 text-xs ${getStatusBadgeColor(currentStatusValue)}`}
+          className={`w-24 sm:w-32 h-8 text-xs ${getStatusBadgeColor(currentStatusValue)}`}
           disabled={isUpdating}
         >
           <SelectValue placeholder="Select status" />
@@ -598,9 +598,9 @@ const VendorPaymentsIndex = () => {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-5 lg:p-6 xl:p-6 2xl:p-8 w-full max-w-full overflow-x-hidden">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-5 lg:p-6 w-full max-w-full min-w-0 overflow-x-hidden">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:gap-4 lg:gap-5">
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3 sm:gap-4 lg:gap-5">
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[#00897B] break-words">Vendor Payments</h1>
           <p className="text-gray-500 mt-1 text-sm sm:text-base lg:text-lg">
@@ -621,12 +621,12 @@ const VendorPaymentsIndex = () => {
         </div>
         
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-2 lg:gap-3 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row gap-2 lg:gap-3 w-full sm:w-auto lg:flex-shrink-0">
           <Button
             variant="outline"
             onClick={handleExportExcel}
             disabled={isLoading}
-            className="w-full sm:w-auto lg:min-w-[140px] xl:min-w-[140px] 2xl:min-w-[160px]"
+            className="w-full sm:w-auto whitespace-nowrap"
             size={isMobile ? "default" : "default"}
           >
             <FileSpreadsheet className="h-4 w-4 mr-2" />
@@ -634,7 +634,7 @@ const VendorPaymentsIndex = () => {
           </Button>
           <Button
             onClick={() => navigate("/admin/vendor-payments/report")}
-            className="bg-[#00897B] hover:bg-[#00796B] w-full sm:w-auto lg:min-w-[140px] xl:min-w-[140px] 2xl:min-w-[160px]"
+            className="bg-[#00897B] hover:bg-[#00796B] w-full sm:w-auto whitespace-nowrap"
             size={isMobile ? "default" : "default"}
           >
             <Calendar className="h-4 w-4 mr-2" />
@@ -642,7 +642,7 @@ const VendorPaymentsIndex = () => {
           </Button>
           <Button
             onClick={() => navigate("/admin/vendor-payments/manual-transfer")}
-            className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto lg:min-w-[140px] xl:min-w-[140px] 2xl:min-w-[160px]"
+            className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto whitespace-nowrap"
             size={isMobile ? "default" : "default"}
           >
             <Download className="h-4 w-4 mr-2" />
@@ -773,15 +773,17 @@ const VendorPaymentsIndex = () => {
                   <Card key={payment.id} className="p-4 border-l-4 border-l-[#00897B] w-full">
                     <div className="space-y-3">
                       {/* Header Row */}
-                      <div className="flex justify-between items-start gap-2">
-                        <div className="flex-1 min-w-0">
+                      <div className="flex flex-col gap-2">
+                        <div className="min-w-0">
                           <span className="text-xs text-gray-500 font-mono">#{payment.id}</span>
                           <div className="font-semibold text-sm mt-0.5 truncate">
                             {payment.vendor_company}
                           </div>
                         </div>
-                        <div className="flex gap-1 flex-shrink-0">
-                          {renderStatusDropdown(payment.id, payment.transfer_status)}
+                        <div className="flex items-center justify-end gap-2 flex-wrap">
+                          <div className="min-w-0">
+                            {renderStatusDropdown(payment.id, payment.transfer_status)}
+                          </div>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -864,40 +866,39 @@ const VendorPaymentsIndex = () => {
               </div>
             ) : (
               /* Desktop Table View */
-              <Card className="w-full xl:overflow-visible 2xl:overflow-hidden">
-                <div className="overflow-x-auto w-full xl:pb-2">
-                  <div className="min-w-[900px]">
-                  <Table className="w-full">
+              <Card className="w-full overflow-hidden">
+                <div className="overflow-x-auto w-full">
+                  <Table className="w-full table-fixed">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="whitespace-nowrap text-xs lg:text-sm">ID</TableHead>
-                        <TableHead className="whitespace-nowrap xl:whitespace-normal 2xl:whitespace-nowrap text-xs lg:text-sm">Vendor</TableHead>
-                        <TableHead className="whitespace-nowrap xl:whitespace-normal 2xl:whitespace-nowrap text-xs lg:text-sm">Blane</TableHead>
-                        <TableHead className="whitespace-nowrap text-xs lg:text-sm">Period</TableHead>
-                        <TableHead className="text-right whitespace-nowrap text-xs lg:text-sm">Amount</TableHead>
-                        <TableHead className="text-right whitespace-nowrap text-xs lg:text-sm">Commission</TableHead>
-                        <TableHead className="text-right whitespace-nowrap text-xs lg:text-sm">Net Amount</TableHead>
-                        <TableHead className="whitespace-nowrap text-xs lg:text-sm">Type</TableHead>
-                        <TableHead className="whitespace-nowrap text-xs lg:text-sm">Status</TableHead>
-                        <TableHead className="whitespace-nowrap text-xs lg:text-sm">Date</TableHead>
-                        <TableHead className="whitespace-nowrap text-xs lg:text-sm">Actions</TableHead>
+                        <TableHead className="whitespace-nowrap text-xs lg:text-sm w-[60px]">ID</TableHead>
+                        <TableHead className="text-xs lg:text-sm w-[22%] min-w-[180px]">Vendor</TableHead>
+                        <TableHead className="hidden xl:table-cell text-xs lg:text-sm w-[22%] min-w-[180px]">Blane</TableHead>
+                        <TableHead className="hidden 2xl:table-cell whitespace-nowrap text-xs lg:text-sm w-[110px]">Period</TableHead>
+                        <TableHead className="text-right whitespace-nowrap text-xs lg:text-sm w-[100px]">Amount</TableHead>
+                        <TableHead className="hidden xl:table-cell text-right whitespace-nowrap text-xs lg:text-sm w-[110px]">Commission</TableHead>
+                        <TableHead className="text-right whitespace-nowrap text-xs lg:text-sm w-[110px]">Net Amount</TableHead>
+                        <TableHead className="hidden xl:table-cell whitespace-nowrap text-xs lg:text-sm w-[80px]">Type</TableHead>
+                        <TableHead className="whitespace-nowrap text-xs lg:text-sm w-[140px]">Status</TableHead>
+                        <TableHead className="hidden xl:table-cell whitespace-nowrap text-xs lg:text-sm w-[110px]">Date</TableHead>
+                        <TableHead className="whitespace-nowrap text-xs lg:text-sm w-[80px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {payments.map((payment) => (
                         <TableRow key={payment.id}>
                           <TableCell className="font-mono text-xs lg:text-sm whitespace-nowrap">#{payment.id}</TableCell>
-                          <TableCell className="whitespace-nowrap xl:whitespace-normal 2xl:whitespace-nowrap">
-                            <div className="font-medium text-xs lg:text-sm xl:max-w-[220px] 2xl:max-w-none xl:break-words">
+                          <TableCell>
+                            <div className="font-medium text-xs lg:text-sm truncate" title={payment.vendor_company}>
                               {payment.vendor_company}
                             </div>
                           </TableCell>
-                          <TableCell className="whitespace-nowrap xl:whitespace-normal 2xl:whitespace-nowrap text-xs lg:text-sm">
-                            <div className="xl:max-w-[220px] 2xl:max-w-none xl:break-words">
+                          <TableCell className="hidden xl:table-cell">
+                            <div className="text-xs lg:text-sm truncate" title={getPaymentBlaneLabel(payment as any)}>
                               {getPaymentBlaneLabel(payment as any)}
                             </div>
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs lg:text-sm">
+                          <TableCell className="hidden 2xl:table-cell whitespace-nowrap text-xs lg:text-sm">
                             {payment.booking_date 
                               ? format(new Date(payment.booking_date), 'MMM dd, yyyy')
                               : 'N/A'}
@@ -908,7 +909,7 @@ const VendorPaymentsIndex = () => {
                               return Number(amount).toFixed(2);
                             })()}DH
                           </TableCell>
-                          <TableCell className="text-right whitespace-nowrap text-xs lg:text-sm">
+                          <TableCell className="hidden xl:table-cell text-right whitespace-nowrap text-xs lg:text-sm">
                             {(() => {
                               const amount = (payment as any).commission_amount_incl_vat || (payment as any).commission_amount_ttc || payment.commission_amount || 0;
                               return Number(amount).toFixed(2);
@@ -920,7 +921,7 @@ const VendorPaymentsIndex = () => {
                               return Number(amount).toFixed(2);
                             })()}DH
                           </TableCell>
-                          <TableCell className="whitespace-nowrap">
+                          <TableCell className="hidden xl:table-cell whitespace-nowrap">
                             <Badge variant="outline" className="text-xs">
                               {payment.payment_type || 'N/A'}
                             </Badge>
@@ -928,7 +929,7 @@ const VendorPaymentsIndex = () => {
                           <TableCell className="whitespace-nowrap">
                             {renderStatusDropdown(payment.id, payment.transfer_status)}
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs lg:text-sm">
+                          <TableCell className="hidden xl:table-cell whitespace-nowrap text-xs lg:text-sm">
                             {payment.transfer_date 
                               ? format(new Date(payment.transfer_date), 'MMM dd, yyyy') 
                               : 'Pending'}
@@ -946,7 +947,6 @@ const VendorPaymentsIndex = () => {
                       ))}
                     </TableBody>
                   </Table>
-                  </div>
                 </div>
 
                 {/* Pagination */}
