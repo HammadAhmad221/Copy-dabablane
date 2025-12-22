@@ -802,6 +802,7 @@ const BlaneForm = ({
       submitFormData.set("on_top", formData.on_top ? "1" : "0");
       submitFormData.set("is_digital", formData.is_digital ? "1" : "0");
       submitFormData.set("allow_out_of_city_delivery", formData.allow_out_of_city_delivery ? "1" : "0");
+      submitFormData.set("allow_out_of_city", formData.allow_out_of_city_delivery ? "1" : "0");
       submitFormData.set("visibility", formData.visibility || "private");
       submitFormData.set("share_token", formData.share_token || "");
 

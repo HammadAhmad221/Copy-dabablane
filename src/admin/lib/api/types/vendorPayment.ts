@@ -70,6 +70,16 @@ export interface PaymentLog {
   admin_id: number;
   admin_name: string;
   action: string;
+  vendor_payment?: {
+    vendor?: {
+      company_name?: string;
+      name?: string;
+    };
+    category_name?: string;
+    total_amount?: number | string;
+    total_amount_ttc?: number | string;
+    total_amount_incl_vat?: number | string;
+  };
   old_values?: Record<string, any>;
   new_values?: Record<string, any>;
   note?: string;

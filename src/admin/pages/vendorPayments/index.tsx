@@ -42,6 +42,8 @@ import vendorPaymentApi from "@/admin/lib/api/services/vendorPaymentService";
 import { vendorApi } from "@/admin/lib/api/services/vendorService";
 import { categoryApi } from "@/admin/lib/api/services/categoryService";
 import { blaneApi } from "@/admin/lib/api/services/blaneService";
+import { orderApi } from "@/admin/lib/api/services/orderService";
+import { reservationApi } from "@/admin/lib/api/services/reservationService";
 import type { VendorPayment } from "@/admin/lib/api/types/vendorPayment";
 import type { Vendor } from "@/admin/lib/api/types/vendor";
 
@@ -83,6 +85,43 @@ const VendorPaymentsIndex = () => {
   const [allVendorIdsWithPayments, setAllVendorIdsWithPayments] = useState<Set<number>>(new Set());
   const [statusUpdates, setStatusUpdates] = useState<Record<number, string>>({});
   const [statusUpdating, setStatusUpdating] = useState<Record<number, boolean>>({});
+
+  const extractBlaneId = (payment: any): number | null => {
+    const raw =
+      payment?.blane_id ??
+      payment?.blaneId ??
+      payment?.blane?.id ??
+      payment?.offer_id ??
+      payment?.offerId ??
+      null;
+
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  const extractBlaneName = (payment: any): string | null => {
+    const name =
+      payment?.blane_name ??
+      payment?.blaneTitle ??
+      payment?.blane_title ??
+      payment?.offer_name ??
+      payment?.offer_title ??
+      payment?.blane?.name ??
+      payment?.blane?.title ??
+      null;
+
+    return name ? String(name) : null;
+  };
+
+  const getPaymentBlaneLabel = (payment: any): string => {
+    const fromPayload = extractBlaneName(payment);
+    if (fromPayload) return fromPayload;
+
+    const id = extractBlaneId(payment);
+    if (id && blaneMap[id]) return blaneMap[id];
+
+    return '-';
+  };
 
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -160,35 +199,134 @@ const VendorPaymentsIndex = () => {
       if (paymentsWithNames.length > 0) {
         console.log('📊 First mapped payment:', paymentsWithNames[0]);
       }
-      setPayments(paymentsWithNames);
-
+      // If the list endpoint doesn't include any blane reference, enrich the current page
+      // by fetching payment details (limited to current page size).
+      let paymentsResolved: any[] = paymentsWithNames;
       try {
-        const uniqueVendorIds = [...new Set(paymentsWithNames.map((p: any) => Number(p.vendor_id)).filter((id: any) => Number.isFinite(id) && id > 0))];
-        const idsToFetch = uniqueVendorIds.filter((id) => blaneMap[id] === undefined);
+        const idsNeedingDetails = paymentsWithNames
+          .filter((p: any) => !extractBlaneId(p) && !extractBlaneName(p))
+          .map((p: any) => Number(p.id))
+          .filter((id: any) => Number.isFinite(id) && id > 0);
+
+        if (idsNeedingDetails.length) {
+          const details = await Promise.all(
+            idsNeedingDetails.map(async (paymentId: number) => {
+              try {
+                const detail = await vendorPaymentApi.getPaymentById(paymentId);
+                return [paymentId, detail] as const;
+              } catch {
+                return [paymentId, null] as const;
+              }
+            })
+          );
+
+          const detailMap = new Map<number, any>(details.filter(([, d]) => d));
+          paymentsResolved = paymentsWithNames.map((p: any) => {
+            const detail = detailMap.get(Number(p.id));
+            return detail ? { ...p, ...detail } : p;
+          });
+        }
+      } catch {
+        // ignore detail enrichment failures
+      }
+
+      setPayments(paymentsResolved as any);
+
+      // If the vendor payment detail only includes order_id/reservation_id, resolve blane_id from those.
+      // This keeps requests limited to the current page size.
+      try {
+        const uniqueOrderIds = [
+          ...new Set(
+            paymentsResolved
+              .map((p: any) => Number(p?.order_id ?? p?.orderId))
+              .filter((id: any) => Number.isFinite(id) && id > 0)
+          ),
+        ];
+        const uniqueReservationIds = [
+          ...new Set(
+            paymentsResolved
+              .map((p: any) => Number(p?.reservation_id ?? p?.reservationId))
+              .filter((id: any) => Number.isFinite(id) && id > 0)
+          ),
+        ];
+
+        const [orders, reservations] = await Promise.all([
+          Promise.all(
+            uniqueOrderIds.map(async (orderId) => {
+              try {
+                const order = await orderApi.getOrder(String(orderId));
+                return [orderId, Number((order as any).blane_id)] as const;
+              } catch {
+                return [orderId, null] as const;
+              }
+            })
+          ),
+          Promise.all(
+            uniqueReservationIds.map(async (reservationId) => {
+              try {
+                const reservation = await reservationApi.getReservation(String(reservationId));
+                return [reservationId, Number((reservation as any).blane_id)] as const;
+              } catch {
+                return [reservationId, null] as const;
+              }
+            })
+          ),
+        ]);
+
+        const orderToBlaneId = new Map<number, number>(
+          orders.filter(([, blaneId]) => Number.isFinite(blaneId as any) && Number(blaneId) > 0) as any
+        );
+        const reservationToBlaneId = new Map<number, number>(
+          reservations.filter(([, blaneId]) => Number.isFinite(blaneId as any) && Number(blaneId) > 0) as any
+        );
+
+        const nextResolved = paymentsResolved.map((p: any) => {
+          // If already has blane_id, keep it
+          if (extractBlaneId(p)) return p;
+
+          const orderId = Number(p?.order_id ?? p?.orderId);
+          const reservationId = Number(p?.reservation_id ?? p?.reservationId);
+          const fromOrder = Number.isFinite(orderId) ? orderToBlaneId.get(orderId) : undefined;
+          const fromReservation = Number.isFinite(reservationId)
+            ? reservationToBlaneId.get(reservationId)
+            : undefined;
+
+          const resolvedBlaneId = fromOrder ?? fromReservation;
+          if (resolvedBlaneId && Number(resolvedBlaneId) > 0) {
+            return { ...p, blane_id: resolvedBlaneId };
+          }
+
+          return p;
+        });
+
+        paymentsResolved = nextResolved;
+        setPayments(nextResolved as any);
+      } catch {
+        // ignore failures; page remains usable
+      }
+
+      // Resolve real blane names per payment (prefer payload fields; otherwise fetch by blane_id)
+      try {
+        const uniqueBlaneIds = [
+          ...new Set(
+            paymentsResolved
+              .map((p: any) => extractBlaneId(p))
+              .filter((id: any) => Number.isFinite(id) && Number(id) > 0)
+              .map((id: any) => Number(id))
+          ),
+        ];
+
+        const idsToFetch = uniqueBlaneIds.filter((id) => blaneMap[id] === undefined);
 
         if (idsToFetch.length) {
           const entries = await Promise.all(
-            idsToFetch.map(async (vendorId) => {
+            idsToFetch.map(async (blaneId) => {
               try {
-                const commerceName = paymentsWithNames.find((p: any) => Number(p.vendor_id) === Number(vendorId))?.vendor_company
-                  || vendorMap[vendorId]
-                  || '';
-
-                if (!commerceName || commerceName === 'N/A') {
-                  return [vendorId, '-'] as const;
-                }
-
-                const res = await blaneApi.getBlanes({
-                  page: 1,
-                  paginationSize: 1,
-                  commerce_name: commerceName,
-                } as any);
-
-                const first = (res as any)?.data?.[0];
-                const blaneName = first?.name || first?.title || '';
-                return [vendorId, blaneName ? String(blaneName) : '-'] as const;
+                const blane = await blaneApi.getBlane(String(blaneId));
+                const name = (blane as any)?.name || (blane as any)?.title || (blane as any)?.slug || '-';
+                return [blaneId, String(name)] as const;
               } catch {
-                return [vendorId, '-'] as const;
+                return [blaneId, '-'] as const;
               }
             })
           );
@@ -666,7 +804,7 @@ const VendorPaymentsIndex = () => {
                       <div>
                         <Label className="text-xs text-gray-500">Blane</Label>
                         <p className="text-xs text-gray-600 mt-0.5">
-                          {blaneMap[payment.vendor_id] || '-'}
+                          {getPaymentBlaneLabel(payment as any)}
                         </p>
                       </div>
 
@@ -756,7 +894,7 @@ const VendorPaymentsIndex = () => {
                           </TableCell>
                           <TableCell className="whitespace-nowrap xl:whitespace-normal 2xl:whitespace-nowrap text-xs lg:text-sm">
                             <div className="xl:max-w-[220px] 2xl:max-w-none xl:break-words">
-                              {blaneMap[payment.vendor_id] || '-'}
+                              {getPaymentBlaneLabel(payment as any)}
                             </div>
                           </TableCell>
                           <TableCell className="whitespace-nowrap text-xs lg:text-sm">
